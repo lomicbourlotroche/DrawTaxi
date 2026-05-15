@@ -28,7 +28,9 @@ fun ControlCenterScreen(
     brandColor: Color,
     onCreateRide: () -> Unit,
     onCheckSms: () -> Unit = {},
-    onCreateQuote: (RideRequest) -> Unit = {},
+    onSendQuote: (RideRequest) -> Unit = {},
+    onAcceptQuote: (RideRequest) -> Unit = {},
+    onRejectQuote: (RideRequest) -> Unit = {},
     onDeleteWithMessage: (RideRequest, String) -> Unit = { _, _ -> },
     onOpenAgenda: () -> Unit = {},
     messageTemplates: List<String> = emptyList()
@@ -169,7 +171,9 @@ fun ControlCenterScreen(
                             rideToDelete = ride
                             showDeleteDialog = true
                         },
-                        onCreateQuote = { onCreateQuote(ride) },
+                        onSendQuote = { onSendQuote(ride) },
+                        onAcceptQuote = { onAcceptQuote(ride) },
+                        onRejectQuote = { onRejectQuote(ride) },
                         onClick = { onRideClick(ride) }
                     )
                 }
@@ -262,7 +266,9 @@ private fun EnhancedRideCard(
     brandColor: Color,
     onValidate: () -> Unit,
     onDelete: () -> Unit,
-    onCreateQuote: () -> Unit,
+    onSendQuote: () -> Unit,
+    onAcceptQuote: () -> Unit,
+    onRejectQuote: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -453,15 +459,40 @@ private fun EnhancedRideCard(
 
                         if (ride.status == RideStatus.DRAFT) {
                             Button(
-                                onClick = onCreateQuote,
+                                onClick = onSendQuote,
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = brandColor),
                                 contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
-                                Icon(Icons.Default.RequestQuote, modifier = Modifier.size(16.dp), contentDescription = null)
+                                Icon(Icons.Default.Send, modifier = Modifier.size(16.dp), contentDescription = null)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Devis", fontSize = 12.sp)
+                            }
+                        }
+
+                        if (ride.status == RideStatus.QUOTED) {
+                            OutlinedButton(
+                                onClick = onRejectQuote,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Red500),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Close, modifier = Modifier.size(16.dp), contentDescription = null)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Refusé", fontSize = 12.sp)
+                            }
+                            Button(
+                                onClick = onAcceptQuote,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Check, modifier = Modifier.size(16.dp), contentDescription = null)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Accepté", fontSize = 12.sp)
                             }
                         }
 

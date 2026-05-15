@@ -29,7 +29,6 @@ import java.util.*
 @Composable
 fun HomeScreen(
     validatedRides: List<RideRequest>,
-    pendingRides: List<RideRequest>,
     brandColor: Color,
     onRideClick: (RideRequest) -> Unit,
     onCreateRide: () -> Unit,
@@ -156,38 +155,6 @@ fun HomeScreen(
             }
         }
 
-        if (pendingRides.isNotEmpty()) {
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = "En attente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800)
-                    Surface(shape = RoundedCornerShape(10.dp), color = Amber100) {
-                        Text(
-                            text = "${pendingRides.size}",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF92400E),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-            
-            items(pendingRides.take(3)) { ride ->
-                RideCard(
-                    ride = ride,
-                    brandColor = brandColor,
-                    onValidate = { onRideClick(ride) },
-                    onDelete = { },
-                    onClick = { onRideClick(ride) }
-                )
-            }
-        }
-
         if (upcomingRides.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(20.dp))
@@ -220,7 +187,7 @@ fun HomeScreen(
             }
         }
 
-        if (validatedRides.isEmpty() && pendingRides.isEmpty()) {
+        if (validatedRides.isEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(40.dp))
                 Column(modifier = Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {

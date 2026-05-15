@@ -25,6 +25,12 @@ import com.drawtaxi.app.logic.fetchRoute
 import com.drawtaxi.app.ui.theme.Slate400
 import com.drawtaxi.app.ui.theme.Slate500
 import com.drawtaxi.app.ui.theme.Slate700
+import com.drawtaxi.app.ui.theme.Amber50
+import com.drawtaxi.app.ui.theme.Amber500
+import com.drawtaxi.app.ui.theme.Amber700
+import com.drawtaxi.app.ui.theme.Rose50
+import com.drawtaxi.app.ui.theme.Rose500
+import com.drawtaxi.app.ui.theme.Rose700
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -56,6 +62,8 @@ fun RideCreateScreen(
     var time by remember { mutableStateOf(initialRide?.time ?: autoFilled?.time ?: "") }
     var price by remember { mutableStateOf(if (initialRide != null && initialRide.price > 0) initialRide.price.toString() else "") }
     var distanceKm by remember { mutableStateOf(initialRide?.distanceKm ?: 0.0) }
+    var isCalculatingRoute by remember { mutableStateOf(false) }
+    var routeError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(autoFilled) {
         autoFilled?.let {
@@ -67,51 +75,84 @@ fun RideCreateScreen(
     }
 
     LaunchedEffect(departure, arrival) {
-        if (departure.length >= 3 && arrival.length >= 3) {
-            kotlinx.coroutines.delay(800L)
-            
-            withContext(Dispatchers.IO) {
-                try {
-                    val depLocation = com.drawtaxi.app.logic.GeocodingService.geocode(departure)
-                    val arrLocation = com.drawtaxi.app.logic.GeocodingService.geocode(arrival)
-                    
-                    if (depLocation != null && arrLocation != null) {
-                        val depPoint = org.osmdroid.util.GeoPoint(depLocation.latitude, depLocation.longitude)
-                        val arrPoint = org.osmdroid.util.GeoPoint(arrLocation.latitude, arrLocation.longitude)
-                        
-                        val routeInfo = fetchRoute(depPoint, arrPoint)
-                        if (routeInfo.distanceMeters > 0) {
-                            val dist = routeInfo.distanceMeters / 1000.0
-                            distanceKm = dist
-                            
-                            val now = java.util.Calendar.getInstance()
-                            val priceBreakdown = com.drawtaxi.app.logic.PriceEngine.calculate(
-                                distanceKm = dist,
-                                dateTime = now,
-                                pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
-                                baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
-                                nightSurchargePercent = settings.nightSurchargePercent,
-                                sundaySurchargePercent = settings.sundaySurchargePercent,
-                                holidaySurchargePercent = settings.holidaySurchargePercent,
-                                euroPerMinute = settings.euroPerMinute,
-                                nightStartHour = settings.nightStartHour,
-                                nightEndHour = settings.nightEndHour,
-                                tvaTransportRate = settings.tvaTransportRate,
-                                tvaWaitTimeRate = settings.tvaWaitTimeRate
-                            )
-                            
-                            withContext(Dispatchers.Main) {
-                                price = String.format("%.2f", priceBreakdown.totalTTC).replace(",", ".")
-                            }
-                        } else {
-                            Log.w("DrawTaxi", "OSRM returned 0 distance")
-                        }
-                    } else {
-                        Log.w("DrawTaxi", "Geocoding failed")
+        if (departure.length < 3 || arrival.length < 3) {
+            isCalculatingRoute = false
+            routeError = null
+            return@LaunchedEffect
+        }
+
+        kotlinx.coroutines.delay(1500L)
+        isCalculatingRoute = true
+        routeError = null
+
+        withContext(Dispatchers.IO) {
+            try {
+                Log.d("DrawTaxi", "Calculating route: $departure -> $arrival")
+                val depLocation = com.drawtaxi.app.logic.GeocodingService.geocode(departure)
+                if (depLocation == null) {
+                    Log.w("DrawTaxi", "Geocoding failed for departure: $departure")
+                    withContext(Dispatchers.Main) {
+                        routeError = "Adresse de départ introuvable"
+                        isCalculatingRoute = false
                     }
-                } catch (e: Exception) {
-                    Log.e("DrawTaxi", "Routing error: ${e.message}", e)
+                    return@withContext
                 }
+
+                val arrLocation = com.drawtaxi.app.logic.GeocodingService.geocode(arrival)
+                if (arrLocation == null) {
+                    Log.w("DrawTaxi", "Geocoding failed for arrival: $arrival")
+                    withContext(Dispatchers.Main) {
+                        routeError = "Adresse de destination introuvable"
+                        isCalculatingRoute = false
+                    }
+                    return@withContext
+                }
+
+                Log.d("DrawTaxi", "Geocoded: dep=(${depLocation.latitude},${depLocation.longitude}) arr=(${arrLocation.latitude},${arrLocation.longitude})")
+
+                val depPoint = org.osmdroid.util.GeoPoint(depLocation.latitude, depLocation.longitude)
+                val arrPoint = org.osmdroid.util.GeoPoint(arrLocation.latitude, arrLocation.longitude)
+
+                val routeInfo = fetchRoute(depPoint, arrPoint)
+                Log.d("DrawTaxi", "Route result: distance=${routeInfo.distanceMeters}m, points=${routeInfo.points.size}")
+
+                if (routeInfo.distanceMeters > 0) {
+                    val dist = routeInfo.distanceMeters / 1000.0
+                    val now = java.util.Calendar.getInstance()
+                    val priceBreakdown = com.drawtaxi.app.logic.PriceEngine.calculate(
+                        distanceKm = dist,
+                        dateTime = now,
+                        pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
+                        baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
+                        nightSurchargePercent = settings.nightSurchargePercent,
+                        sundaySurchargePercent = settings.sundaySurchargePercent,
+                        holidaySurchargePercent = settings.holidaySurchargePercent,
+                        euroPerMinute = settings.euroPerMinute,
+                        nightStartHour = settings.nightStartHour,
+                        nightEndHour = settings.nightEndHour,
+                        tvaTransportRate = settings.tvaTransportRate,
+                        tvaWaitTimeRate = settings.tvaWaitTimeRate
+                    )
+
+                    withContext(Dispatchers.Main) {
+                        distanceKm = dist
+                        price = String.format("%.2f", priceBreakdown.totalTTC).replace(",", ".")
+                        isCalculatingRoute = false
+                        Log.d("DrawTaxi", "Route calculated: ${dist}km, ${price}€")
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        routeError = "Impossible de calculer l'itinéraire"
+                        isCalculatingRoute = false
+                    }
+                    Log.w("DrawTaxi", "OSRM returned 0 distance")
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    routeError = "Erreur: ${e.message}"
+                    isCalculatingRoute = false
+                }
+                Log.e("DrawTaxi", "Routing error: ${e.message}", e)
             }
         }
     }
@@ -294,6 +335,44 @@ fun RideCreateScreen(
                                 Text("$price €", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
                             }
                         }
+                    }
+                }
+            }
+
+            if (isCalculatingRoute) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Amber50),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = Amber500
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Calcul de l'itinéraire...", style = MaterialTheme.typography.bodyMedium, color = Amber700)
+                    }
+                }
+            }
+
+            routeError?.let { error ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Rose50),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = Rose500, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(error, style = MaterialTheme.typography.bodyMedium, color = Rose700)
                     }
                 }
             }

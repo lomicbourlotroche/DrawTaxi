@@ -126,7 +126,6 @@ class MainActivity : ComponentActivity() {
             val validatedRides by viewModel.validatedRides.collectAsState()
             val pendingRides by viewModel.pendingRides.collectAsState()
             val allAbsences by viewModel.allAbsences.collectAsState()
-            val allQuotes by viewModel.allQuotes.collectAsState()
 
             _currentSettings = { settings }
             pendingSettingsUpdate = { viewModel.updateSettings(it) }
@@ -138,8 +137,6 @@ class MainActivity : ComponentActivity() {
             var isCreatingRide by remember { mutableStateOf(false) }
             var creationText by remember { mutableStateOf("") }
             var editingRide by remember { mutableStateOf<RideRequest?>(null) }
-            var showQuoteScreen by remember { mutableStateOf(false) }
-            var quoteRide by remember { mutableStateOf<RideRequest?>(null) }
             var showAgendaScreen by remember { mutableStateOf(false) }
             var showCompletionScreen by remember { mutableStateOf(false) }
             var completionRide by remember { mutableStateOf<RideRequest?>(null) }
@@ -182,59 +179,6 @@ class MainActivity : ComponentActivity() {
                             Toast.makeText(this@MainActivity, "Message d'absence envoyé", Toast.LENGTH_SHORT).show()
                         },
                         onBack = { showAgendaScreen = false }
-                    )
-                } else if (showQuoteScreen && quoteRide != null) {
-                    val currentQuote = quoteRide?.let { ride ->
-                        pendingRides.find { it.id == ride.id }?.let { updatedRide ->
-                            if (updatedRide.quoteId.isNotBlank()) {
-                                allQuotes.find { it.id == updatedRide.quoteId }
-                            } else null
-                        }
-                    }
-                    QuoteScreen(
-                        ride = quoteRide!!,
-                        quote = currentQuote,
-                        settings = settings,
-                        onCreateQuote = { dist, price, channel ->
-                            val quote = com.drawtaxi.app.data.Quote(
-                                id = com.drawtaxi.app.data.Quote.createId(quoteRide!!.id),
-                                rideId = quoteRide!!.id,
-                                departure = quoteRide!!.departure,
-                                arrival = quoteRide!!.arrival,
-                                distanceKm = dist,
-                                price = price,
-                                messageChannel = channel
-                            )
-                            viewModel.sendQuote(quoteRide!!, quote, this@MainActivity)
-                            Toast.makeText(this@MainActivity, "Devis envoyé au client", Toast.LENGTH_SHORT).show()
-                            showQuoteScreen = false
-                            quoteRide = null
-                        },
-                        onSendQuote = { },
-                        onAcceptQuote = { quote ->
-                            viewModel.acceptQuote(quote)
-                            Toast.makeText(this@MainActivity, "Devis accepté - Course confirmée", Toast.LENGTH_SHORT).show()
-                            showQuoteScreen = false
-                            quoteRide = null
-                        },
-                        onRejectQuote = { quote ->
-                            viewModel.rejectQuote(quote)
-                            val message = settings.rejectionTemplate
-                            com.drawtaxi.app.logic.MessageSender.sendMessage(
-                                this@MainActivity,
-                                quoteRide!!.messageChannel,
-                                quoteRide!!.sender,
-                                quoteRide!!.clientEmail,
-                                message
-                            )
-                            Toast.makeText(this@MainActivity, "Devis refusé - Course supprimée", Toast.LENGTH_SHORT).show()
-                            showQuoteScreen = false
-                            quoteRide = null
-                        },
-                        onBack = {
-                            showQuoteScreen = false
-                            quoteRide = null
-                        }
                     )
                 } else if (showCompletionScreen && completionRide != null) {
                     RideCompletionScreen(
@@ -349,7 +293,6 @@ class MainActivity : ComponentActivity() {
                                     "home" -> {
                                         HomeScreen(
                                             validatedRides = validatedRides,
-                                            pendingRides = pendingRides,
                                             brandColor = settings.brandColor,
                                             onRideClick = { selectedRide = it },
                                             onCreateRide = {
@@ -367,7 +310,9 @@ class MainActivity : ComponentActivity() {
                                                 selectedRide = null
                                             },
                                             onDelete = { viewModel.deleteRide(it) },
-                                            onRideClick = { selectedRide = it },
+                                            onRideClick = { ride ->
+                                                editingRide = ride
+                                            },
                                             brandColor = settings.brandColor,
                                             onCreateRide = {
                                                 isCreatingRide = true
@@ -377,9 +322,67 @@ class MainActivity : ComponentActivity() {
                                                 viewModel.scanSmsNow(this@MainActivity)
                                                 Toast.makeText(this@MainActivity, "Vérification des SMS en cours...", Toast.LENGTH_SHORT).show()
                                             },
-                                            onCreateQuote = { ride ->
-                                                quoteRide = ride
-                                                showQuoteScreen = true
+                                            onSendQuote = { ride ->
+                                                val priceBreakdown = com.drawtaxi.app.logic.PriceEngine.calculate(
+                                                    distanceKm = ride.distanceKm,
+                                                    dateTime = java.util.Calendar.getInstance(),
+                                                    pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
+                                                    baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
+                                                    nightSurchargePercent = settings.nightSurchargePercent,
+                                                    sundaySurchargePercent = settings.sundaySurchargePercent,
+                                                    holidaySurchargePercent = settings.holidaySurchargePercent,
+                                                    euroPerMinute = settings.euroPerMinute,
+                                                    nightStartHour = settings.nightStartHour,
+                                                    nightEndHour = settings.nightEndHour,
+                                                    tvaTransportRate = settings.tvaTransportRate,
+                                                    tvaWaitTimeRate = settings.tvaWaitTimeRate
+                                                )
+                                                val quoteMessage = settings.quoteTemplate
+                                                    .replace("[DEPART]", ride.departure.ifBlank { "—" })
+                                                    .replace("[ARRIVEE]", ride.arrival.ifBlank { "—" })
+                                                    .replace("[DISTANCE]", String.format("%.1f", ride.distanceKm))
+                                                    .replace("[PRIX]", String.format("%.2f", priceBreakdown.totalTTC))
+                                                com.drawtaxi.app.logic.MessageSender.sendMessage(
+                                                    this@MainActivity,
+                                                    ride.messageChannel,
+                                                    ride.sender,
+                                                    ride.clientEmail,
+                                                    quoteMessage
+                                                )
+                                                val quote = com.drawtaxi.app.data.Quote(
+                                                    id = com.drawtaxi.app.data.Quote.createId(ride.id),
+                                                    rideId = ride.id,
+                                                    departure = ride.departure,
+                                                    arrival = ride.arrival,
+                                                    distanceKm = ride.distanceKm,
+                                                    price = priceBreakdown.totalTTC,
+                                                    messageChannel = ride.messageChannel,
+                                                    status = com.drawtaxi.app.data.QuoteStatus.PENDING,
+                                                    sentAt = System.currentTimeMillis()
+                                                )
+                                                viewModel.sendQuote(ride, quote, this@MainActivity)
+                                                Toast.makeText(this@MainActivity, "Devis envoyé au client", Toast.LENGTH_SHORT).show()
+                                            },
+                                            onAcceptQuote = { ride ->
+                                                val updatedRide = ride.copy(
+                                                    status = RideStatus.CONFIRMED,
+                                                    price = ride.price
+                                                )
+                                                viewModel.updateRide(updatedRide)
+                                                viewModel.updateRideStatus(ride.id, RideStatus.CONFIRMED)
+                                                Toast.makeText(this@MainActivity, "Course confirmée", Toast.LENGTH_SHORT).show()
+                                            },
+                                            onRejectQuote = { ride ->
+                                                val message = settings.rejectionTemplate
+                                                com.drawtaxi.app.logic.MessageSender.sendMessage(
+                                                    this@MainActivity,
+                                                    ride.messageChannel,
+                                                    ride.sender,
+                                                    ride.clientEmail,
+                                                    message
+                                                )
+                                                viewModel.deleteRide(ride)
+                                                Toast.makeText(this@MainActivity, "Devis refusé - Course supprimée", Toast.LENGTH_SHORT).show()
                                             },
                                             onDeleteWithMessage = { ride, message ->
                                                 viewModel.deleteRideWithMessage(ride, message, this@MainActivity)
