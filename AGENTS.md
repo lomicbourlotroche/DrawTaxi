@@ -4,7 +4,7 @@
 - **Type**: Android native application (Kotlin)
 - **UI Framework**: Jetpack Compose
 - **Architecture**: MVVM with Repository pattern
-- **Database**: Room (v5)
+- **Database**: Room (v6)
 - **Min SDK**: 24, Target SDK: 34, Compile SDK: 34
 
 ---
@@ -219,7 +219,7 @@ class TaxiViewModelFactory(private val repository: TaxiRepository) : ViewModelPr
 - Singleton pattern with `getDatabase()` factory method
 - Use `@Volatile` for INSTANCE field
 - Use `fallbackToDestructiveMigration()` for schema changes
-- Current database version: **5**
+- Current database version: **6**
 
 ### Coroutines & Flow
 
@@ -359,7 +359,7 @@ class SmsParserTest {
 ## Important Notes
 
 - **NO PDF generation**: Invoices were replaced by text receipts + manual Kolecto entry
-- **Database version is 5**: Any schema change requires incrementing this
+- **Database version is 6**: Any schema change requires incrementing this
 - **SMS permissions are critical**: App won't work without RECEIVE_SMS, READ_SMS, SEND_SMS
 - **Foreground service**: SmsForegroundService auto-restarts on task removal
 - **Profitability defaults**: fuelCostPerKm = 0.12, operatingCostPerHour = 15.0

@@ -44,7 +44,7 @@ com.drawtaxi.app/
 │   ├── TaxiRepository.kt        # Couche repository (Flow, StateFlow)
 │   ├── BackupManager.kt         # Sauvegarde/restauration JSON
 │   └── local/
-│       ├── AppDatabase.kt       # Room Database (v5)
+│       ├── AppDatabase.kt       # Room Database (v6)
 │       ├── RideDao.kt           # Opérations CRUD rides
 │       ├── RideEntity.kt        # Entity Room + mappings
 │       └── SettingsManager.kt   # DataStore Preferences

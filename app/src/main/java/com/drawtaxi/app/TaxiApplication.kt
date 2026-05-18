@@ -56,7 +56,7 @@ class TaxiApplication : Application() {
             val workManager = WorkManager.getInstance(this)
             workManager.cancelUniqueWork(SmsScanWorker.WORK_NAME)
 
-            CoroutineScope(Dispatchers.IO).launch {
+            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
                 try {
                     val settings = repository.settings.first()
                     if (!settings.monitorSms) {
