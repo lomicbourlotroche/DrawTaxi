@@ -107,22 +107,14 @@ object GeocodingService {
 
     private fun tryPhotonWithCity(address: String): Location? {
         return try {
-            val cities = brestCities.take(5)
-            val deferredResults = cities.map { city ->
-                kotlinx.coroutines.runBlocking {
-                    kotlinx.coroutines.async {
-                        try {
-                            val query = URLEncoder.encode("$address, $city", "UTF-8")
-                            val url = URL("$PHOTON_BASE?q=$query&limit=1&lang=fr&lat=48.39&lon=-4.49&zoom=12")
-                            val json = fetchJson(url)
-                            parsePhotonResponse(json)
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
-                }
+            for (city in brestCities.take(5)) {
+                val query = URLEncoder.encode("$address, $city", "UTF-8")
+                val url = URL("$PHOTON_BASE?q=$query&limit=1&lang=fr&lat=48.39&lon=-4.49&zoom=12")
+                val json = fetchJson(url)
+                val result = parsePhotonResponse(json)
+                if (result != null) return result
             }
-            deferredResults.awaitAll().firstOrNull { it != null }
+            null
         } catch (e: Exception) {
             null
         }

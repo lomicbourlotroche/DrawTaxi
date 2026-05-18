@@ -12,6 +12,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,8 +37,6 @@ import com.drawtaxi.app.ui.theme.Rose500
 import com.drawtaxi.app.ui.theme.Rose700
 import com.drawtaxi.app.ui.theme.Emerald500
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,6 +69,7 @@ fun RideCreateScreen(
     var routeError by remember { mutableStateOf<String?>(null) }
     var distanceInput by remember { mutableStateOf(if (initialRide?.distanceKm ?: 0.0 > 0) String.format("%.1f", initialRide?.distanceKm ?: 0.0) else "") }
     var hasCalculatedRoute by remember { mutableStateOf(initialRide?.distanceKm ?: 0.0 > 0) }
+    val scope = rememberCoroutineScope()
 
     fun recalculatePriceFromDistance(dist: Double) {
         val now = java.util.Calendar.getInstance()
@@ -96,7 +99,7 @@ fun RideCreateScreen(
         isCalculatingRoute = true
         routeError = null
 
-        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             try {
                 Log.d("DrawTaxi", "Calculating route: $departure -> $arrival")
                 val depLocation = com.drawtaxi.app.logic.GeocodingService.geocode(departure, context)
