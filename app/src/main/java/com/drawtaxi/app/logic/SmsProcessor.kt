@@ -40,20 +40,9 @@ object SmsProcessor {
                 return ProcessResult(Action.NO_ACTION, null)
             }
 
-            val parsedDetails = parseSmsAdvanced(address, body, timestamp)
-            
-            // Convertir ParsedSms en AiParsedResult pour le handler
-            val aiParsedResult = AiParsedResult(
-                departure = parsedDetails.departure,
-                arrival = parsedDetails.arrival,
-                time = parsedDetails.time,
-                date = parsedDetails.date,
-                isConfirmation = parsedDetails.isConfirmation,
-                isCancellation = parsedDetails.isCancellation,
-                isModification = parsedDetails.isModification,
-                confidence = parsedDetails.confidence,
-                missingFields = parsedDetails.missingFields
-            )
+            // Utiliser l'IA si disponible
+            val aiResult = AiSmsParser.parseWithAI(context, body, settings.aiEnabled)
+            Log.d(TAG, "Résultat AI: departure=${aiResult.departure}, arrival=${aiResult.arrival}, time=${aiResult.time}, confidence=${aiResult.confidence}")
             
             // Vérifier si c'est une réponse à un devis (confirmation/refus/modification)
             val isQuoteResponse = QuoteResponseHandler.handleResponse(
@@ -61,14 +50,14 @@ object SmsProcessor {
                 repository,
                 address,
                 body,
-                aiParsedResult
+                aiResult
             )
             if (isQuoteResponse) {
                 Log.d(TAG, "Réponse à un devis traitée")
                 return ProcessResult(Action.RIDE_UPDATED, null)
             }
 
-            if (parsedDetails.isCancellation) {
+            if (aiResult.isCancellation) {
                 return handleCancellation(context, repository, address, body)
             }
 
@@ -87,7 +76,7 @@ object SmsProcessor {
                 }
 
                 RideMatchResult.ADDITION -> {
-                    handleNewRide(repository, address, body, timestamp)
+                    handleNewRideWithAI(context, repository, address, body, timestamp, aiResult, settings)
                 }
 
                 RideMatchResult.CLARIFICATION -> {
@@ -100,12 +89,43 @@ object SmsProcessor {
                 }
 
                 RideMatchResult.NEW_RIDE -> {
-                    handleNewRide(repository, address, body, timestamp)
+                    handleNewRideWithAI(context, repository, address, body, timestamp, aiResult, settings)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erreur traitement SMS: ${e.message}", e)
             return ProcessResult(Action.NO_ACTION, null)
+        }
+    }
+
+    private suspend fun handleNewRideWithAI(
+        context: Context,
+        repository: TaxiRepository,
+        address: String,
+        body: String,
+        timestamp: Long,
+        aiResult: AiParsedResult,
+        settings: com.drawtaxi.app.data.AppSettings
+    ): ProcessResult {
+        val ride = aiResult.toRideRequest(address, timestamp, settings)
+        return if (ride != null) {
+            val missingFields = aiResult.missingFields
+            val hasMissingInfo = missingFields.isNotEmpty()
+            val updatedRide = ride.copy(
+                hasMissingInfo = hasMissingInfo,
+                missingFieldsList = missingFields.joinToString(",")
+            )
+            repository.saveRide(updatedRide)
+            Log.d(TAG, "Nouvelle course créée (AI): ${updatedRide.id} (infos manquantes: $hasMissingInfo)")
+            ProcessResult(
+                action = Action.NEW_RIDE,
+                ride = updatedRide,
+                notificationTitle = "Nouvelle course",
+                notificationBody = "${updatedRide.departure} → ${updatedRide.arrival}"
+            )
+        } else {
+            Log.d(TAG, "AI n'a pas pu extraire d'informations de course")
+            ProcessResult(Action.NO_ACTION, null)
         }
     }
 
