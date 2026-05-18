@@ -272,7 +272,7 @@ private fun ClientDetailBottomSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
     
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(

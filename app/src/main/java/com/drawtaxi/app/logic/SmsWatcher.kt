@@ -10,6 +10,7 @@ import com.drawtaxi.app.TaxiApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -28,7 +29,7 @@ class SmsWatcher(
     }
 
     private var debounceJob: Job? = null
-    private val watcherScope = CoroutineScope(Dispatchers.IO)
+    private val watcherScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val processedSmsCache = ConcurrentHashMap<String, Long>()
     private var lastCheckedId: Long = -1
 
@@ -37,7 +38,6 @@ class SmsWatcher(
     }
 
     override fun onChange(selfChange: Boolean) {
-        super.onChange(selfChange)
         if (selfChange) return
         
         Log.d(TAG, "Changement détecté dans les SMS - debounce activé")
@@ -49,7 +49,6 @@ class SmsWatcher(
     }
 
     override fun onChange(selfChange: Boolean, uri: Uri?) {
-        super.onChange(selfChange, uri)
         if (selfChange) return
         
         Log.d(TAG, "Changement détecté - URI: $uri")
@@ -108,10 +107,7 @@ class SmsWatcher(
                         if (address.isNotBlank() && body.isNotBlank() && timestamp > 0) {
                             processedSmsCache[dedupKey] = now
                             if (processedSmsCache.size > MAX_PROCESSED_CACHE_SIZE) {
-                                val oldestKeys = processedSmsCache.entries
-                                    .sortedBy { it.value }
-                                    .take(processedSmsCache.size - MAX_PROCESSED_CACHE_SIZE / 2)
-                                oldestKeys.forEach { processedSmsCache.remove(it.key) }
+                                evictOldCacheEntries()
                             }
                             
                             Log.d(TAG, "Nouveau SMS détecté - De: $address, Corps: ${body.take(50)}...")
@@ -134,6 +130,21 @@ class SmsWatcher(
         }
     }
 
+    private fun evictOldCacheEntries() {
+        val now = System.currentTimeMillis()
+        val expiredKeys = processedSmsCache.filterValues { (now - it) > DEDUP_WINDOW_MS }.keys
+        processedSmsCache.keys.removeAll(expiredKeys)
+        
+        if (processedSmsCache.size > MAX_PROCESSED_CACHE_SIZE) {
+            val excessCount = processedSmsCache.size - (MAX_PROCESSED_CACHE_SIZE / 2)
+            val oldestKeys = processedSmsCache.entries
+                .sortedBy { it.value }
+                .take(excessCount)
+                .map { it.key }
+            processedSmsCache.keys.removeAll(oldestKeys)
+        }
+    }
+
     fun start() {
         Log.d(TAG, "Démarrage de la surveillance SMS avec ContentObserver")
         contentResolver.registerContentObserver(
@@ -148,6 +159,7 @@ class SmsWatcher(
     fun stop() {
         Log.d(TAG, "Arrêt de la surveillance SMS")
         debounceJob?.cancel()
+        watcherScope.cancel()
         try {
             contentResolver.unregisterContentObserver(this)
         } catch (e: Exception) {

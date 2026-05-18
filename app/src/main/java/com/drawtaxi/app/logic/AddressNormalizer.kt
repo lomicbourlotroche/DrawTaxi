@@ -16,21 +16,21 @@ object AddressNormalizer {
     )
 
     private val accentCorrections = mapOf(
-        "marechal" to "marechal", "general" to "general",
-        "republique" to "republique", "liberation" to "liberation",
-        "prefecture" to "prefecture", "eglise" to "eglise",
-        "ecole" to "ecole", "hopital" to "hopital",
+        "marechal" to "maréchal", "general" to "général",
+        "republique" to "république", "liberation" to "libération",
+        "prefecture" to "préfecture", "eglise" to "église",
+        "ecole" to "école", "hopital" to "hôpital",
         "pharmacie" to "pharmacie", "mairie" to "mairie",
-        "cimetiere" to "cimetiere", "theatre" to "theatre",
-        "musee" to "musee", "stade" to "stade",
+        "cimetiere" to "cimetière", "theatre" to "théâtre",
+        "musee" to "musée", "stade" to "stade",
         "parking" to "parking", "centre commercial" to "centre commercial",
         "hyper" to "hyper", "super" to "super", "u." to "u",
         "leclerc" to "leclerc", "auchan" to "auchan", "carrefour" to "carrefour",
-        "casino" to "casino", "intermarche" to "intermarche",
+        "casino" to "casino", "intermarche" to "intermarché",
         "boulangerie" to "boulangerie", "boucherie" to "boucherie",
-        "patisserie" to "patisserie", "restaurant" to "restaurant",
-        "cafe" to "cafe", "hotel" to "hotel",
-        "gare" to "gare", "aeroport" to "aeroport"
+        "patisserie" to "pâtisserie", "restaurant" to "restaurant",
+        "cafe" to "café", "hotel" to "hôtel",
+        "gare" to "gare", "aeroport" to "aéroport"
     )
 
     private val noiseWords = listOf(

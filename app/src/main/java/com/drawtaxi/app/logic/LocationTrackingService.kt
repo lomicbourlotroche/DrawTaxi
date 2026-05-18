@@ -188,8 +188,11 @@ class LocationTrackingService : Service() {
     }
 
     private fun stopTracking() {
+        if (!isTracking) return
         isTracking = false
-        fusedLocationClient.removeLocationUpdates(locationCallback)
+        if (::locationCallback.isInitialized) {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         Log.d(TAG, "Suivi GPS arrêté")

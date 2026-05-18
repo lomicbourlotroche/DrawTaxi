@@ -80,7 +80,7 @@ private val confirmationKeywords = listOf(
 private val cancelKeywords = listOf(
     "annule", "annuler", "annulation", "annulez", "supprime", "supprimer",
     "suppression", "efface", "effacer", "désist", "desist", "abandon",
-    "n'abandonne pas", "ne vient pas", "ne peut pas", "cancel", "cancelled",
+    "ne vient pas", "ne peut pas", "cancel", "cancelled",
     "delete", "stop", "stopped", "stopper", "ne plus", "stoppé", "stoppee",
     "plus besoin", "je n'ai plus", "pas la peine", "inutile",
     "c'est annulé", "annule", "c'est bon j'ai", "j'ai trouvé"
@@ -130,17 +130,8 @@ fun parseSms(sender: String, body: String, timestamp: Long = System.currentTimeM
             return null
         }
         
-        return RideRequest(
-            id = RideRequest.createStableId(sender, body, timestamp),
-            sender = sender,
-            body = body,
-            departure = "",
-            arrival = "",
-            time = "",
-            distanceKm = 0.0,
-            timestamp = timestamp,
-            status = RideStatus.DRAFT
-        )
+        Log.d(TAG, "SMS taxi détecté mais sans infos de course: $sender")
+        return null
     }
     
     val estimatedDistance = estimateDistance(parsed.departure, parsed.arrival)
@@ -184,10 +175,10 @@ private fun estimateDistance(departure: String, arrival: String): Double {
     val arrIsSuburb = suburbKeywords.any { arrLower.contains(it) }
     
     return when {
-        depIsParis && arrIsParis -> 8.0 + Math.random() * 12
-        (depIsParis && arrIsSuburb) || (depIsSuburb && arrIsParis) -> 20.0 + Math.random() * 15
-        depIsSuburb && arrIsSuburb -> 15.0 + Math.random() * 20
-        else -> 15.0 + Math.random() * 25
+        depIsParis && arrIsParis -> 10.0
+        (depIsParis && arrIsSuburb) || (depIsSuburb && arrIsParis) -> 25.0
+        depIsSuburb && arrIsSuburb -> 20.0
+        else -> 25.0
     }
 }
 

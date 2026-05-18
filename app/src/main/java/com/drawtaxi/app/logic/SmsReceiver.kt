@@ -12,8 +12,10 @@ import androidx.core.content.ContextCompat
 import com.drawtaxi.app.TaxiApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 class SmsReceiver : BroadcastReceiver() {
@@ -57,47 +59,44 @@ class SmsReceiver : BroadcastReceiver() {
         Log.d(TAG, "SMS reçu - De: $sender - Corps: ${fullBody.take(50)}...")
 
         val pendingResult = goAsync()
+        val receiverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-        CoroutineScope(Dispatchers.IO).launch {
+        receiverScope.launch {
             try {
-                val repository = (context.applicationContext as TaxiApplication).repository
-                val settings = repository.settings.first()
+                withTimeoutOrNull(8000L) {
+                    val repository = (context.applicationContext as TaxiApplication).repository
+                    val settings = repository.settings.first()
 
-                if (!settings.monitorSms) {
-                    Log.d(TAG, "Surveillance SMS désactivée")
-                    pendingResult.finish()
-                    return@launch
+                    if (!settings.monitorSms) {
+                        Log.d(TAG, "Surveillance SMS désactivée")
+                        return@withTimeoutOrNull
+                    }
+
+                    if (!hasSmsPermission(context)) {
+                        Log.e(TAG, "Permission SMS non accordée")
+                        return@withTimeoutOrNull
+                    }
+
+                    val parsed = parseSmsAdvanced(sender, fullBody, timestamp)
+                    val existingRide = findRecentRideForSender(sender, repository)
+
+                    if (parsed.isCancellation) {
+                        handleCancellation(context, sender, fullBody, repository)
+                        return@withTimeoutOrNull
+                    }
+
+                    if (parsed.isConfirmation && existingRide != null) {
+                        handleConfirmation(context, sender, fullBody, existingRide, repository)
+                        return@withTimeoutOrNull
+                    }
+
+                    if (parsed.isModification && existingRide != null) {
+                        handleModification(context, sender, fullBody, parsed, existingRide, repository, settings)
+                        return@withTimeoutOrNull
+                    }
+
+                    processNewOrUpdatedRide(context, sender, fullBody, parsed, timestamp, existingRide, repository, settings)
                 }
-
-                if (!hasSmsPermission(context)) {
-                    Log.e(TAG, "Permission SMS non accordée")
-                    pendingResult.finish()
-                    return@launch
-                }
-
-                val parsed = parseSmsAdvanced(sender, fullBody, timestamp)
-                val existingRide = findRecentRideForSender(sender, repository)
-
-                if (parsed.isCancellation) {
-                    handleCancellation(context, sender, fullBody, repository)
-                    pendingResult.finish()
-                    return@launch
-                }
-
-                if (parsed.isConfirmation && existingRide != null) {
-                    handleConfirmation(context, sender, fullBody, existingRide, repository)
-                    pendingResult.finish()
-                    return@launch
-                }
-
-                if (parsed.isModification && existingRide != null) {
-                    handleModification(context, sender, fullBody, parsed, existingRide, repository, settings)
-                    pendingResult.finish()
-                    return@launch
-                }
-
-                processNewOrUpdatedRide(context, sender, fullBody, parsed, timestamp, existingRide, repository, settings)
-
             } catch (e: Exception) {
                 Log.e(TAG, "Erreur traitement SMS: ${e.message}", e)
             } finally {

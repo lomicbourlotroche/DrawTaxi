@@ -27,22 +27,28 @@ suspend fun fetchRoute(start: GeoPoint, end: GeoPoint): RouteInfo {
             val url = URL(urlString)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
             connection.connect()
 
-            if (connection.responseCode == 200) {
-                val reader = BufferedReader(InputStreamReader(connection.inputStream))
-                val response = StringBuilder()
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    response.append(line)
+            val result = try {
+                if (connection.responseCode == 200) {
+                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
+                    val response = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        response.append(line)
+                    }
+                    reader.close()
+                    parseOsrmResponse(response.toString())
+                } else {
+                    android.util.Log.e("DrawTaxi", "FetchRoute ERROR: code=${connection.responseCode}")
+                    RouteInfo(emptyList(), 0.0)
                 }
-                reader.close()
-
-                parseOsrmResponse(response.toString())
-            } else {
-                android.util.Log.e("DrawTaxi", "FetchRoute ERROR: code=${connection.responseCode}")
-                RouteInfo(emptyList(), 0.0)
+            } finally {
+                connection.disconnect()
             }
+            result
         } catch (e: Exception) {
             android.util.Log.e("DrawTaxi", "FetchRoute EXCEPTION: ${e.message}", e)
             RouteInfo(emptyList(), 0.0)

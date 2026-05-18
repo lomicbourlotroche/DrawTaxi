@@ -5,6 +5,8 @@ import android.location.Geocoder
 import android.location.Location
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -105,14 +107,22 @@ object GeocodingService {
 
     private fun tryPhotonWithCity(address: String): Location? {
         return try {
-            for (city in brestCities) {
-                val query = URLEncoder.encode("$address, $city", "UTF-8")
-                val url = URL("$PHOTON_BASE?q=$query&limit=1&lang=fr&lat=48.39&lon=-4.49&zoom=12")
-                val json = fetchJson(url)
-                val result = parsePhotonResponse(json)
-                if (result != null) return result
+            val cities = brestCities.take(5)
+            val deferredResults = cities.map { city ->
+                kotlinx.coroutines.runBlocking {
+                    kotlinx.coroutines.async {
+                        try {
+                            val query = URLEncoder.encode("$address, $city", "UTF-8")
+                            val url = URL("$PHOTON_BASE?q=$query&limit=1&lang=fr&lat=48.39&lon=-4.49&zoom=12")
+                            val json = fetchJson(url)
+                            parsePhotonResponse(json)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                }
             }
-            null
+            deferredResults.awaitAll().firstOrNull { it != null }
         } catch (e: Exception) {
             null
         }
@@ -185,11 +195,14 @@ object GeocodingService {
         connection.connectTimeout = 10000
         connection.readTimeout = 10000
         connection.setRequestProperty("User-Agent", "DrawTaxi/1.0")
-
-        val reader = BufferedReader(InputStreamReader(connection.inputStream))
-        val response = reader.readText()
-        reader.close()
-        return response
+        try {
+            val reader = BufferedReader(InputStreamReader(connection.inputStream))
+            val response = reader.readText()
+            reader.close()
+            return response
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun parsePhotonResponse(response: String): Location? {

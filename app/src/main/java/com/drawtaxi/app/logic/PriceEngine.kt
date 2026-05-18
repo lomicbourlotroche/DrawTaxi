@@ -158,12 +158,23 @@ object PriceEngine {
         }
     }
 
-    fun formatQuoteMessage(price: PriceBreakdown, departure: String, arrival: String): String {
+    fun formatQuoteMessage(
+        price: PriceBreakdown,
+        departure: String,
+        arrival: String,
+        pricePerKm: Double = 1.20,
+        baseFare: Double = 2.60
+    ): String {
+        val estimatedDistance = if (pricePerKm > 0) {
+            (price.basePrice + price.distancePrice - baseFare) / pricePerKm
+        } else {
+            0.0
+        }
         return buildString {
             appendLine("Bonjour, voici le devis pour votre course :")
             appendLine("")
             appendLine("Trajet : $departure → $arrival")
-            appendLine("Distance : ${String.format("%.1f km", (price.basePrice + price.distancePrice - 2.60) / 1.20)}")
+            appendLine("Distance : ${String.format("%.1f km", estimatedDistance)}")
             if (price.isNight) appendLine("⏰ Majoration nuit incluse")
             if (price.isSunday) appendLine("📅 Majoration dimanche incluse")
             if (price.isHoliday) appendLine("🎉 Majoration jour férié incluse")

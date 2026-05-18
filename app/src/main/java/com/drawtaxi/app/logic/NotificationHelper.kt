@@ -20,12 +20,6 @@ object NotificationHelper {
     private const val NOTIFICATION_ID_LOCATION = 103
     private const val NOTIFICATION_ID_SMS = 104
 
-    private var notificationManager: NotificationManagerCompat? = null
-
-    private fun getManager(context: Context): NotificationManagerCompat {
-        return notificationManager ?: NotificationManagerCompat.from(context).also { notificationManager = it }
-    }
-
     fun showNewRideNotification(context: Context, rideId: String, destination: String, time: String) {
         val title = "Nouvelle Course !"
         val body = "Destination : $destination${if (time.isNotBlank()) " à $time" else ""}"
@@ -54,7 +48,7 @@ object NotificationHelper {
             .setAutoCancel(true)
 
         try {
-            getManager(context).notify(NOTIFICATION_ID_NEW_RIDE, builder.build())
+            NotificationManagerCompat.from(context.applicationContext).notify(NOTIFICATION_ID_NEW_RIDE, builder.build())
         } catch (e: SecurityException) {
             Log.e("DrawTaxi", "Permission de notification manquante")
         }
@@ -106,7 +100,7 @@ object NotificationHelper {
             .setAutoCancel(true)
 
         try {
-            getManager(context).notify(notificationId.coerceIn(1, 1000), builder.build())
+            NotificationManagerCompat.from(context.applicationContext).notify(notificationId.coerceIn(1, 1000), builder.build())
         } catch (e: SecurityException) {
             Log.e("DrawTaxi", "Permission de notification manquante")
         }

@@ -25,7 +25,7 @@ import java.util.*
 @Composable
 fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideRequest>, brandColor: Color) {
     val now = Calendar.getInstance()
-    val today = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(now.time)
+    val today = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(now.time) }
     val weekAgo = remember(now) {
         Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -7) }.timeInMillis
     }

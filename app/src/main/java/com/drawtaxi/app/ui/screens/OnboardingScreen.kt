@@ -134,8 +134,7 @@ fun OnboardingScreen(
                 onClick = {
                     onUpdateSettings(settings.copy(
                         companyName = companyName,
-                        name = driverName,
-                        isFirstLaunch = false
+                        name = driverName
                     ))
                     onComplete()
                 },
@@ -146,7 +145,7 @@ fun OnboardingScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = settings.brandColor),
                 enabled = companyName.isNotBlank() && driverName.isNotBlank()
             ) {
-                Text("COMMENCER", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                Text("SUIVANT", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
             }

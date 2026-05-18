@@ -13,17 +13,15 @@ import com.drawtaxi.app.data.local.SettingsManager
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import com.drawtaxi.app.logic.RideMatcher
-import com.drawtaxi.app.logic.RideMatchResult
-import com.drawtaxi.app.logic.RideMatchInfo
 import com.drawtaxi.app.logic.SmsForegroundService
+import com.drawtaxi.app.logic.SmsProcessor
 import com.drawtaxi.app.logic.SmsScanWorker
-import com.drawtaxi.app.logic.parseSms
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -161,96 +159,47 @@ class TaxiApplication : Application() {
     fun onNewSmsReceived(address: String, body: String, timestamp: Long) {
         Log.d(TAG, "SMS reçu de $address: ${body.take(50)}...")
         
-        CoroutineScope(Dispatchers.IO).launch {
+        val appScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        appScope.launch {
             try {
-                val settings = repository.settings.first()
-                if (!settings.monitorSms) {
-                    Log.d(TAG, "Surveillance SMS désactivée, SMS ignoré")
-                    return@launch
-                }
+                val result = SmsProcessor.processSms(
+                    context = this@TaxiApplication,
+                    repository = repository,
+                    address = address,
+                    body = body,
+                    timestamp = timestamp
+                )
 
-                val pendingList = repository.getPendingRidesList()
-                val matchInfo = RideMatcher.matchSmsToRides(address, body, pendingList)
-                
-                Log.d(TAG, "Analyse SMS: ${matchInfo.result} - ${matchInfo.reason}")
-                
-                    when (matchInfo.result) {
-                    RideMatchResult.DELETION -> {
-                        matchInfo.matchedRide?.let { ride ->
-                            repository.deleteRide(ride)
-                            Log.d(TAG, "Course supprimée: ${ride.id}")
+                when (result.action) {
+                    SmsProcessor.Action.NEW_RIDE -> {
+                        com.drawtaxi.app.logic.NotificationHelper.showNewRideNotification(
+                            this@TaxiApplication,
+                            result.ride?.id ?: "",
+                            result.ride?.arrival ?: "",
+                            result.ride?.time ?: ""
+                        )
+                    }
+                    SmsProcessor.Action.RIDE_UPDATED -> {
+                        result.notificationTitle?.let { title ->
                             com.drawtaxi.app.logic.NotificationHelper.showInfoNotification(
                                 this@TaxiApplication,
-                                "Course annulée",
-                                "Course supprimée: ${ride.departure} → ${ride.arrival}",
+                                title,
+                                result.notificationBody ?: "",
+                                result.ride?.id
+                            )
+                        }
+                    }
+                    SmsProcessor.Action.RIDE_DELETED -> {
+                        result.notificationTitle?.let { title ->
+                            com.drawtaxi.app.logic.NotificationHelper.showInfoNotification(
+                                this@TaxiApplication,
+                                title,
+                                result.notificationBody ?: "",
                                 null
                             )
                         }
                     }
-                    
-                    RideMatchResult.MODIFICATION -> {
-                        matchInfo.matchedRide?.let { ride ->
-                            val parsedRide = parseSms(address, body, timestamp)
-                            if (parsedRide != null) {
-                                val updatedRide = ride.copy(
-                                    departure = if (parsedRide.departure.isNotBlank()) parsedRide.departure else ride.departure,
-                                    arrival = if (parsedRide.arrival.isNotBlank()) parsedRide.arrival else ride.arrival,
-                                    time = if (parsedRide.time.isNotBlank()) parsedRide.time else ride.time,
-                                    body = ride.body + "\n--- MODIFICATION ---\n" + body
-                                )
-                                repository.updateRide(updatedRide)
-                                Log.d(TAG, "Course modifiée: ${updatedRide.id}")
-                                com.drawtaxi.app.logic.NotificationHelper.showInfoNotification(
-                                    this@TaxiApplication,
-                                    "Course modifiée",
-                                    "${updatedRide.departure} → ${updatedRide.arrival}",
-                                    ride.id
-                                )
-                            }
-                        }
-                    }
-                    
-                    RideMatchResult.ADDITION -> {
-                        val parsedRide = parseSms(address, body, timestamp)
-                        if (parsedRide != null) {
-                            repository.saveRide(parsedRide)
-                            Log.d(TAG, "Nouvelle course ajoutée: ${parsedRide.id}")
-                            com.drawtaxi.app.logic.NotificationHelper.showNewRideNotification(
-                                this@TaxiApplication,
-                                parsedRide.id,
-                                parsedRide.arrival,
-                                parsedRide.time
-                            )
-                        }
-                    }
-                    
-                    RideMatchResult.CLARIFICATION -> {
-                        matchInfo.matchedRide?.let { ride ->
-                            val updatedRide = ride.copy(
-                                body = ride.body + "\n--- REPONSE ---\n" + body
-                            )
-                            repository.updateRide(updatedRide)
-                            Log.d(TAG, "Réponse ajoutée à la course: ${ride.id}")
-                        }
-                    }
-                    
-                    RideMatchResult.DUPLICATE -> {
-                        Log.d(TAG, "Doublon détecté, ignoré")
-                    }
-                    
-                    RideMatchResult.NEW_RIDE -> {
-                        val parsedRide = parseSms(address, body, timestamp)
-                        if (parsedRide != null) {
-                            repository.saveRide(parsedRide)
-                            Log.d(TAG, "Nouvelle course créée: ${parsedRide.id}")
-                            com.drawtaxi.app.logic.NotificationHelper.showNewRideNotification(
-                                this@TaxiApplication,
-                                parsedRide.id,
-                                parsedRide.arrival,
-                                parsedRide.time
-                            )
-                        }
-                    }
+                    else -> {}
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Erreur traitement SMS: ${e.message}")

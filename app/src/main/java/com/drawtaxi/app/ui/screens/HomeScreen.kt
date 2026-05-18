@@ -36,30 +36,31 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val now = Calendar.getInstance()
-    val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val todayDateStr = dateFormat.format(now.time)
     val currentTimeStr = timeFormat.format(now.time)
 
     val isIgnoringBatteryOptimization = remember { PermissionHelper.isIgnoringBatteryOptimizations(context) }
 
-    val upcomingRides = remember(validatedRides) {
-        validatedRides.filter { ride ->
-            val rideDate = ride.date.ifBlank { todayDateStr }
-            val rideTime = ride.time.ifBlank { "00:00" }
-            when {
-                rideDate > todayDateStr -> true
-                rideDate == todayDateStr && rideTime >= currentTimeStr -> true
-                else -> false
-            }
-        }.sortedWith(compareBy({ it.date.ifBlank { todayDateStr } }, { it.time.ifBlank { "00:00" } }))
+    val sortByDate = validatedRides.sortedWith(
+        compareBy<RideRequest> { it.date.ifBlank { "99/99/9999" } }
+            .thenBy { it.time.ifBlank { "99:99" } }
+    )
+
+    val todayRides = sortByDate.filter { ride ->
+        val rideDate = ride.date.ifBlank { todayDateStr }
+        rideDate == todayDateStr
     }
 
-    val todayRides = remember(validatedRides) {
-        validatedRides.filter { ride ->
-            val rideDate = ride.date.ifBlank { todayDateStr }
-            rideDate == todayDateStr && ride.time < currentTimeStr
-        }
+    val upcomingRides = sortByDate.filter { ride ->
+        val rideDate = ride.date.ifBlank { todayDateStr }
+        rideDate > todayDateStr
+    }
+
+    val pastRides = sortByDate.filter { ride ->
+        val rideDate = ride.date.ifBlank { todayDateStr }
+        rideDate < todayDateStr
     }
 
     val todayRevenue = todayRides.sumOf { it.price }
@@ -155,13 +156,13 @@ fun HomeScreen(
             }
         }
 
-        if (upcomingRides.isNotEmpty()) {
+        if (todayRides.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(20.dp))
-                Text(text = "À venir", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800, modifier = Modifier.padding(horizontal = 20.dp))
+                Text(text = "Aujourd'hui", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800, modifier = Modifier.padding(horizontal = 20.dp))
             }
             
-            items(upcomingRides.take(5)) { ride ->
+            items(todayRides) { ride ->
                 RideCard(
                     ride = ride,
                     brandColor = brandColor,
@@ -172,13 +173,30 @@ fun HomeScreen(
             }
         }
 
-        if (todayRides.isNotEmpty()) {
+        if (upcomingRides.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(20.dp))
-                Text(text = "Terminées aujourd'hui", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800, modifier = Modifier.padding(horizontal = 20.dp))
+                Text(text = "À venir", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800, modifier = Modifier.padding(horizontal = 20.dp))
             }
             
-            items(todayRides.sortedByDescending { it.time }) { ride ->
+            items(upcomingRides) { ride ->
+                RideCard(
+                    ride = ride,
+                    brandColor = brandColor,
+                    onValidate = { onRideClick(ride) },
+                    onDelete = { },
+                    onClick = { onRideClick(ride) }
+                )
+            }
+        }
+
+        if (pastRides.isNotEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(text = "Passées", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800, modifier = Modifier.padding(horizontal = 20.dp))
+            }
+            
+            items(pastRides) { ride ->
                 RideHistoryCard(
                     ride = ride,
                     brandColor = brandColor,

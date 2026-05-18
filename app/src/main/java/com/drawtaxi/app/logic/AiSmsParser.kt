@@ -35,9 +35,9 @@ data class AiParsedResult(
             val depIsParis = parisKeywords.any { depLower.contains(it) }
             val arrIsParis = parisKeywords.any { arrLower.contains(it) }
             when {
-                depIsParis && arrIsParis -> 8.0 + Math.random() * 12
-                depIsParis || arrIsParis -> 20.0 + Math.random() * 15
-                else -> 15.0 + Math.random() * 25
+                depIsParis && arrIsParis -> 10.0
+                depIsParis || arrIsParis -> 25.0
+                else -> 25.0
             }
         } else 0.0
 

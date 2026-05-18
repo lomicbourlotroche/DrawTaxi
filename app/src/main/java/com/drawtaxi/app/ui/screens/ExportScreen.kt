@@ -227,7 +227,7 @@ fun ExportScreen(
 
 @Composable
 private fun ExportPreviewRow(ride: RideRequest) {
-    val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
     
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -259,7 +259,7 @@ private fun generateCsv(rides: List<RideRequest>): String {
     val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
     
     val sb = StringBuilder()
-    sb.appendLine("Date,Heure,Client,Dénpart,Arrivée,Distance (km),Prix (€),Numéro facture,Notes")
+    sb.appendLine("Date,Heure,Client,Départ,Arrivée,Distance (km),Prix (€),Numéro facture,Notes")
     
     rides.forEach { ride ->
         val date = ride.date.ifBlank { dateFormat.format(Date(ride.timestamp)) }

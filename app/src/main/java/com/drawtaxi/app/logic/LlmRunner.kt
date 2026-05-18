@@ -21,6 +21,11 @@ object LlmRunner {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    fun cleanup() {
+        client.dispatcher.executorService.shutdown()
+        client.connectionPool.evictAll()
+    }
+
     fun run(modelPath: String, prompt: String): String? {
         return try {
             Log.d(TAG, "Running inference via HuggingFace API (model: $modelPath)")
@@ -55,7 +60,9 @@ object LlmRunner {
 
                 if (response.code == 503) {
                     Log.w(TAG, "Model is loading, retrying in 20s...")
-                    Thread.sleep(20000)
+                    kotlinx.coroutines.runBlocking {
+                        kotlinx.coroutines.delay(20000)
+                    }
                     return runHuggingFaceInference(prompt)
                 }
                 return null

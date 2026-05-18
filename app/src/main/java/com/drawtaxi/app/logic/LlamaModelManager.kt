@@ -10,8 +10,10 @@ import java.net.URL
 object LlamaModelManager {
 
     private const val TAG = "LlamaModelManager"
-    private const val MODEL_FILENAME = "phi3-mini.gguf"
-    private const val MODEL_URL = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
+    private const val MODEL_FILENAME = "llama-3.2-3b-instruct-q4_k_m.gguf"
+    private const val MODEL_URL = "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf?download=true"
+    private const val EXPECTED_SIZE_BYTES = 1_500_000_000L
+    private const val MIN_VALID_SIZE = 500_000_000L
 
     enum class ModelStatus {
         NOT_DOWNLOADED,
@@ -35,7 +37,7 @@ object LlamaModelManager {
 
     fun isModelAvailable(context: Context): Boolean {
         val file = getModelFile(context)
-        return file.exists() && file.length() > 100_000_000L
+        return file.exists() && file.length() > MIN_VALID_SIZE
     }
 
     suspend fun downloadModel(
@@ -54,38 +56,39 @@ object LlamaModelManager {
             val url = URL(MODEL_URL)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
-            connection.connectTimeout = 30000
-            connection.readTimeout = 30000
+            connection.connectTimeout = 60000
+            connection.readTimeout = 60000
             connection.instanceFollowRedirects = true
+            connection.setRequestProperty("User-Agent", "DrawTaxi/1.0")
 
-            val totalSize = connection.contentLengthLong
+            val totalSize = connection.contentLengthLong.takeIf { it > 0 } ?: EXPECTED_SIZE_BYTES
             var downloadedBytes = 0L
 
             FileOutputStream(outputFile).use { output ->
                 connection.inputStream.use { input ->
-                    val buffer = ByteArray(8192)
+                    val buffer = ByteArray(65536)
                     var bytesRead: Int
 
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         output.write(buffer, 0, bytesRead)
                         downloadedBytes += bytesRead
 
-                        if (totalSize > 0) {
-                            _downloadProgress = downloadedBytes.toFloat() / totalSize
-                            onProgress(_downloadProgress)
-                        }
+                        _downloadProgress = (downloadedBytes.toFloat() / totalSize).coerceAtMost(1.0f)
+                        onProgress(_downloadProgress)
                     }
                 }
             }
 
-            if (outputFile.length() > 100_000_000L) {
+            connection.disconnect()
+
+            if (outputFile.length() > MIN_VALID_SIZE) {
                 _status = ModelStatus.READY
                 Log.i(TAG, "Model downloaded successfully: ${outputFile.length() / 1024 / 1024} MB")
                 true
             } else {
                 outputFile.delete()
                 _status = ModelStatus.ERROR
-                Log.e(TAG, "Downloaded file too small, deleting")
+                Log.e(TAG, "Downloaded file too small (${outputFile.length()} bytes), deleting")
                 false
             }
         } catch (e: Exception) {
@@ -124,5 +127,15 @@ object LlamaModelManager {
     fun getDownloadedSize(context: Context): Long {
         val file = getModelFile(context)
         return if (file.exists()) file.length() else 0L
+    }
+
+    fun getModelSizeFormatted(context: Context): String {
+        val size = getDownloadedSize(context)
+        return when {
+            size == 0L -> "Non téléchargé"
+            size < 1_000_000 -> "${size / 1024} Ko"
+            size < 1_000_000_000 -> "${size / 1_000_000} Mo"
+            else -> String.format("%.1f Go", size / 1_000_000_000.0)
+        }
     }
 }

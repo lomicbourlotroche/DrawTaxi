@@ -52,8 +52,14 @@ class TaxiRepository(
         }
     }
 
-    suspend fun saveRide(ride: RideRequest) {
+    suspend fun saveRide(ride: RideRequest): Boolean {
+        val existing = rideDao.getRideById(ride.id)
+        if (existing != null) {
+            rideDao.updateRide(ride.toEntity())
+            return false
+        }
         rideDao.insertRide(ride.toEntity())
+        return true
     }
 
     suspend fun validateRide(id: String) {

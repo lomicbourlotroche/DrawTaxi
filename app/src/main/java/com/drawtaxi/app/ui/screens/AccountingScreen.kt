@@ -91,12 +91,13 @@ fun AccountingScreen(
     val averagePerKm = if (totalKm > 0) totalRevenue / totalKm else 0.0
     
     val dailyStats = remember(filteredRides) {
+        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+        val dayNameFormat = SimpleDateFormat("EEE", Locale.getDefault())
         filteredRides
             .groupBy { it.date.ifBlank { "Sans date" } }
             .map { (date, rides) ->
                 val calendar = Calendar.getInstance()
                 val parsed = try {
-                    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
                     sdf.parse(date)
                 } catch (e: Exception) { null }
                 
@@ -112,7 +113,7 @@ fun AccountingScreen(
                 
                 DailyStats(
                     date = date,
-                    dayName = SimpleDateFormat("EEE", Locale.getDefault()).format(calendar.time),
+                    dayName = dayNameFormat.format(calendar.time),
                     totalRevenue = dayRevenue,
                     rideCount = rides.size,
                     totalKm = rides.sumOf { it.distanceKm },

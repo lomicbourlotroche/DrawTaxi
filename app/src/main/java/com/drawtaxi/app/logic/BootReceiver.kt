@@ -12,8 +12,10 @@ import com.drawtaxi.app.data.local.AppDatabase
 import com.drawtaxi.app.data.local.SettingsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 class BootReceiver : BroadcastReceiver() {
     companion object {
@@ -26,33 +28,36 @@ class BootReceiver : BroadcastReceiver() {
             Log.d(TAG, "Boot/PackageReplaced - vérification de la surveillance SMS")
 
             val pendingResult = goAsync()
-            CoroutineScope(Dispatchers.IO).launch {
+            val bootScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+            bootScope.launch {
                 try {
-                    val settingsManager = SettingsManager(context)
-                    val settings = settingsManager.settingsFlow.first()
+                    withTimeoutOrNull(10000L) {
+                        val settingsManager = SettingsManager(context)
+                        val settings = settingsManager.settingsFlow.first()
 
-                    if (!settings.monitorSms) {
-                        Log.d(TAG, "Surveillance SMS désactivée dans les paramètres")
-                        return@launch
-                    }
+                        if (!settings.monitorSms) {
+                            Log.d(TAG, "Surveillance SMS désactivée dans les paramètres")
+                            return@withTimeoutOrNull
+                        }
 
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS)
-                        != PackageManager.PERMISSION_GRANTED) {
-                        Log.d(TAG, "Permission READ_SMS non accordée")
-                        return@launch
-                    }
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS)
+                            != PackageManager.PERMISSION_GRANTED) {
+                            Log.d(TAG, "Permission READ_SMS non accordée")
+                            return@withTimeoutOrNull
+                        }
 
-                    if (SmsForegroundService.isRunning) {
-                        Log.d(TAG, "Service déjà en cours d'exécution")
-                        return@launch
-                    }
+                        if (SmsForegroundService.isRunning) {
+                            Log.d(TAG, "Service déjà en cours d'exécution")
+                            return@withTimeoutOrNull
+                        }
 
-                    Log.d(TAG, "Démarrage du SmsForegroundService après boot")
-                    val serviceIntent = Intent(context, SmsForegroundService::class.java)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(serviceIntent)
-                    } else {
-                        context.startService(serviceIntent)
+                        Log.d(TAG, "Démarrage du SmsForegroundService après boot")
+                        val serviceIntent = Intent(context, SmsForegroundService::class.java)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            context.startForegroundService(serviceIntent)
+                        } else {
+                            context.startService(serviceIntent)
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Erreur au démarrage du service: ${e.message}")

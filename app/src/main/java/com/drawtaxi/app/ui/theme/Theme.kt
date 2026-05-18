@@ -172,8 +172,10 @@ fun DrawTaxiTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = if (darkTheme) Slate950.toArgb() else brandColor.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                window.statusBarColor = if (darkTheme) Slate950.toArgb() else brandColor.toArgb()
+            }
         }
     }
 

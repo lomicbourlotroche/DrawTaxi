@@ -20,6 +20,9 @@ interface RideDao {
     @Query("SELECT * FROM rides WHERE isPending = 1 ORDER BY timestamp DESC")
     suspend fun getPendingRidesList(): List<RideEntity>
 
+    @Query("SELECT * FROM rides WHERE id = :rideId LIMIT 1")
+    suspend fun getRideById(rideId: String): RideEntity?
+
     @Query("SELECT * FROM rides WHERE status = :status ORDER BY timestamp DESC")
     suspend fun getRidesByStatus(status: String): List<RideEntity>
 

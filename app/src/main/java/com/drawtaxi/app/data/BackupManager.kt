@@ -135,8 +135,10 @@ class BackupManager(private val context: Context) {
 
     suspend fun exportToUri(uri: Uri, backupData: String): Result<Unit> {
         return try {
-            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                OutputStreamWriter(outputStream).use { writer ->
+            val outputStream = context.contentResolver.openOutputStream(uri)
+                ?: return Result.failure(Exception("Cannot open output stream"))
+            outputStream.use {
+                OutputStreamWriter(it).use { writer ->
                     writer.write(backupData)
                 }
             }

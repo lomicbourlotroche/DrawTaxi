@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import com.drawtaxi.app.data.local.AppDatabase
 import com.drawtaxi.app.data.local.SettingsManager
 import com.drawtaxi.app.data.TaxiRepository
+import kotlinx.coroutines.flow.first
 
 class SmsScanWorker(
     context: Context,
@@ -19,14 +20,9 @@ class SmsScanWorker(
 
         fun getIntervalMinutes(context: Context): Int {
             val settingsManager = SettingsManager(context)
-            var interval = 60
-            kotlinx.coroutines.runBlocking {
-                settingsManager.settingsFlow.collect { settings ->
-                    interval = settings.smsScanIntervalMinutes
-                    throw kotlinx.coroutines.CancellationException("Got value")
-                }
+            return kotlinx.coroutines.runBlocking {
+                settingsManager.settingsFlow.first().smsScanIntervalMinutes
             }
-            return interval
         }
     }
 

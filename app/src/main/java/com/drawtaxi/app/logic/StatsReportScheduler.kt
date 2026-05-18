@@ -11,6 +11,7 @@ import com.drawtaxi.app.data.StatsReport
 import com.drawtaxi.app.data.TaxiRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -23,16 +24,9 @@ class StatsReportScheduler {
         const val ACTION_WEEKLY_REPORT = "com.drawtaxi.app.ACTION_WEEKLY_REPORT"
         const val ACTION_MONTHLY_REPORT = "com.drawtaxi.app.ACTION_MONTHLY_REPORT"
 
-        fun scheduleDailyReport(context: Context) {
+        fun scheduleWeeklyReport(context: Context) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-            val calendar = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, 23)
-                set(Calendar.MINUTE, 59)
-                set(Calendar.SECOND, 0)
-                if (before(Calendar.getInstance())) {
-                    add(Calendar.DAY_OF_YEAR, 1)
-                }
-            }
+            val calendar = getNextSundayAt2359()
 
             val weeklyIntent = Intent(context, StatsReportReceiver::class.java).apply {
                 action = ACTION_WEEKLY_REPORT
@@ -44,6 +38,19 @@ class StatsReportScheduler {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                weeklyPendingIntent
+            )
+
+            Log.d(TAG, "Rapport hebdomadaire programmé pour: ${calendar.time}")
+        }
+
+        fun scheduleMonthlyReport(context: Context) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val calendar = getLastDayOfMonthAt2359()
+
             val monthlyIntent = Intent(context, StatsReportReceiver::class.java).apply {
                 action = ACTION_MONTHLY_REPORT
             }
@@ -54,21 +61,44 @@ class StatsReportScheduler {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            alarmManager.setRepeating(
+            alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 calendar.timeInMillis,
-                AlarmManager.INTERVAL_DAY,
-                weeklyPendingIntent
-            )
-
-            alarmManager.setRepeating(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                AlarmManager.INTERVAL_DAY,
                 monthlyPendingIntent
             )
 
-            Log.d(TAG, "Rapports programmés à 23:59 quotidiennement")
+            Log.d(TAG, "Rapport mensuel programmé pour: ${calendar.time}")
+        }
+
+        private fun getNextSundayAt2359(): Calendar {
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 59)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            while (calendar.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY) {
+                calendar.add(Calendar.DAY_OF_YEAR, 1)
+            }
+            if (calendar.before(Calendar.getInstance())) {
+                calendar.add(Calendar.WEEK_OF_YEAR, 1)
+            }
+            return calendar
+        }
+
+        private fun getLastDayOfMonthAt2359(): Calendar {
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 59)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            if (calendar.before(Calendar.getInstance())) {
+                calendar.add(Calendar.MONTH, 1)
+                calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
+            }
+            return calendar
         }
 
         fun generateWeeklyStats(rides: List<RideRequest>): StatsReport? {
@@ -162,7 +192,8 @@ class StatsReportReceiver : BroadcastReceiver() {
     }
 
     private fun generateAndNotify(context: Context, type: String) {
-        CoroutineScope(Dispatchers.IO).launch {
+        val receiverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        receiverScope.launch {
             try {
                 val database = com.drawtaxi.app.data.local.AppDatabase.getDatabase(context)
                 val settingsManager = com.drawtaxi.app.data.local.SettingsManager(context)
@@ -189,6 +220,11 @@ class StatsReportReceiver : BroadcastReceiver() {
                         null
                     )
                     Log.d("StatsReportReceiver", "Rapport $type généré: ${it.totalRides} courses, ${it.totalRevenue} €")
+                }
+
+                when (type) {
+                    "weekly" -> StatsReportScheduler.scheduleWeeklyReport(context)
+                    "monthly" -> StatsReportScheduler.scheduleMonthlyReport(context)
                 }
             } catch (e: Exception) {
                 Log.e("StatsReportReceiver", "Erreur génération rapport: ${e.message}")

@@ -113,7 +113,7 @@ object RideCalculator {
 
     fun filterByPeriod(rides: List<RideRequest>, period: DashboardPeriod): List<RideRequest> {
         val now = Calendar.getInstance()
-        val calendar = Calendar.getInstance()
+        val calendar = now.clone() as Calendar
 
         val startOfPeriod = when (period) {
             DashboardPeriod.TODAY -> {

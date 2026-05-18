@@ -31,6 +31,7 @@ import com.drawtaxi.app.ui.theme.Amber700
 import com.drawtaxi.app.ui.theme.Rose50
 import com.drawtaxi.app.ui.theme.Rose500
 import com.drawtaxi.app.ui.theme.Rose700
+import com.drawtaxi.app.ui.theme.Emerald500
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -64,48 +65,58 @@ fun RideCreateScreen(
     var distanceKm by remember { mutableStateOf(initialRide?.distanceKm ?: 0.0) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
     var routeError by remember { mutableStateOf<String?>(null) }
+    var distanceInput by remember { mutableStateOf(if (initialRide?.distanceKm ?: 0.0 > 0) String.format("%.1f", initialRide?.distanceKm ?: 0.0) else "") }
+    var hasCalculatedRoute by remember { mutableStateOf(initialRide?.distanceKm ?: 0.0 > 0) }
 
-    LaunchedEffect(autoFilled) {
-        autoFilled?.let {
-            if (clientPhone.isBlank()) clientPhone = it.sender
-            if (departure.isBlank()) departure = it.departure
-            if (arrival.isBlank()) arrival = it.arrival
-            if (time.isBlank()) time = it.time
-        }
+    fun recalculatePriceFromDistance(dist: Double) {
+        val now = java.util.Calendar.getInstance()
+        val priceBreakdown = com.drawtaxi.app.logic.PriceEngine.calculate(
+            distanceKm = dist,
+            dateTime = now,
+            pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
+            baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
+            nightSurchargePercent = settings.nightSurchargePercent,
+            sundaySurchargePercent = settings.sundaySurchargePercent,
+            holidaySurchargePercent = settings.holidaySurchargePercent,
+            euroPerMinute = settings.euroPerMinute,
+            nightStartHour = settings.nightStartHour,
+            nightEndHour = settings.nightEndHour,
+            tvaTransportRate = settings.tvaTransportRate,
+            tvaWaitTimeRate = settings.tvaWaitTimeRate
+        )
+        price = String.format("%.2f", priceBreakdown.totalTTC).replace(",", ".")
     }
 
-    LaunchedEffect(departure, arrival) {
+    fun calculateRoute() {
         if (departure.length < 3 || arrival.length < 3) {
-            isCalculatingRoute = false
-            routeError = null
-            return@LaunchedEffect
+            routeError = "Adresses trop courtes"
+            return
         }
 
-        kotlinx.coroutines.delay(1500L)
         isCalculatingRoute = true
         routeError = null
 
-        withContext(Dispatchers.IO) {
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
                 Log.d("DrawTaxi", "Calculating route: $departure -> $arrival")
-                val depLocation = com.drawtaxi.app.logic.GeocodingService.geocode(departure)
+                val depLocation = com.drawtaxi.app.logic.GeocodingService.geocode(departure, context)
                 if (depLocation == null) {
                     Log.w("DrawTaxi", "Geocoding failed for departure: $departure")
                     withContext(Dispatchers.Main) {
-                        routeError = "Adresse de départ introuvable"
+                        routeError = "Départ introuvable"
                         isCalculatingRoute = false
                     }
-                    return@withContext
+                    return@launch
                 }
 
-                val arrLocation = com.drawtaxi.app.logic.GeocodingService.geocode(arrival)
+                val arrLocation = com.drawtaxi.app.logic.GeocodingService.geocode(arrival, context)
                 if (arrLocation == null) {
                     Log.w("DrawTaxi", "Geocoding failed for arrival: $arrival")
                     withContext(Dispatchers.Main) {
-                        routeError = "Adresse de destination introuvable"
+                        routeError = "Destination introuvable"
                         isCalculatingRoute = false
                     }
-                    return@withContext
+                    return@launch
                 }
 
                 Log.d("DrawTaxi", "Geocoded: dep=(${depLocation.latitude},${depLocation.longitude}) arr=(${arrLocation.latitude},${arrLocation.longitude})")
@@ -116,36 +127,30 @@ fun RideCreateScreen(
                 val routeInfo = fetchRoute(depPoint, arrPoint)
                 Log.d("DrawTaxi", "Route result: distance=${routeInfo.distanceMeters}m, points=${routeInfo.points.size}")
 
+                var dist: Double
                 if (routeInfo.distanceMeters > 0) {
-                    val dist = routeInfo.distanceMeters / 1000.0
-                    val now = java.util.Calendar.getInstance()
-                    val priceBreakdown = com.drawtaxi.app.logic.PriceEngine.calculate(
-                        distanceKm = dist,
-                        dateTime = now,
-                        pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
-                        baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
-                        nightSurchargePercent = settings.nightSurchargePercent,
-                        sundaySurchargePercent = settings.sundaySurchargePercent,
-                        holidaySurchargePercent = settings.holidaySurchargePercent,
-                        euroPerMinute = settings.euroPerMinute,
-                        nightStartHour = settings.nightStartHour,
-                        nightEndHour = settings.nightEndHour,
-                        tvaTransportRate = settings.tvaTransportRate,
-                        tvaWaitTimeRate = settings.tvaWaitTimeRate
-                    )
-
-                    withContext(Dispatchers.Main) {
-                        distanceKm = dist
-                        price = String.format("%.2f", priceBreakdown.totalTTC).replace(",", ".")
-                        isCalculatingRoute = false
-                        Log.d("DrawTaxi", "Route calculated: ${dist}km, ${price}€")
-                    }
+                    dist = routeInfo.distanceMeters / 1000.0
+                    Log.d("DrawTaxi", "Using OSRM distance: $dist km")
                 } else {
-                    withContext(Dispatchers.Main) {
-                        routeError = "Impossible de calculer l'itinéraire"
-                        isCalculatingRoute = false
-                    }
-                    Log.w("DrawTaxi", "OSRM returned 0 distance")
+                    val lat1 = Math.toRadians(depLocation.latitude)
+                    val lat2 = Math.toRadians(arrLocation.latitude)
+                    val dLat = Math.toRadians(arrLocation.latitude - depLocation.latitude)
+                    val dLon = Math.toRadians(arrLocation.longitude - depLocation.longitude)
+                    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                            Math.cos(lat1) * Math.cos(lat2) *
+                            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+                    val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+                    dist = 6371.0 * c * 1.3
+                    Log.d("DrawTaxi", "Using haversine fallback: $dist km (x1.3 for road)")
+                }
+
+                withContext(Dispatchers.Main) {
+                    distanceKm = dist
+                    distanceInput = String.format("%.1f", dist)
+                    recalculatePriceFromDistance(dist)
+                    isCalculatingRoute = false
+                    hasCalculatedRoute = true
+                    Log.d("DrawTaxi", "Route calculated: ${dist}km, ${price}€")
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -154,6 +159,27 @@ fun RideCreateScreen(
                 }
                 Log.e("DrawTaxi", "Routing error: ${e.message}", e)
             }
+        }
+    }
+
+    LaunchedEffect(autoFilled) {
+        autoFilled?.let {
+            if (clientPhone.isBlank()) clientPhone = it.sender
+            if (departure.isBlank()) departure = it.departure
+            if (arrival.isBlank()) arrival = it.arrival
+            if (time.isBlank()) time = it.time
+        }
+    }
+
+    LaunchedEffect(initialRide?.id) {
+        if (initialRide != null && initialRide.distanceKm > 0) {
+            distanceKm = initialRide.distanceKm
+            distanceInput = String.format("%.1f", initialRide.distanceKm)
+            recalculatePriceFromDistance(initialRide.distanceKm)
+            hasCalculatedRoute = true
+        } else if (departure.length >= 3 && arrival.length >= 3) {
+            kotlinx.coroutines.delay(1000L)
+            calculateRoute()
         }
     }
     
@@ -277,7 +303,7 @@ fun RideCreateScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = departure,
-                        onValueChange = { departure = it; stopTimer() },
+                        onValueChange = { departure = it; stopTimer(); hasCalculatedRoute = false },
                         label = { Text("Adresse de départ") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -285,7 +311,7 @@ fun RideCreateScreen(
                     )
                     OutlinedTextField(
                         value = arrival,
-                        onValueChange = { arrival = it; stopTimer() },
+                        onValueChange = { arrival = it; stopTimer(); hasCalculatedRoute = false },
                         label = { Text("Adresse de destination") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -311,28 +337,50 @@ fun RideCreateScreen(
                             placeholder = { Text("HHhMM") }
                         )
                     }
-                }
-            }
 
-            if (distanceKm > 0) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = brandColor.copy(0.08f)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Distance estimée", style = MaterialTheme.typography.bodySmall, color = Slate500)
-                            Text(String.format("%.1f km", distanceKm), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        }
-                        if (price.isNotBlank()) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Prix estimé", style = MaterialTheme.typography.bodySmall, color = Slate500)
-                                Text("$price €", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = distanceInput,
+                            onValueChange = {
+                                distanceInput = it
+                                stopTimer()
+                                val d = it.toDoubleOrNull()
+                                if (d != null && d > 0) {
+                                    distanceKm = d
+                                    recalculatePriceFromDistance(d)
+                                }
+                            },
+                            label = { Text("Distance (km)") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = brandColor) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            trailingIcon = {
+                                if (distanceKm > 0) {
+                                    Text(
+                                        text = "✓",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Emerald500,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                            }
+                        )
+                        Button(
+                            onClick = { calculateRoute() },
+                            enabled = !isCalculatingRoute && departure.length >= 3 && arrival.length >= 3,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = brandColor),
+                            modifier = Modifier.align(Alignment.Bottom)
+                        ) {
+                            if (isCalculatingRoute) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                            } else {
+                                Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -373,6 +421,31 @@ fun RideCreateScreen(
                         Icon(Icons.Default.Warning, contentDescription = null, tint = Rose500, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(error, style = MaterialTheme.typography.bodyMedium, color = Rose700)
+                    }
+                }
+            }
+
+            if (distanceKm > 0 && !isCalculatingRoute) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = brandColor.copy(0.08f)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Distance", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                            Text(String.format("%.1f km", distanceKm), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                        if (price.isNotBlank()) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Prix estimé", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                                Text("$price €", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
+                            }
+                        }
                     }
                 }
             }

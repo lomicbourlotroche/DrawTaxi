@@ -22,6 +22,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.MainActivity
+import com.drawtaxi.app.R
 import com.drawtaxi.app.TaxiApplication
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.TaxiRepository
@@ -42,6 +43,8 @@ class SmsForegroundService : Service() {
         private const val SMS_PROCESS_DELAY_MS = 1000L
         private const val DEDUP_WINDOW_MS = 60000L
         private const val MAX_PROCESSED_CACHE = 200
+        const val ACTION_STOP_SERVICE = "ACTION_STOP_SERVICE"
+        const val ACTION_SCAN_NOW = "ACTION_SCAN_NOW"
 
         @Volatile
         var isRunning = false
@@ -61,6 +64,7 @@ class SmsForegroundService : Service() {
     private val processedSmsCache = ConcurrentHashMap<String, Long>()
     private val debounceHandler = Handler(Looper.getMainLooper())
     private var debounceRunnable: Runnable? = null
+    private var totalSmsProcessed = 0
 
     private lateinit var repository: TaxiRepository
 
@@ -80,6 +84,19 @@ class SmsForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_STOP_SERVICE -> {
+                Log.d(TAG, "Arrêt demandé via notification")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_SCAN_NOW -> {
+                Log.d(TAG, "Scan manuel demandé via notification")
+                scanNow()
+                return START_STICKY
+            }
+        }
+
         Log.d(TAG, "Service démarré")
 
         try {
@@ -155,18 +172,56 @@ class SmsForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val currentTime = timeFormat.format(Date())
+        val stopIntent = Intent(this, SmsForegroundService::class.java).apply {
+            action = ACTION_STOP_SERVICE
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val scanIntent = Intent(this, SmsForegroundService::class.java).apply {
+            action = ACTION_SCAN_NOW
+        }
+        val scanPendingIntent = PendingIntent.getService(
+            this,
+            2,
+            scanIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val smsCountText = if (totalSmsProcessed > 0) {
+            "$totalSmsProcessed SMS analysé${if (totalSmsProcessed > 1) "s" else ""}"
+        } else {
+            "En attente de SMS..."
+        }
 
         return NotificationCompat.Builder(this, NotificationHelper.CHANNEL_ID_SMS)
-            .setContentTitle("DrawTaxi - Surveillance active")
-            .setContentText("Dernière vérification: $currentTime")
-            .setSmallIcon(android.R.drawable.ic_menu_sort_by_size)
+            .setContentTitle("DrawTaxi - Surveillance SMS active")
+            .setContentText(smsCountText)
+            .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setShowWhen(true)
+            .setUsesChronometer(false)
+            .addAction(
+                android.R.drawable.ic_menu_search,
+                "Scanner",
+                scanPendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Arrêter",
+                stopPendingIntent
+            )
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("DrawTaxi surveille vos SMS entrants pour détecter automatiquement les réservations de courses.\n\n$smsCountText")
+            )
             .build()
     }
 
@@ -300,6 +355,7 @@ class SmsForegroundService : Service() {
                             }
                             
                             processSms(address, body, timestamp)
+                            totalSmsProcessed++
                         }
                     }
                     if (count > 0) {
@@ -319,20 +375,25 @@ class SmsForegroundService : Service() {
 
     private fun updateNotification() {
         try {
-            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-            val currentTime = timeFormat.format(Date())
+            val smsCountText = if (totalSmsProcessed > 0) {
+                "$totalSmsProcessed SMS analysé${if (totalSmsProcessed > 1) "s" else ""}"
+            } else {
+                "En attente de SMS..."
+            }
             
             val notification = NotificationCompat.Builder(this, NotificationHelper.CHANNEL_ID_SMS)
-                .setContentTitle("DrawTaxi - Surveillance active")
-                .setContentText("Dernière vérification: $currentTime")
-                .setSmallIcon(android.R.drawable.ic_menu_sort_by_size)
+                .setContentTitle("DrawTaxi - Surveillance SMS active")
+                .setContentText(smsCountText)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setOngoing(true)
                 .setContentIntent(PendingIntent.getActivity(
                     this, 0, Intent(this, MainActivity::class.java),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 ))
                 .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setShowWhen(true)
+                .setOnlyAlertOnce(true)
                 .build()
             
             val notificationManager = getSystemService(NotificationManager::class.java)
@@ -343,150 +404,36 @@ class SmsForegroundService : Service() {
     }
 
     suspend fun processSms(address: String, body: String, timestamp: Long) {
-        Log.d(TAG, "Traitement SMS de $address: ${body.take(50)}")
+        val result = SmsProcessor.processSms(
+            context = this,
+            repository = repository,
+            address = address,
+            body = body,
+            timestamp = timestamp
+        )
 
-        try {
-            val settings = repository.getSettingsSync()
-            if (!settings.monitorSms) {
-                Log.d(TAG, "Surveillance SMS désactivée, SMS ignoré")
-                return
-            }
-
-            val isTaxi = AiSmsParser.isTaxiRelated(this, body, settings.aiEnabled)
-            if (!isTaxi) {
-                Log.d(TAG, "SMS non lié au taxi (IA), ignoré")
-                return
-            }
-
-            val parsedDetails = parseSmsAdvanced(address, body, timestamp)
-            
-            if (parsedDetails.isCancellation) {
-                handleCancellationSms(address, body)
-                return
-            }
-
-            val pendingList = repository.getPendingRidesList()
-            val matchInfo = RideMatcher.matchSmsToRides(address, body, pendingList)
-
-            Log.d(TAG, "Analyse SMS: ${matchInfo.result} - ${matchInfo.reason}")
-
-            when (matchInfo.result) {
-                RideMatchResult.DELETION, RideMatchResult.MODIFICATION -> {
-                    matchInfo.matchedRide?.let { ride ->
-                        val parsedRide = parseSms(address, body, timestamp)
-                        if (matchInfo.result == RideMatchResult.DELETION || parsedDetails.isCancellation) {
-                            repository.deleteRide(ride)
-                            Log.d(TAG, "Course supprimée: ${ride.id}")
-                            NotificationHelper.showInfoNotification(
-                                this@SmsForegroundService,
-                                "Course annulée",
-                                "Course supprimée: ${ride.departure} → ${ride.arrival}",
-                                null
-                            )
-                        } else if (parsedRide != null) {
-                            val updatedRide = ride.copy(
-                                departure = if (parsedRide.departure.isNotBlank()) parsedRide.departure else ride.departure,
-                                arrival = if (parsedRide.arrival.isNotBlank()) parsedRide.arrival else ride.arrival,
-                                time = if (parsedRide.time.isNotBlank()) parsedRide.time else ride.time,
-                                body = ride.body + "\n--- MODIFICATION ---\n" + body
-                            )
-                            repository.updateRide(updatedRide)
-                            Log.d(TAG, "Course modifiée: ${updatedRide.id}")
-                            NotificationHelper.showInfoNotification(
-                                this@SmsForegroundService,
-                                "Course modifiée",
-                                "${updatedRide.departure} → ${updatedRide.arrival}",
-                                ride.id
-                            )
-                        }
-                    }
-                }
-
-                RideMatchResult.ADDITION -> {
-                    val parsedRide = parseSms(address, body, timestamp)
-                    if (parsedRide != null) {
-                        repository.saveRide(parsedRide)
-                        Log.d(TAG, "Nouvelle course ajoutée: ${parsedRide.id}")
-                        NotificationHelper.showNewRideNotification(
-                            this@SmsForegroundService,
-                            parsedRide.id,
-                            parsedRide.arrival,
-                            parsedRide.time
-                        )
-                    }
-                }
-
-                RideMatchResult.CLARIFICATION -> {
-                    matchInfo.matchedRide?.let { ride ->
-                        val parsedRide = parseSms(address, body, timestamp)
-                        if (parsedRide != null && (parsedRide.departure.isNotBlank() ||
-                            parsedRide.arrival.isNotBlank() || parsedRide.time.isNotBlank())) {
-                            val updatedRide = ride.copy(
-                                departure = if (parsedRide.departure.isNotBlank()) parsedRide.departure else ride.departure,
-                                arrival = if (parsedRide.arrival.isNotBlank()) parsedRide.arrival else ride.arrival,
-                                time = if (parsedRide.time.isNotBlank()) parsedRide.time else ride.time,
-                                body = ride.body + "\n--- REPONSE ---\n" + body
-                            )
-                            repository.updateRide(updatedRide)
-                            Log.d(TAG, "Course mise à jour depuis réponse: ${ride.id}")
-                        } else {
-                            val updatedRide = ride.copy(
-                                body = ride.body + "\n--- REPONSE ---\n" + body
-                            )
-                            repository.updateRide(updatedRide)
-                            Log.d(TAG, "Réponse ajoutée à la course: ${ride.id}")
-                        }
-                    }
-                }
-
-                RideMatchResult.DUPLICATE -> {
-                    Log.d(TAG, "Doublon détecté, ignoré")
-                }
-
-                RideMatchResult.NEW_RIDE -> {
-                    if (parsedDetails.isCancellation) {
-                        Log.d(TAG, "Message d'annulation sans course correspondante, ignoré")
-                        return
-                    }
-                    val parsedRide = parseSms(address, body, timestamp)
-                    if (parsedRide != null) {
-                        val missingFields = parsedDetails.missingFields
-                        val hasMissingInfo = missingFields.isNotEmpty()
-                        val updatedRide = parsedRide.copy(
-                            hasMissingInfo = hasMissingInfo,
-                            missingFieldsList = missingFields.joinToString(",")
-                        )
-                        repository.saveRide(updatedRide)
-                        Log.d(TAG, "Nouvelle course créée: ${updatedRide.id} (infos manquantes: $hasMissingInfo)")
-                        NotificationHelper.showNewRideNotification(
-                            this@SmsForegroundService,
-                            updatedRide.id,
-                            updatedRide.arrival,
-                            updatedRide.time
-                        )
-                    }
+        when (result.action) {
+            SmsProcessor.Action.NEW_RIDE -> {
+                result.ride?.let { ride ->
+                    NotificationHelper.showNewRideNotification(
+                        this,
+                        ride.id,
+                        ride.arrival,
+                        ride.time
+                    )
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erreur traitement SMS: ${e.message}", e)
-        }
-    }
-
-    private suspend fun handleCancellationSms(address: String, body: String) {
-        val pendingList = repository.getPendingRidesList()
-        val matchingRide = pendingList
-            .filter { it.sender == address }
-            .maxByOrNull { it.timestamp }
-        
-        if (matchingRide != null) {
-            repository.deleteRide(matchingRide)
-            Log.d(TAG, "Course annulée via SMS: ${matchingRide.id}")
-            NotificationHelper.showInfoNotification(
-                this@SmsForegroundService,
-                "Course annulée",
-                "Course supprimée: ${matchingRide.departure} → ${matchingRide.arrival}",
-                null
-            )
+            SmsProcessor.Action.RIDE_UPDATED, SmsProcessor.Action.RIDE_DELETED -> {
+                result.notificationTitle?.let { title ->
+                    NotificationHelper.showInfoNotification(
+                        this,
+                        title,
+                        result.notificationBody ?: "",
+                        result.ride?.id
+                    )
+                }
+            }
+            else -> {}
         }
     }
 

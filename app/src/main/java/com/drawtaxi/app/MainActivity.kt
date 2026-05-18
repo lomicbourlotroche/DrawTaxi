@@ -159,15 +159,31 @@ class MainActivity : ComponentActivity() {
             }
 
             DrawTaxiTheme(brandColor = settings.brandColor, darkTheme = settings.darkMode) {
+                var onboardingStep by remember { mutableStateOf(0) }
+
                 if (settings.isFirstLaunch) {
-                    OnboardingScreen(
-                        settings = settings,
-                        onUpdateSettings = { viewModel.updateSettings(it) },
-                        onRequestSms = { requestSmsPermission() },
-                        onRequestNotification = { requestNotificationPermission() },
-                        onRequestLocation = { requestLocationPermission() },
-                        onComplete = { }
-                    )
+                    when (onboardingStep) {
+                        0 -> OnboardingScreen(
+                            settings = settings,
+                            onUpdateSettings = { viewModel.updateSettings(it) },
+                            onRequestSms = { requestSmsPermission() },
+                            onRequestNotification = { requestNotificationPermission() },
+                            onRequestLocation = { requestLocationPermission() },
+                            onComplete = { onboardingStep = 1 }
+                        )
+                        1 -> {
+                            BackHandler { onboardingStep = 0 }
+                            AiModelDownloadScreen(
+                                brandColor = settings.brandColor,
+                                onSkip = {
+                                    viewModel.updateSettings(settings.copy(isFirstLaunch = false))
+                                },
+                                onComplete = {
+                                    viewModel.updateSettings(settings.copy(isFirstLaunch = false))
+                                }
+                            )
+                        }
+                    }
                 } else if (showAgendaScreen) {
                     AgendaScreen(
                         absences = allAbsences,

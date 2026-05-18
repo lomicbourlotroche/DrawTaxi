@@ -90,12 +90,16 @@ object OsmRoutingService {
                 val responseCode = connection.responseCode
                 if (responseCode != 200) {
                     Log.e(TAG, "OSRM error: $responseCode")
+                    connection.disconnect()
                     return@withContext null
                 }
 
-                val reader = BufferedReader(InputStreamReader(connection.inputStream))
-                val response = reader.readText()
-                reader.close()
+                val response = try {
+                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
+                    reader.readText()
+                } finally {
+                    connection.disconnect()
+                }
 
                 parseOsmResponse(response)
             } catch (e: Exception) {

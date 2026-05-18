@@ -22,7 +22,7 @@ object RideMatcher {
 
     private val deleteKeywords = listOf(
         "annule", "annuler", "annulation", "supprime", "supprimer", "suppression",
-        "efface", "effacer", "désist", "desist", "abandon", "n'abandonne pas",
+        "efface", "effacer", "désist", "desist", "abandon",
         "ne vient pas", "ne peut pas", "cancel", "cancelled", "delete",
         "stop", "stopped", "stopper", "ne plus", "stoppé"
     )
@@ -30,7 +30,7 @@ object RideMatcher {
     private val modifyKeywords = listOf(
         "modifie", "modifier", "change", "changer", "changement", "rectifie",
         "rectifier", "corrige", "corriger", "mauvais", "erreur", "faux",
-        "pas ", "invers", "swap", "different", "autre", "nouveau", "nouvelle",
+        "invers", "swap", "different", "autre", "nouveau", "nouvelle",
         "mise à jour", "mise a jour", "update", "instead", "actually"
     )
 
@@ -133,7 +133,18 @@ object RideMatcher {
     }
 
     private fun containsKeyword(text: String, keywords: List<String>): Boolean {
-        return keywords.any { keyword -> text.contains(keyword) }
+        return keywords.any { keyword ->
+            if (keyword.endsWith(" ")) {
+                text.contains(keyword)
+            } else {
+                text.contains(keyword) && (
+                    text.indexOf(keyword) == 0 ||
+                    text.indexOf(keyword) + keyword.length == text.length ||
+                    text[text.indexOf(keyword) - 1].isWhitespace() ||
+                    text[text.indexOf(keyword) + keyword.length].isWhitespace()
+                )
+            }
+        }
     }
 
     private fun containsTaxiKeyword(text: String): Boolean {

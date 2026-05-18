@@ -8,6 +8,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,7 +31,7 @@ fun RideHistoryItem(
     isUpcoming: Boolean,
     onClick: () -> Unit
 ) {
-    val sdf = SimpleDateFormat("dd/MM, HH:mm", Locale.getDefault())
+    val sdf = remember { SimpleDateFormat("dd/MM, HH:mm", Locale.getDefault()) }
     val dateString = sdf.format(Date(ride.timestamp))
 
     Row(
