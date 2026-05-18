@@ -2,6 +2,7 @@ package com.drawtaxi.app.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -142,6 +143,20 @@ fun SettingsMain(
                     style = MaterialTheme.typography.bodySmall,
                     color = Slate500
                 )
+            }
+            
+            // Bouton téléchargement modèle si non disponible
+            if (settings.aiEnabled && !isAiAvailable) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = { onNavigate("aiDownload") },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Télécharger le modèle IA")
+                }
             }
         }
 

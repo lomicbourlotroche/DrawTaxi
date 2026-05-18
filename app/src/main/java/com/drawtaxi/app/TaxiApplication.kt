@@ -14,6 +14,7 @@ import com.drawtaxi.app.data.local.SettingsManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import com.drawtaxi.app.logic.SmsForegroundService
+import com.drawtaxi.app.logic.OvhImapService
 import com.drawtaxi.app.logic.SmsProcessor
 import com.drawtaxi.app.logic.SmsScanWorker
 import androidx.work.PeriodicWorkRequestBuilder
@@ -40,14 +41,17 @@ class TaxiApplication : Application() {
     companion object {
         private const val TAG = "TaxiApp"
         var isSmsServiceRunning = false
+        var isImapServiceRunning = false
     }
 
     override fun onCreate() {
         super.onCreate()
         org.osmdroid.config.Configuration.getInstance().userAgentValue = packageName
-        createNotificationChannel()
+        createNotificationChannels()
         
+        // Démarrer les services de surveillance
         startSmsServiceIfEnabled()
+        startImapServiceIfEnabled()
         schedulePeriodicSmsScan()
     }
 
@@ -91,16 +95,45 @@ class TaxiApplication : Application() {
         schedulePeriodicSmsScan()
     }
 
-    private fun createNotificationChannel() {
+    private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Alerte Courses"
-            val descriptionText = "Notifications pour les nouvelles courses reçues"
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel("ride_alerts", name, importance).apply {
-                description = descriptionText
-            }
             val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
+            
+            // Canal pour les alertes de nouvelles courses
+            val rideChannel = NotificationChannel(
+                "ride_alerts", 
+                "Alerte Courses", 
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications pour les nouvelles courses reçues"
+            }
+            notificationManager.createNotificationChannel(rideChannel)
+            
+            // Canal pour le service SMS en arrière-plan
+            val smsServiceChannel = NotificationChannel(
+                "sms_service_channel",
+                "Surveillance SMS",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Surveillance active des SMS de réservation"
+                setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+            }
+            notificationManager.createNotificationChannel(smsServiceChannel)
+            
+            // Canal pour le service IMAP en arrière-plan
+            val imapServiceChannel = NotificationChannel(
+                "ovh_imap_channel",
+                "Surveillance Email OVH",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Surveillance active des emails de réservation"
+                setShowBadge(false)
+                enableLights(false)
+                enableVibration(false)
+            }
+            notificationManager.createNotificationChannel(imapServiceChannel)
         }
     }
 
@@ -150,10 +183,62 @@ class TaxiApplication : Application() {
             val serviceIntent = Intent(this, SmsForegroundService::class.java)
             stopService(serviceIntent)
         } catch (e: Exception) {
-            Log.e(TAG, "Erreur arrêt service: ${e.message}")
+            Log.e(TAG, "Erreur arrêt service SMS: ${e.message}")
         }
         isSmsServiceRunning = false
         Log.d(TAG, "SmsForegroundService arrêté")
+    }
+
+    fun startImapServiceIfEnabled() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val settings = repository.settings.first()
+                if (!settings.ovhImapEnabled) {
+                    Log.d(TAG, "Surveillance IMAP désactivée dans les paramètres")
+                    stopImapService()
+                    return@launch
+                }
+
+                if (settings.ovhSmtpUsername.isBlank() || settings.ovhSmtpPassword.isBlank()) {
+                    Log.d(TAG, "Identifiants OVH non configurés")
+                    stopImapService()
+                    return@launch
+                }
+
+                if (isImapServiceRunning) {
+                    Log.d(TAG, "OvhImapService déjà actif")
+                    return@launch
+                }
+
+                startImapForegroundService()
+            } catch (e: Exception) {
+                Log.e(TAG, "Erreur démarrage service IMAP: ${e.message}")
+            }
+        }
+    }
+
+    private fun startImapForegroundService() {
+        Log.d(TAG, "Démarrage du OvhImapService")
+        
+        val serviceIntent = Intent(this, OvhImapService::class.java)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
+        isImapServiceRunning = true
+    }
+
+    private fun stopImapService() {
+        try {
+            val serviceIntent = Intent(this, OvhImapService::class.java)
+            stopService(serviceIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Erreur arrêt service IMAP: ${e.message}")
+        }
+        isImapServiceRunning = false
+        Log.d(TAG, "OvhImapService arrêté")
     }
 
     fun onNewSmsReceived(address: String, body: String, timestamp: Long) {

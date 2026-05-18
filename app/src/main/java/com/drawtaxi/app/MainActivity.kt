@@ -125,10 +125,11 @@ class MainActivity : ComponentActivity() {
         val repository = (application as TaxiApplication).repository
         val factory = TaxiViewModelFactory(repository)
 
-        // Démarrage automatique du service SMS si permissions accordées
+        // Démarrage automatique des services de surveillance
         if (com.drawtaxi.app.logic.PermissionHelper.hasSmsPermissions(this)) {
             (application as? TaxiApplication)?.startSmsServiceIfEnabled()
         }
+        (application as? TaxiApplication)?.startImapServiceIfEnabled()
 
         setContent {
             val viewModel: TaxiViewModel = viewModel(factory = factory)
@@ -165,6 +166,16 @@ class MainActivity : ComponentActivity() {
                             intentState.value = null
                         }
                     }
+                }
+            }
+
+            // Redémarrer les services quand les paramètres changent
+            LaunchedEffect(settings.monitorSms, settings.ovhImapEnabled) {
+                if (settings.monitorSms && com.drawtaxi.app.logic.PermissionHelper.hasSmsPermissions(this@MainActivity)) {
+                    (application as? TaxiApplication)?.startSmsServiceIfEnabled()
+                }
+                if (settings.ovhImapEnabled) {
+                    (application as? TaxiApplication)?.startImapServiceIfEnabled()
                 }
             }
 
@@ -262,7 +273,7 @@ class MainActivity : ComponentActivity() {
                                     editingRide = null
                                 },
                                 brandColor = settings.brandColor,
-                                hasPending = pendingRides.isNotEmpty()
+                                hasPending = pendingRides.any { it.status == RideStatus.DRAFT || it.status == RideStatus.QUOTED }
                             )
                         }
                     ) { innerPadding ->
@@ -317,16 +328,23 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 when (activeTab) {
                                     "home" -> {
-                                        // Séparer les courses confirmées des terminées
-                                        val confirmedRides = validatedRides.filter {
+                                        // Courses confirmées = depuis validatedRides (isPending=0) OU pendingRides avec statut CONFIRMED/IN_PROGRESS
+                                        val confirmedFromValidated = validatedRides.filter {
                                             it.status == RideStatus.CONFIRMED || it.status == RideStatus.IN_PROGRESS
                                         }
+                                        val confirmedFromPending = pendingRides.filter {
+                                            it.status == RideStatus.CONFIRMED || it.status == RideStatus.IN_PROGRESS
+                                        }
+                                        val allConfirmedRides = confirmedFromValidated + confirmedFromPending
+                                        
+                                        // Courses terminées (COMPLETED)
                                         val completedRides = validatedRides.filter {
                                             it.status == RideStatus.COMPLETED
                                         }
+                                        
                                         HomeScreen(
                                             validatedRides = completedRides,
-                                            confirmedRides = confirmedRides,
+                                            confirmedRides = allConfirmedRides,
                                             brandColor = settings.brandColor,
                                             onRideClick = { selectedRide = it },
                                             onCreateRide = {
@@ -402,12 +420,13 @@ class MainActivity : ComponentActivity() {
                                                 Toast.makeText(this@MainActivity, "Devis envoyé au client", Toast.LENGTH_SHORT).show()
                                             },
                                             onAcceptQuote = { ride ->
+                                                // Quand une course est confirmée, elle passe isPending=false pour apparaître dans l'accueil
                                                 val updatedRide = ride.copy(
                                                     status = RideStatus.CONFIRMED,
-                                                    price = ride.price
+                                                    price = ride.price,
+                                                    isPending = false
                                                 )
                                                 viewModel.updateRide(updatedRide)
-                                                viewModel.updateRideStatus(ride.id, RideStatus.CONFIRMED)
                                                 Toast.makeText(this@MainActivity, "Course confirmée", Toast.LENGTH_SHORT).show()
                                             },
                                             onRejectQuote = { ride ->
@@ -482,6 +501,11 @@ class MainActivity : ComponentActivity() {
                                                 settings = settings,
                                                 onUpdate = { viewModel.updateSettings(it) },
                                                 onBack = { settingsView = "main" }
+                                            )
+                                            "aiDownload" -> AiModelDownloadScreen(
+                                                brandColor = settings.brandColor,
+                                                onSkip = { settingsView = "main" },
+                                                onComplete = { settingsView = "main" }
                                             )
                                             "export" -> ExportScreen(
                                                 rides = validatedRides,

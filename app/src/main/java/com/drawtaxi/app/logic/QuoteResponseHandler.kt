@@ -39,10 +39,11 @@ object QuoteResponseHandler {
                 Log.d(TAG, "Confirmation reçue pour la course ${ride.id}")
                 // Mettre à jour le statut du devis
                 repository.updateQuoteStatus(quote.id, com.drawtaxi.app.data.QuoteStatus.ACCEPTED)
-                // Confirmer la course
+                // Confirmer la course et la passer à isPending=false pour l'afficher dans l'accueil
                 val confirmedRide = ride.copy(
                     status = RideStatus.CONFIRMED,
-                    price = quote.price
+                    price = quote.price,
+                    isPending = false
                 )
                 repository.updateRide(confirmedRide)
                 // Envoyer une confirmation au client
