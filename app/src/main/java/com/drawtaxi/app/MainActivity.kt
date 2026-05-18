@@ -279,7 +279,7 @@ class MainActivity : ComponentActivity() {
                     ) { innerPadding ->
                         Box(modifier = Modifier.padding(innerPadding)) {
                             if (activeRide != null) {
-                                ActiveRideScreen(
+                                RideNavigationScreen(
                                     ride = activeRide!!,
                                     settings = settings,
                                     brandColor = settings.brandColor,
@@ -289,10 +289,9 @@ class MainActivity : ComponentActivity() {
                                         showCompletionScreen = true
                                         activeRide = null
                                     },
-                                    onCancel = {
-                                        viewModel.deleteRide(activeRide!!)
-                                        activeRide = null
-                                        Toast.makeText(this@MainActivity, "Course annulée", Toast.LENGTH_SHORT).show()
+                                    onEditRide = { updatedRide ->
+                                        viewModel.updateRide(updatedRide)
+                                        Toast.makeText(this@MainActivity, "Course modifiée", Toast.LENGTH_SHORT).show()
                                     }
                                 )
                             } else if (selectedRide != null) {

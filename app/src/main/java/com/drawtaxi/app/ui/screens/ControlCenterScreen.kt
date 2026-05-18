@@ -42,6 +42,7 @@ fun ControlCenterScreen(
     var selectedTemplate by remember { mutableStateOf("") }
     var showQuoteDialog by remember { mutableStateOf(false) }
     var rideForQuote by remember { mutableStateOf<RideRequest?>(null) }
+    var showDeleteAllDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -117,6 +118,27 @@ fun ControlCenterScreen(
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Créer", fontSize = 12.sp)
+                }
+                
+                // Bouton supprimer tous les brouillons
+                if (pendingRides.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = { showDeleteAllDialog = true },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Rose500
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteSweep,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Rose500
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Tout supprimer", fontSize = 12.sp, color = Rose500)
+                    }
                 }
             }
         }
@@ -280,6 +302,58 @@ fun ControlCenterScreen(
             onCancel = {
                 showQuoteDialog = false
                 rideForQuote = null
+            }
+        )
+    }
+    
+    // Dialog de confirmation pour tout supprimer
+    if (showDeleteAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            icon = { 
+                Icon(
+                    Icons.Default.DeleteSweep,
+                    contentDescription = null,
+                    tint = Rose500,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = { Text("Supprimer tous les brouillons ?") },
+            text = {
+                Column {
+                    Text(
+                        "Vous êtes sur le point de supprimer ${pendingRides.size} course${if (pendingRides.size > 1) "s" else ""} en attente.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Cette action est irréversible.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Rose500,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        // Supprimer toutes les courses en attente
+                        pendingRides.forEach { ride ->
+                            onDelete(ride)
+                        }
+                        showDeleteAllDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Rose500)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Tout supprimer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllDialog = false }) {
+                    Text("Annuler")
+                }
             }
         )
     }
