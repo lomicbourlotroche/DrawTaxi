@@ -26,16 +26,18 @@ fun ProInfoSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onBa
     var siret by remember { mutableStateOf(settings.siret) }
     var city by remember { mutableStateOf(settings.city) }
     var vehicle by remember { mutableStateOf(settings.vehicle) }
+    var homeAddress by remember { mutableStateOf(settings.homeAddress) }
     var signature by remember { mutableStateOf(settings.signature) }
     var missingInfoTemplate by remember { mutableStateOf(settings.missingInfoTemplate) }
     var arrivalMessageTemplate by remember { mutableStateOf(settings.arrivalMessageTemplate) }
 
     // Debounced update to avoid DataStore lag
-    LaunchedEffect(companyName, name, siret, city, vehicle, signature, missingInfoTemplate, arrivalMessageTemplate) {
+    LaunchedEffect(companyName, name, siret, city, vehicle, homeAddress, signature, missingInfoTemplate, arrivalMessageTemplate) {
         kotlinx.coroutines.delay(500)
         if (companyName != settings.companyName || name != settings.name || 
             siret != settings.siret || city != settings.city || 
-            vehicle != settings.vehicle || signature != settings.signature ||
+            vehicle != settings.vehicle || homeAddress != settings.homeAddress ||
+            signature != settings.signature ||
             missingInfoTemplate != settings.missingInfoTemplate ||
             arrivalMessageTemplate != settings.arrivalMessageTemplate) {
             onUpdate(settings.copy(
@@ -44,6 +46,7 @@ fun ProInfoSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onBa
                 siret = siret,
                 city = city,
                 vehicle = vehicle,
+                homeAddress = homeAddress,
                 signature = signature,
                 missingInfoTemplate = missingInfoTemplate,
                 arrivalMessageTemplate = arrivalMessageTemplate
@@ -68,6 +71,7 @@ fun ProInfoSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onBa
             TaxiInputField(label = "SIRET", value = siret, onValueChange = { siret = it })
             TaxiInputField(label = "Ville", value = city, onValueChange = { city = it })
             TaxiInputField(label = "Véhicule", value = vehicle, onValueChange = { vehicle = it })
+            TaxiInputField(label = "Adresse du domicile", value = homeAddress, onValueChange = { homeAddress = it }, placeholder = "Utilisé pour le GPS retour")
         }
 
         TaxiCard(title = "Signature & Templates") {

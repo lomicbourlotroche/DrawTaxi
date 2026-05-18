@@ -44,30 +44,24 @@ fun HomeScreen(
 
     val isIgnoringBatteryOptimization = remember { PermissionHelper.isIgnoringBatteryOptimizations(context) }
 
-    val sortByDate = validatedRides.sortedWith(
-        compareBy<RideRequest> { it.date.ifBlank { "99/99/9999" } }
-            .thenBy { it.time.ifBlank { "99:99" } }
+    // Uniquement les courses terminées
+    val completedRides = validatedRides.filter { it.isPending == false }.sortedWith(
+        compareByDescending<RideRequest> { it.date.ifBlank { "01/01/1970" } }
+            .thenByDescending { it.time.ifBlank { "00:00" } }
     )
 
-    val todayRides = sortByDate.filter { ride ->
+    // Dernières courses terminées (max 5)
+    val recentCompletedRides = completedRides.take(5)
+
+    val todayCompletedRides = completedRides.filter { ride ->
         val rideDate = ride.date.ifBlank { todayDateStr }
         rideDate == todayDateStr
     }
 
-    val upcomingRides = sortByDate.filter { ride ->
-        val rideDate = ride.date.ifBlank { todayDateStr }
-        rideDate > todayDateStr
-    }
-
-    val pastRides = sortByDate.filter { ride ->
-        val rideDate = ride.date.ifBlank { todayDateStr }
-        rideDate < todayDateStr
-    }
-
-    val todayRevenue = todayRides.sumOf { it.price }
-    val totalKmToday = todayRides.sumOf { it.distanceKm }
-    val todayFuel = todayRides.sumOf { it.fuelCost }
-    val todayNet = todayRevenue - todayFuel - todayRides.sumOf { it.operatingCost }
+    val todayRevenue = todayCompletedRides.sumOf { it.price }
+    val totalKmToday = todayCompletedRides.sumOf { it.distanceKm }
+    val todayFuel = todayCompletedRides.sumOf { it.fuelCost }
+    val todayNet = todayRevenue - todayFuel - todayCompletedRides.sumOf { it.operatingCost }
 
     LazyColumn(modifier = Modifier.fillMaxSize().background(Slate50)) {
         item {
@@ -115,11 +109,11 @@ fun HomeScreen(
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HomeStatCard(value = String.format("%.2f €", todayRevenue), label = "Revenus", modifier = Modifier.weight(1f))
-                        HomeStatCard(value = "${todayRides.size}", label = "Courses", modifier = Modifier.weight(1f))
+                        HomeStatCard(value = "${todayCompletedRides.size}", label = "Courses", modifier = Modifier.weight(1f))
                         HomeStatCard(value = String.format("%.0f km", totalKmToday), label = "Km", modifier = Modifier.weight(1f))
                     }
 
-                    if (todayRides.isNotEmpty()) {
+                    if (todayCompletedRides.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -157,69 +151,20 @@ fun HomeScreen(
             }
         }
 
-        // Section Courses Confirmées
-        if (confirmedRides.isNotEmpty()) {
+        // Section Dernières courses terminées
+        if (recentCompletedRides.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
-                    text = "Courses confirmées",
+                    text = "Dernières courses terminées",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = Emerald500,
+                    color = Slate800,
                     modifier = Modifier.padding(horizontal = 20.dp)
                 )
             }
 
-            items(confirmedRides) { ride ->
-                ConfirmedRideCard(
-                    ride = ride,
-                    brandColor = brandColor,
-                    onClick = { onRideClick(ride) }
-                )
-            }
-        }
-
-        if (todayRides.isNotEmpty()) {
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(text = "Aujourd'hui", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800, modifier = Modifier.padding(horizontal = 20.dp))
-            }
-            
-            items(todayRides) { ride ->
-                RideCard(
-                    ride = ride,
-                    brandColor = brandColor,
-                    onValidate = { onRideClick(ride) },
-                    onDelete = { },
-                    onClick = { onRideClick(ride) }
-                )
-            }
-        }
-
-        if (upcomingRides.isNotEmpty()) {
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(text = "À venir", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800, modifier = Modifier.padding(horizontal = 20.dp))
-            }
-            
-            items(upcomingRides) { ride ->
-                RideCard(
-                    ride = ride,
-                    brandColor = brandColor,
-                    onValidate = { onRideClick(ride) },
-                    onDelete = { },
-                    onClick = { onRideClick(ride) }
-                )
-            }
-        }
-
-        if (pastRides.isNotEmpty()) {
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(text = "Passées", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Slate800, modifier = Modifier.padding(horizontal = 20.dp))
-            }
-            
-            items(pastRides) { ride ->
+            items(recentCompletedRides) { ride ->
                 RideHistoryCard(
                     ride = ride,
                     brandColor = brandColor,
@@ -228,7 +173,7 @@ fun HomeScreen(
             }
         }
 
-        if (validatedRides.isEmpty()) {
+        if (completedRides.isEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(40.dp))
                 Column(modifier = Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -238,8 +183,8 @@ fun HomeScreen(
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(text = "Aucune course", style = MaterialTheme.typography.titleMedium, color = Slate500)
-                    Text(text = "Créez une course ou attendez les SMS", style = MaterialTheme.typography.bodyMedium, color = Slate400)
+                    Text(text = "Aucune course terminée", style = MaterialTheme.typography.titleMedium, color = Slate500)
+                    Text(text = "Les courses terminées apparaîtront ici", style = MaterialTheme.typography.bodyMedium, color = Slate400)
                     Spacer(modifier = Modifier.height(20.dp))
                     Button(
                         onClick = onCreateRide,
@@ -256,70 +201,6 @@ fun HomeScreen(
 
         item {
             Spacer(modifier = Modifier.height(100.dp))
-        }
-    }
-}
-
-@Composable
-private fun ConfirmedRideCard(
-    ride: RideRequest,
-    brandColor: Color,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Indicateur vert
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Emerald500)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = ride.arrival.ifBlank { "Destination" },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-                if (ride.departure.isNotBlank()) {
-                    Text(
-                        text = "Depuis ${ride.departure}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Slate500,
-                        maxLines = 1
-                    )
-                }
-                Text(
-                    text = "${ride.date} à ${ride.time}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = brandColor
-                )
-            }
-
-            if (ride.price > 0) {
-                Text(
-                    text = String.format("%.2f €", ride.price),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = brandColor
-                )
-            }
         }
     }
 }

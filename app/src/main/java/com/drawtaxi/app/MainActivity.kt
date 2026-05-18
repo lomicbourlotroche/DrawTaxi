@@ -151,6 +151,7 @@ class MainActivity : ComponentActivity() {
             var showAgendaScreen by remember { mutableStateOf(false) }
             var showCompletionScreen by remember { mutableStateOf(false) }
             var completionRide by remember { mutableStateOf<RideRequest?>(null) }
+            var showReturnHomeScreen by remember { mutableStateOf(false) }
 
             val currentIntent by intentState
             LaunchedEffect(currentIntent) {
@@ -217,6 +218,15 @@ class MainActivity : ComponentActivity() {
                         },
                         onBack = { showAgendaScreen = false }
                     )
+                } else if (showReturnHomeScreen) {
+                    ReturnHomeScreen(
+                        settings = settings,
+                        brandColor = settings.brandColor,
+                        onBack = {
+                            showReturnHomeScreen = false
+                            activeTab = "home"
+                        }
+                    )
                 } else if (showCompletionScreen && completionRide != null) {
                     RideCompletionScreen(
                         ride = completionRide!!,
@@ -231,6 +241,7 @@ class MainActivity : ComponentActivity() {
                             )
                             showCompletionScreen = false
                             completionRide = null
+                            showReturnHomeScreen = true
                             Toast.makeText(this@MainActivity, "Course terminée !", Toast.LENGTH_SHORT).show()
                         },
                         onBack = {

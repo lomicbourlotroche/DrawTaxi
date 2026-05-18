@@ -4,11 +4,13 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.location.Location
 import android.net.Uri
 import android.os.Looper
 import androidx.compose.animation.*
-import androidx.compose.foundation.background
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,46 +22,52 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
+import com.drawtaxi.app.data.RideStatus
 import com.drawtaxi.app.logic.GeocodingService
 import com.drawtaxi.app.logic.OsrmRoutingService
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.mapbox.mapboxsdk.Mapbox
-import com.mapbox.mapboxsdk.camera.CameraPosition
-import com.mapbox.mapboxsdk.camera.CameraUpdateFactory
-import com.mapbox.mapboxsdk.geometry.LatLng
-import com.mapbox.mapboxsdk.maps.MapboxMap
-import com.mapbox.mapboxsdk.maps.MapView
-import com.mapbox.mapboxsdk.style.layers.LineLayer
-import com.mapbox.mapboxsdk.style.layers.PropertyFactory
-import com.mapbox.mapboxsdk.style.sources.GeoJsonSource
-import org.json.JSONArray
-import org.json.JSONObject
-import java.text.SimpleDateFormat
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import java.util.*
 
-/**
- * Écran de navigation complète pour une course taxi
- * Style Google Maps avec 3 phases : Rouge → Bleu → Vert
- */
+enum class NavigationPhase {
+    TO_PICKUP,
+    TO_DESTINATION,
+    TO_HOME,
+    COMPLETED
+}
+
 @SuppressLint("MissingPermission")
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun RideNavigationScreen(
     ride: RideRequest,
     settings: AppSettings,
-    brandColor: Color,
+    brandColor: ComposeColor,
     onBack: () -> Unit,
     onComplete: (RideRequest) -> Unit,
     onEditRide: (RideRequest) -> Unit = {}
@@ -68,37 +76,38 @@ fun RideNavigationScreen(
     val scope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    // États de navigation
     var currentPhase by remember { mutableStateOf(NavigationPhase.TO_PICKUP) }
     var currentLocation by remember { mutableStateOf<Location?>(null) }
-    var mapboxMap by remember { mutableStateOf<MapboxMap?>(null) }
+    var osmMapView by remember { mutableStateOf<MapView?>(null) }
 
-    // Routes pour chaque phase
     var routeToPickup by remember { mutableStateOf<OsrmRoutingService.RouteResult?>(null) }
     var routeToDestination by remember { mutableStateOf<OsrmRoutingService.RouteResult?>(null) }
-    var routeToHome by remember { mutableStateOf<OsrmRoutingService.RouteResult?>(null) }
 
-    // UI States
     var showCallDialog by remember { mutableStateOf(false) }
     var showMessageDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
-    var isNavigating by remember { mutableStateOf(true) }
+    var showCompleteDialog by remember { mutableStateOf(false) }
+    var showPhaseSkipConfirm by remember { mutableStateOf(false) }
+
     var etaText by remember { mutableStateOf("-- min") }
     var distanceText by remember { mutableStateOf("-- km") }
-    var messageText by remember { mutableStateOf("") }
+    var currentSpeed by remember { mutableStateOf("0 km/h") }
+    var isRecalculating by remember { mutableStateOf(false) }
+    var deviationCount by remember { mutableStateOf(0) }
+    var lastRecalculationTime by remember { mutableStateOf(0L) }
 
-    // Initialiser Mapbox
-    LaunchedEffect(Unit) {
-        Mapbox.getInstance(context)
-    }
+    // Instructions turn-by-turn
+    var currentInstruction by remember { mutableStateOf("") }
+    var nextInstruction by remember { mutableStateOf("") }
+    var nextInstructionDistance by remember { mutableStateOf("") }
 
-    // Démarrer le suivi GPS
+    // Suivi GPS
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED) {
 
             val locationRequest = LocationRequest.Builder(
-                Priority.PRIORITY_HIGH_ACCURACY, 2000L
+                Priority.PRIORITY_HIGH_ACCURACY, 1500L
             ).apply {
                 setMinUpdateIntervalMillis(1000L)
             }.build()
@@ -107,6 +116,9 @@ fun RideNavigationScreen(
                 override fun onLocationResult(result: LocationResult) {
                     result.lastLocation?.let { location ->
                         currentLocation = location
+                        currentSpeed = if (location.hasSpeed()) {
+                            String.format("%.0f km/h", location.speed * 3.6)
+                        } else "0 km/h"
                     }
                 }
             }
@@ -119,68 +131,138 @@ fun RideNavigationScreen(
         }
     }
 
-    // Calculer les 3 routes
-    LaunchedEffect(ride, currentLocation) {
+    // Calculer les routes
+    LaunchedEffect(ride) {
         scope.launch {
-            // Route 1: Position actuelle → Point de départ (Rouge)
-            if (currentLocation != null && ride.departure.isNotBlank()) {
-                val pickupLoc = GeocodingService.geocode(ride.departure)
-                pickupLoc?.let {
-                    routeToPickup = OsrmRoutingService.calculateRoute(currentLocation!!, it)
-                }
-            }
-
-            // Route 2: Point de départ → Destination (Bleu)
-            if (ride.departure.isNotBlank() && ride.arrival.isNotBlank()) {
+            if (ride.departure.isNotBlank()) {
                 val fromLoc = GeocodingService.geocode(ride.departure)
                 val toLoc = GeocodingService.geocode(ride.arrival)
+
                 if (fromLoc != null && toLoc != null) {
                     routeToDestination = OsrmRoutingService.calculateRoute(fromLoc, toLoc)
                 }
             }
+        }
+    }
 
-            // Route 3: Destination → Domicile chauffeur (Vert)
-            if (ride.arrival.isNotBlank() && settings.homeAddress.isNotBlank()) {
-                val destLoc = GeocodingService.geocode(ride.arrival)
-                val homeLoc = GeocodingService.geocode(settings.homeAddress)
-                if (destLoc != null && homeLoc != null) {
-                    routeToHome = OsrmRoutingService.calculateRoute(destLoc, homeLoc)
+    // Route dynamique vers pickup
+    LaunchedEffect(currentLocation, ride.departure) {
+        if (currentLocation != null && ride.departure.isNotBlank()) {
+            val pickupLoc = GeocodingService.geocode(ride.departure)
+            pickupLoc?.let {
+                routeToPickup = OsrmRoutingService.calculateRoute(currentLocation!!, it)
+            }
+        }
+    }
+
+    // Recalcul + instructions turn-by-turn
+    LaunchedEffect(currentLocation, currentPhase) {
+        if (currentLocation == null) return@LaunchedEffect
+
+        val activeRoute = when (currentPhase) {
+            NavigationPhase.TO_PICKUP -> routeToPickup
+            NavigationPhase.TO_DESTINATION -> routeToDestination
+            else -> null
+        }
+
+        activeRoute?.let { route ->
+            if (route.success && route.geometry.isNotEmpty()) {
+                // Trouver le point le plus proche
+                var minDistance = Double.MAX_VALUE
+                var nearestIndex = 0
+                val currentLoc = Location("current").apply {
+                    latitude = currentLocation!!.latitude
+                    longitude = currentLocation!!.longitude
+                }
+
+                for (i in route.geometry.indices) {
+                    val point = route.geometry[i]
+                    val routePoint = Location("route").apply {
+                        latitude = point.first
+                        longitude = point.second
+                    }
+                    val distance = currentLoc.distanceTo(routePoint).toDouble()
+                    if (distance < minDistance) {
+                        minDistance = distance
+                        nearestIndex = i
+                    }
+                }
+
+                // Instructions turn-by-turn
+                var allSteps = route.legs.flatMap { it.steps }
+                if (allSteps.isNotEmpty()) {
+                    // Trouver l'étape actuelle
+                    var stepIndex = 0
+                    var accumulatedDistance = 0.0
+                    for (i in allSteps.indices) {
+                        accumulatedDistance += allSteps[i].distance
+                        if (accumulatedDistance > minDistance + route.geometry.drop(nearestIndex).size * 5) {
+                            stepIndex = i
+                            break
+                        }
+                    }
+
+                    currentInstruction = OsrmRoutingService.getManeuverInstruction(
+                        allSteps.getOrElse(stepIndex) { allSteps.first() }.maneuver,
+                        allSteps.getOrElse(stepIndex) { allSteps.first() }.name
+                    )
+
+                    if (stepIndex + 1 < allSteps.size) {
+                        val nextStep = allSteps[stepIndex + 1]
+                        nextInstruction = OsrmRoutingService.getManeuverInstruction(nextStep.maneuver, nextStep.name)
+                        nextInstructionDistance = OsrmRoutingService.formatDistance(nextStep.distance)
+                    } else {
+                        nextInstruction = ""
+                        nextInstructionDistance = ""
+                    }
+                }
+
+                // Recalcul si déviation
+                if (minDistance > 100.0 && System.currentTimeMillis() - lastRecalculationTime > 10000) {
+                    deviationCount++
+                    if (deviationCount >= 2 || minDistance > 200.0) {
+                        isRecalculating = true
+                        lastRecalculationTime = System.currentTimeMillis()
+
+                        val destAddress = when (currentPhase) {
+                            NavigationPhase.TO_PICKUP -> ride.departure
+                            NavigationPhase.TO_DESTINATION -> ride.arrival
+                            else -> ""
+                        }
+
+                        if (destAddress.isNotBlank()) {
+                            val destLoc = GeocodingService.geocode(destAddress)
+                            if (destLoc != null) {
+                                val newRoute = OsrmRoutingService.calculateRoute(currentLocation!!, destLoc)
+                                when (currentPhase) {
+                                    NavigationPhase.TO_PICKUP -> routeToPickup = newRoute
+                                    NavigationPhase.TO_DESTINATION -> routeToDestination = newRoute
+                                    else -> {}
+                                }
+                            }
+                        }
+                        isRecalculating = false
+                        deviationCount = 0
+                    }
+                } else if (minDistance < 50.0) {
+                    deviationCount = 0
                 }
             }
         }
     }
 
-    // Mettre à jour les routes sur la carte
-    LaunchedEffect(mapboxMap, routeToPickup, routeToDestination, routeToHome) {
-        mapboxMap?.let { map ->
-            updateMapWithAllRoutes(map, routeToPickup, routeToDestination, routeToHome, currentPhase)
-        }
-    }
-
-    // Mettre à jour la position et suivre l'étape
-    LaunchedEffect(currentLocation, currentPhase) {
+    // ETA + auto-switch
+    LaunchedEffect(currentLocation, currentPhase, routeToPickup, routeToDestination) {
         currentLocation?.let { location ->
-            // Centrer la carte sur la position
-            mapboxMap?.animateCamera(
-                CameraUpdateFactory.newLatLngZoom(
-                    LatLng(location.latitude, location.longitude),
-                    17.0
-                )
-            )
-
-            // Mettre à jour ETA et distance selon la phase
             when (currentPhase) {
                 NavigationPhase.TO_PICKUP -> {
                     routeToPickup?.let {
                         if (it.success) {
                             etaText = OsrmRoutingService.formatDuration(it.duration)
                             distanceText = OsrmRoutingService.formatDistance(it.distance)
-
-                            // Auto-switch si proche du point de départ (< 50m)
                             val pickupLoc = GeocodingService.geocode(ride.departure)
                             pickupLoc?.let { pickup ->
-                                val distance = location.distanceTo(pickup)
-                                if (distance < 50f) {
+                                if (location.distanceTo(pickup) < 50f) {
                                     currentPhase = NavigationPhase.TO_DESTINATION
                                 }
                             }
@@ -192,102 +274,77 @@ fun RideNavigationScreen(
                         if (it.success) {
                             etaText = OsrmRoutingService.formatDuration(it.duration)
                             distanceText = OsrmRoutingService.formatDistance(it.distance)
-
-                            // Auto-switch si proche de la destination (< 50m)
-                            val destLoc = GeocodingService.geocode(ride.arrival)
-                            destLoc?.let { dest ->
-                                val distance = location.distanceTo(dest)
-                                if (distance < 50f) {
-                                    currentPhase = NavigationPhase.TO_HOME
-                                }
-                            }
                         }
                     }
                 }
-                NavigationPhase.TO_HOME -> {
-                    routeToHome?.let {
-                        if (it.success) {
-                            etaText = OsrmRoutingService.formatDuration(it.duration)
-                            distanceText = OsrmRoutingService.formatDistance(it.distance)
-                        }
-                    }
-                }
+                NavigationPhase.TO_HOME, NavigationPhase.COMPLETED -> {}
             }
         }
     }
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = when (currentPhase) {
-                                NavigationPhase.TO_PICKUP -> "Aller chercher le client"
-                                NavigationPhase.TO_DESTINATION -> "En course"
-                                NavigationPhase.TO_HOME -> "Retour au domicile"
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${ride.date} à ${ride.time}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Slate500
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showEditDialog = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Modifier")
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = when (currentPhase) {
-                        NavigationPhase.TO_PICKUP -> Rose500
-                        NavigationPhase.TO_DESTINATION -> Indigo500
-                        NavigationPhase.TO_HOME -> Emerald500
-                    }
-                )
-            )
-        },
-        floatingActionButton = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Barre supérieure minimaliste
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 48.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Bouton appel
-                SmallFloatingActionButton(
-                    onClick = { showCallDialog = true },
-                    containerColor = Emerald500,
-                    contentColor = Color.White
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(ComposeColor.White.copy(alpha = 0.95f))
+                        .shadow(4.dp, CircleShape)
                 ) {
-                    Icon(Icons.Default.Phone, contentDescription = "Appeler")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
                 }
 
-                // Bouton message
-                SmallFloatingActionButton(
-                    onClick = { showMessageDialog = true },
-                    containerColor = Indigo500,
-                    contentColor = Color.White
+                // Vitesse actuelle
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = ComposeColor.White.copy(alpha = 0.95f),
+                    shadowElevation = 4.dp
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Message")
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Speed, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(currentSpeed, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
+                    }
                 }
             }
         },
-        bottomBar = {
-            NavigationBottomBar(
-                currentPhase = currentPhase,
-                eta = etaText,
-                distance = distanceText,
-                ride = ride,
-                onPhaseChange = { currentPhase = it },
-                onComplete = { onComplete(ride) }
-            )
+        floatingActionButton = {
+            // Boutons flottants
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                FloatingActionButton(
+                    onClick = { showCallDialog = true },
+                    containerColor = Emerald500,
+                    contentColor = ComposeColor.White,
+                    shape = CircleShape,
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Icon(Icons.Default.Phone, contentDescription = "Appeler", modifier = Modifier.size(24.dp))
+                }
+                FloatingActionButton(
+                    onClick = { showMessageDialog = true },
+                    containerColor = Indigo500,
+                    contentColor = ComposeColor.White,
+                    shape = CircleShape,
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Message", modifier = Modifier.size(24.dp))
+                }
+            }
         }
     ) { padding ->
         Box(
@@ -295,273 +352,439 @@ fun RideNavigationScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Carte MapLibre
+            // Carte osmdroid plein écran
             AndroidView(
                 factory = { ctx ->
+                    Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid_nav", 0))
                     MapView(ctx).apply {
-                        onCreate(null)
-                        getMapAsync { map ->
-                            mapboxMap = map
+                        setTileSource(TileSourceFactory.MAPNIK)
+                        setMultiTouchControls(true)
+                        controller.setZoom(16.0)
 
-                            map.setStyle("https://demotiles.maplibre.org/style.json") { style ->
-                                // Ajouter les 3 sources pour les routes
-                                style.addSource(GeoJsonSource("route-pickup"))
-                                style.addSource(GeoJsonSource("route-destination"))
-                                style.addSource(GeoJsonSource("route-home"))
+                        val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
+                        overlays.add(locationOverlay)
+                        locationOverlay.enableMyLocation()
+                        locationOverlay.isDrawAccuracyEnabled = false
 
-                                // Couche Rouge: vers point de départ
-                                style.addLayerBelow(
-                                    LineLayer("layer-pickup", "route-pickup")
-                                        .withProperties(
-                                            PropertyFactory.lineColor(Rose500.toArgb()),
-                                            PropertyFactory.lineWidth(8f),
-                                            PropertyFactory.lineOpacity(0.9f),
-                                            PropertyFactory.lineCap(com.mapbox.mapboxsdk.style.layers.Property.LINE_CAP_ROUND),
-                                            PropertyFactory.lineJoin(com.mapbox.mapboxsdk.style.layers.Property.LINE_JOIN_ROUND)
-                                        ),
-                                    "road-label"
-                                )
+                        osmMapView = this
+                    }
+                },
+                update = { map ->
+                    map.overlays.filterIsInstance<Polyline>().toList().forEach { map.overlays.remove(it) }
+                    map.overlays.filterIsInstance<Marker>().toList().forEach { map.overlays.remove(it) }
 
-                                // Couche Bleue: vers destination
-                                style.addLayerBelow(
-                                    LineLayer("layer-destination", "route-destination")
-                                        .withProperties(
-                                            PropertyFactory.lineColor(Indigo500.toArgb()),
-                                            PropertyFactory.lineWidth(8f),
-                                            PropertyFactory.lineOpacity(0.9f),
-                                            PropertyFactory.lineCap(com.mapbox.mapboxsdk.style.layers.Property.LINE_CAP_ROUND),
-                                            PropertyFactory.lineJoin(com.mapbox.mapboxsdk.style.layers.Property.LINE_JOIN_ROUND)
-                                        ),
-                                    "road-label"
-                                )
+                    val activeRoute = when (currentPhase) {
+                        NavigationPhase.TO_PICKUP -> routeToPickup
+                        NavigationPhase.TO_DESTINATION -> routeToDestination
+                        else -> null
+                    }
 
-                                // Couche Verte: vers domicile
-                                style.addLayerBelow(
-                                    LineLayer("layer-home", "route-home")
-                                        .withProperties(
-                                            PropertyFactory.lineColor(Emerald500.toArgb()),
-                                            PropertyFactory.lineWidth(8f),
-                                            PropertyFactory.lineOpacity(0.9f),
-                                            PropertyFactory.lineCap(com.mapbox.mapboxsdk.style.layers.Property.LINE_CAP_ROUND),
-                                            PropertyFactory.lineJoin(com.mapbox.mapboxsdk.style.layers.Property.LINE_JOIN_ROUND)
-                                        ),
-                                    "road-label"
-                                )
+                    activeRoute?.let { route ->
+                        if (route.success && route.geometry.isNotEmpty()) {
+                            val polyline = Polyline()
+                            polyline.setPoints(ArrayList(route.geometry.map { GeoPoint(it.first, it.second) }))
+                            polyline.color = when (currentPhase) {
+                                NavigationPhase.TO_PICKUP -> Color.RED
+                                NavigationPhase.TO_DESTINATION -> Color.BLUE
+                                else -> Color.GRAY
                             }
+                            polyline.width = 14f
+                            map.overlays.add(0, polyline)
 
-                            map.cameraPosition = CameraPosition.Builder()
-                                .target(LatLng(46.603354, 1.888334))
-                                .zoom(5.0)
-                                .build()
+                            // Marqueur destination
+                            val destPoint = route.geometry.last()
+                            val marker = Marker(map)
+                            marker.position = GeoPoint(destPoint.first, destPoint.second)
+                            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            marker.title = when (currentPhase) {
+                                NavigationPhase.TO_PICKUP -> "Client: ${ride.departure}"
+                                NavigationPhase.TO_DESTINATION -> "Destination: ${ride.arrival}"
+                                else -> "Terminé"
+                            }
+                            map.overlays.add(marker)
+
+                            // Zoom sur l'itinéraire + position actuelle
+                            currentLocation?.let { loc ->
+                                val geoPoints = ArrayList<GeoPoint>()
+                                geoPoints.addAll(route.geometry.map { GeoPoint(it.first, it.second) })
+                                geoPoints.add(GeoPoint(loc.latitude, loc.longitude))
+                                val bounds = BoundingBox.fromGeoPoints(geoPoints)
+                                map.zoomToBoundingBox(bounds, true, 100)
+                            }
                         }
+                    }
+
+                    // Centrer sur la position actuelle
+                    currentLocation?.let { loc ->
+                        val currentPoint = GeoPoint(loc.latitude, loc.longitude)
+                        map.controller.animateTo(currentPoint)
                     }
                 },
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Légende des couleurs
-            Card(
+            // Panneau d'instructions turn-by-turn
+            AnimatedVisibility(
+                visible = currentInstruction.isNotBlank(),
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f))
+                    .align(Alignment.TopCenter)
+                    .padding(top = 110.dp, start = 16.dp, end = 16.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    RouteLegendItem(color = Rose500, label = "→ Point de départ", isActive = currentPhase == NavigationPhase.TO_PICKUP)
-                    RouteLegendItem(color = Indigo500, label = "→ Destination", isActive = currentPhase == NavigationPhase.TO_DESTINATION)
-                    RouteLegendItem(color = Emerald500, label = "→ Domicile", isActive = currentPhase == NavigationPhase.TO_HOME)
-                }
+                InstructionCard(
+                    instruction = currentInstruction,
+                    nextInstruction = nextInstruction,
+                    nextDistance = nextInstructionDistance,
+                    isRecalculating = isRecalculating,
+                    phase = currentPhase
+                )
             }
 
-            // Bouton recenter
-            FloatingActionButton(
-                onClick = {
-                    currentLocation?.let { loc ->
-                        mapboxMap?.animateCamera(
-                            CameraUpdateFactory.newLatLngZoom(
-                                LatLng(loc.latitude, loc.longitude),
-                                17.0
-                            )
-                        )
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 200.dp, end = 16.dp),
-                containerColor = Color.White
-            ) {
-                Icon(Icons.Default.MyLocation, contentDescription = "Centrer")
-            }
+            // Panneau d'information en bas
+            BottomNavigationPanel(
+                currentPhase = currentPhase,
+                eta = etaText,
+                distance = distanceText,
+                ride = ride,
+                onComplete = { showCompleteDialog = true },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
     }
 
     // Dialog appel
     if (showCallDialog) {
-        CallClientDialog(
-            clientName = ride.clientName.ifBlank { "Client" },
-            phoneNumber = ride.clientPhone,
-            onDismiss = { showCallDialog = false },
-            onCall = { phone ->
-                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
-                context.startActivity(intent)
-                showCallDialog = false
-            }
+        AlertDialog(
+            onDismissRequest = { showCallDialog = false },
+            icon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Emerald500) },
+            title = { Text("Appeler ${ride.clientName.ifBlank { "Client" }}") },
+            text = { Text("Numéro: ${ride.clientPhone.ifBlank { "Non disponible" }}") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (ride.clientPhone.isNotBlank()) {
+                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${ride.clientPhone}")))
+                        }
+                        showCallDialog = false
+                    },
+                    enabled = ride.clientPhone.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald500)
+                ) {
+                    Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Appeler")
+                }
+            },
+            dismissButton = { TextButton(onClick = { showCallDialog = false }) { Text("Annuler") } }
         )
     }
 
     // Dialog message
     if (showMessageDialog) {
-        MessageClientDialog(
-            clientName = ride.clientName.ifBlank { "Client" },
-            phoneNumber = ride.clientPhone,
-            defaultMessage = "Bonjour, je suis votre chauffeur et j'arrive.",
-            onDismiss = { showMessageDialog = false },
-            onSend = { message ->
-                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                    data = Uri.parse("smsto:${ride.clientPhone}")
-                    putExtra("sms_body", message)
+        var message by remember { mutableStateOf("Bonjour, je suis votre chauffeur et j'arrive.") }
+        AlertDialog(
+            onDismissRequest = { showMessageDialog = false },
+            icon = { Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null, tint = Indigo500) },
+            title = { Text("Message à ${ride.clientName.ifBlank { "Client" }}") },
+            text = {
+                OutlinedTextField(
+                    value = message,
+                    onValueChange = { message = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (ride.clientPhone.isNotBlank()) {
+                            context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${ride.clientPhone}")).apply {
+                                putExtra("sms_body", message)
+                            })
+                        }
+                        showMessageDialog = false
+                    },
+                    enabled = ride.clientPhone.isNotBlank() && message.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Indigo500)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Envoyer")
                 }
-                context.startActivity(intent)
-                showMessageDialog = false
-            }
+            },
+            dismissButton = { TextButton(onClick = { showMessageDialog = false }) { Text("Annuler") } }
         )
     }
 
-    // Dialog modifier course
+    // Dialog modifier
     if (showEditDialog) {
-        EditRideDialog(
-            ride = ride,
-            onDismiss = { showEditDialog = false },
-            onSave = { updatedRide ->
-                onEditRide(updatedRide)
-                showEditDialog = false
+        var departure by remember { mutableStateOf(ride.departure) }
+        var arrival by remember { mutableStateOf(ride.arrival) }
+        var time by remember { mutableStateOf(ride.time) }
+
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("Modifier la course") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = departure, onValueChange = { departure = it }, label = { Text("Départ") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = arrival, onValueChange = { arrival = it }, label = { Text("Arrivée") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = time, onValueChange = { time = it }, label = { Text("Heure") }, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    onEditRide(ride.copy(departure = departure, arrival = arrival, time = time))
+                    showEditDialog = false
+                }) { Text("Sauvegarder") }
+            },
+            dismissButton = { TextButton(onClick = { showEditDialog = false }) { Text("Annuler") } }
+        )
+    }
+
+    // Dialog terminer course
+    if (showCompleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showCompleteDialog = false },
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Emerald500, modifier = Modifier.size(40.dp)) },
+            title = { Text("Terminer la course ?") },
+            text = {
+                Column {
+                    Text("Course: ${ride.departure} → ${ride.arrival}")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "La course sera marquée comme terminée et archivée.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val completedRide = ride.copy(
+                            status = RideStatus.COMPLETED,
+                            isPending = false
+                        )
+                        onComplete(completedRide)
+                        showCompleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald500)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Terminer")
+                }
+            },
+            dismissButton = { TextButton(onClick = { showCompleteDialog = false }) { Text("Annuler") } }
+        )
+    }
+}
+
+@Composable
+private fun InstructionCard(
+    instruction: String,
+    nextInstruction: String,
+    nextDistance: String,
+    isRecalculating: Boolean,
+    phase: NavigationPhase
+) {
+    val phaseColor = when (phase) {
+        NavigationPhase.TO_PICKUP -> Rose500
+        NavigationPhase.TO_DESTINATION -> Indigo500
+        NavigationPhase.TO_HOME -> Emerald500
+        NavigationPhase.COMPLETED -> Slate500
+    }
+
+    if (isRecalculating) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = ComposeColor.White,
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = phaseColor, strokeWidth = 3.dp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text("Recalcul de l'itinéraire...", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-        )
+        }
+    } else {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = ComposeColor.White,
+            shadowElevation = 8.dp
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Instruction principale
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = phaseColor.copy(alpha = 0.15f),
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = getDirectionIcon(instruction),
+                                contentDescription = null,
+                                tint = phaseColor,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = instruction,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Prochaine instruction
+                if (nextInstruction.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = Slate100)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.TrendingFlat,
+                            contentDescription = null,
+                            tint = Slate400,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Dans $nextDistance : $nextInstruction",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Slate600,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun RouteLegendItem(color: Color, label: String, isActive: Boolean) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(12.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isActive) color else Slate500,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-        )
-    }
-}
-
-@Composable
-private fun NavigationBottomBar(
+private fun BottomNavigationPanel(
     currentPhase: NavigationPhase,
     eta: String,
     distance: String,
     ride: RideRequest,
-    onPhaseChange: (NavigationPhase) -> Unit,
-    onComplete: () -> Unit
+    onComplete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Surface(
-        color = Color.White,
-        shadowElevation = 8.dp
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+    val phaseColor = when (currentPhase) {
+        NavigationPhase.TO_PICKUP -> Rose500
+        NavigationPhase.TO_DESTINATION -> Indigo500
+        NavigationPhase.TO_HOME -> Emerald500
+        NavigationPhase.COMPLETED -> Slate500
+    }
+
+    val phaseLabel = when (currentPhase) {
+        NavigationPhase.TO_PICKUP -> "Aller au client"
+        NavigationPhase.TO_DESTINATION -> "En course"
+        NavigationPhase.TO_HOME -> "Retour domicile"
+        NavigationPhase.COMPLETED -> "Terminé"
+    }
+
+    val destinationText = when (currentPhase) {
+        NavigationPhase.TO_PICKUP -> ride.departure
+        NavigationPhase.TO_DESTINATION -> ride.arrival
+        NavigationPhase.TO_HOME -> "Domicile"
+        NavigationPhase.COMPLETED -> "Course terminée"
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        // Barre de progression des phases
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Info principale
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = when (currentPhase) {
-                            NavigationPhase.TO_PICKUP -> "Aller chercher:"
-                            NavigationPhase.TO_DESTINATION -> "Destination:"
-                            NavigationPhase.TO_HOME -> "Retour:"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Slate500
-                    )
-                    Text(
-                        text = when (currentPhase) {
-                            NavigationPhase.TO_PICKUP -> ride.departure
-                            NavigationPhase.TO_DESTINATION -> ride.arrival
-                            NavigationPhase.TO_HOME -> "Domicile"
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
+            PhaseProgressDot(isActive = currentPhase == NavigationPhase.TO_PICKUP, isCompleted = currentPhase.ordinal > 0, color = Rose500)
+            PhaseProgressDot(isActive = currentPhase == NavigationPhase.TO_DESTINATION, isCompleted = currentPhase.ordinal > 1, color = Indigo500)
+        }
 
+        // Panneau principal
+        Surface(
+            color = ComposeColor.White,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            shadowElevation = 12.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+            ) {
+                // En-tête avec destination
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    StatBox(value = eta, label = "ETA")
-                    StatBox(value = distance, label = "Distance")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = phaseLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = phaseColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = destinationText,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        StatItem(value = eta, label = "Arrivée", icon = Icons.Default.Schedule)
+                        StatItem(value = distance, label = "Distance", icon = Icons.Default.Route)
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
-            Divider()
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Boutons de phase
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                PhaseButton(
-                    phase = NavigationPhase.TO_PICKUP,
-                    currentPhase = currentPhase,
-                    color = Rose500,
-                    icon = Icons.Default.PersonPin,
-                    label = "Client",
-                    onClick = { onPhaseChange(NavigationPhase.TO_PICKUP) }
-                )
-
-                PhaseButton(
-                    phase = NavigationPhase.TO_DESTINATION,
-                    currentPhase = currentPhase,
-                    color = Indigo500,
-                    icon = Icons.Default.Flag,
-                    label = "Course",
-                    onClick = { onPhaseChange(NavigationPhase.TO_DESTINATION) }
-                )
-
-                PhaseButton(
-                    phase = NavigationPhase.TO_HOME,
-                    currentPhase = currentPhase,
-                    color = Emerald500,
-                    icon = Icons.Default.Home,
-                    label = "Maison",
-                    onClick = { onPhaseChange(NavigationPhase.TO_HOME) }
-                )
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Bouton terminer
                 Button(
                     onClick = onComplete,
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald500),
-                    shape = RoundedCornerShape(12.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = phaseColor)
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Terminer", fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = when (currentPhase) {
+                            NavigationPhase.TO_PICKUP -> "Client récupéré"
+                            NavigationPhase.TO_DESTINATION -> "Terminer la course"
+                            NavigationPhase.TO_HOME -> "Retour en cours"
+                            NavigationPhase.COMPLETED -> "Course terminée"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = MaterialTheme.typography.titleMedium.fontSize
+                    )
                 }
             }
         }
@@ -569,293 +792,48 @@ private fun NavigationBottomBar(
 }
 
 @Composable
-private fun PhaseButton(
-    phase: NavigationPhase,
-    currentPhase: NavigationPhase,
-    color: Color,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    val isActive = phase == currentPhase
+private fun RowScope.PhaseProgressDot(isActive: Boolean, isCompleted: Boolean, color: ComposeColor) {
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .height(4.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(
+                when {
+                    isCompleted -> color
+                    isActive -> color
+                    else -> Slate200
+                }
+            )
+    )
+}
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier
-                .size(48.dp)
-                .background(
-                    color = if (isActive) color else color.copy(alpha = 0.2f),
-                    shape = CircleShape
-                )
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = if (isActive) Color.White else color,
-                modifier = Modifier.size(24.dp)
+@Composable
+private fun StatItem(value: String, label: String, icon: ImageVector) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = Slate400, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Slate900
             )
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isActive) color else Slate500,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-        )
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Slate500)
     }
 }
 
-@Composable
-private fun StatBox(value: String, label: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Slate900
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Slate500
-        )
+private fun getDirectionIcon(instruction: String): ImageVector {
+    return when {
+        instruction.contains("tourner", ignoreCase = true) -> Icons.Default.TurnRight
+        instruction.contains("gauche", ignoreCase = true) -> Icons.Default.TurnLeft
+        instruction.contains("droite", ignoreCase = true) -> Icons.Default.TurnRight
+        instruction.contains("rond-point", ignoreCase = true) -> Icons.Default.Loop
+        instruction.contains("continuer", ignoreCase = true) -> Icons.Default.Straight
+        instruction.contains("départ", ignoreCase = true) -> Icons.Default.PlayArrow
+        instruction.contains("arrivée", ignoreCase = true) -> Icons.Default.Flag
+        else -> Icons.Default.Navigation
     }
-}
-
-@Composable
-private fun CallClientDialog(
-    clientName: String,
-    phoneNumber: String,
-    onDismiss: () -> Unit,
-    onCall: (String) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Emerald500) },
-        title = { Text("Appeler $clientName") },
-        text = {
-            Column {
-                Text("Numéro: $phoneNumber")
-                if (phoneNumber.isBlank()) {
-                    Text(
-                        "Aucun numéro de téléphone disponible",
-                        color = Rose500,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onCall(phoneNumber) },
-                enabled = phoneNumber.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Emerald500)
-            ) {
-                Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Appeler")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Annuler")
-            }
-        }
-    )
-}
-
-@Composable
-private fun MessageClientDialog(
-    clientName: String,
-    phoneNumber: String,
-    defaultMessage: String,
-    onDismiss: () -> Unit,
-    onSend: (String) -> Unit
-) {
-    var message by remember { mutableStateOf(defaultMessage) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null, tint = Indigo500) },
-        title = { Text("Message à $clientName") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = message,
-                    onValueChange = { message = it },
-                    label = { Text("Message") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    maxLines = 5
-                )
-                if (phoneNumber.isBlank()) {
-                    Text(
-                        "Aucun numéro de téléphone disponible",
-                        color = Rose500,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSend(message) },
-                enabled = phoneNumber.isNotBlank() && message.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Indigo500)
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Envoyer SMS")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Annuler")
-            }
-        }
-    )
-}
-
-@Composable
-private fun EditRideDialog(
-    ride: RideRequest,
-    onDismiss: () -> Unit,
-    onSave: (RideRequest) -> Unit
-) {
-    var departure by remember { mutableStateOf(ride.departure) }
-    var arrival by remember { mutableStateOf(ride.arrival) }
-    var time by remember { mutableStateOf(ride.time) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Indigo500) },
-        title = { Text("Modifier la course") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = departure,
-                    onValueChange = { departure = it },
-                    label = { Text("Point de départ") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = arrival,
-                    onValueChange = { arrival = it },
-                    label = { Text("Destination") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = time,
-                    onValueChange = { time = it },
-                    label = { Text("Heure") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onSave(ride.copy(
-                        departure = departure,
-                        arrival = arrival,
-                        time = time
-                    ))
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Indigo500)
-            ) {
-                Text("Sauvegarder")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Annuler")
-            }
-        }
-    )
-}
-
-private fun updateMapWithAllRoutes(
-    map: MapboxMap,
-    routeToPickup: OsrmRoutingService.RouteResult?,
-    routeToDestination: OsrmRoutingService.RouteResult?,
-    routeToHome: OsrmRoutingService.RouteResult?,
-    currentPhase: NavigationPhase
-) {
-    val style = map.style ?: return
-
-    // Route Rouge: vers point de départ
-    routeToPickup?.let { route ->
-        if (route.success) {
-            val geoJson = createRouteGeoJson(route.geometry)
-            style.getSourceAs<GeoJsonSource>("route-pickup")?.setGeoJson(geoJson)
-        }
-    }
-
-    // Route Bleue: vers destination
-    routeToDestination?.let { route ->
-        if (route.success) {
-            val geoJson = createRouteGeoJson(route.geometry)
-            style.getSourceAs<GeoJsonSource>("route-destination")?.setGeoJson(geoJson)
-        }
-    }
-
-    // Route Verte: vers domicile
-    routeToHome?.let { route ->
-        if (route.success) {
-            val geoJson = createRouteGeoJson(route.geometry)
-            style.getSourceAs<GeoJsonSource>("route-home")?.setGeoJson(geoJson)
-        }
-    }
-
-    // Ajuster la visibilité selon la phase
-    when (currentPhase) {
-        NavigationPhase.TO_PICKUP -> {
-            style.getLayer("layer-pickup")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.VISIBLE))
-            style.getLayer("layer-destination")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.NONE))
-            style.getLayer("layer-home")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.NONE))
-        }
-        NavigationPhase.TO_DESTINATION -> {
-            style.getLayer("layer-pickup")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.NONE))
-            style.getLayer("layer-destination")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.VISIBLE))
-            style.getLayer("layer-home")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.NONE))
-        }
-        NavigationPhase.TO_HOME -> {
-            style.getLayer("layer-pickup")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.NONE))
-            style.getLayer("layer-destination")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.NONE))
-            style.getLayer("layer-home")?.setProperties(PropertyFactory.visibility(com.mapbox.mapboxsdk.style.layers.Property.VISIBLE))
-        }
-    }
-}
-
-private fun createRouteGeoJson(geometry: List<Pair<Double, Double>>): String {
-    val coordinatesArray = JSONArray()
-    geometry.forEach { point ->
-        val coord = JSONArray()
-        coord.put(point.second) // longitude
-        coord.put(point.first)  // latitude
-        coordinatesArray.put(coord)
-    }
-
-    return JSONObject().apply {
-        put("type", "Feature")
-        put("geometry", JSONObject().apply {
-            put("type", "LineString")
-            put("coordinates", coordinatesArray)
-        })
-        put("properties", JSONObject())
-    }.toString()
-}
-
-enum class NavigationPhase {
-    TO_PICKUP,      // Rouge: Aller chercher le client
-    TO_DESTINATION, // Bleu: Conduire le client
-    TO_HOME         // Vert: Retour au domicile
 }

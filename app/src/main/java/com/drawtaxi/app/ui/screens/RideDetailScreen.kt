@@ -43,8 +43,31 @@ fun RideDetailScreen(
     val brandColor = settings.brandColor
     var showTemplateDialog by remember { mutableStateOf(false) }
 
-    val profitability = if (ride.price > 0) {
-        RideRequest.calculateProfitability(ride.price, ride.fuelCost, ride.operatingCost)
+    // Calcul de rentabilité identique à celui utilisé avant l'envoi du devis
+    val priceBreakdown = remember(ride, settings) {
+        com.drawtaxi.app.logic.PriceEngine.calculate(
+            distanceKm = ride.distanceKm,
+            dateTime = java.util.Calendar.getInstance(),
+            pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
+            baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
+            nightSurchargePercent = settings.nightSurchargePercent,
+            sundaySurchargePercent = settings.sundaySurchargePercent,
+            holidaySurchargePercent = settings.holidaySurchargePercent,
+            euroPerMinute = settings.euroPerMinute,
+            nightStartHour = settings.nightStartHour,
+            nightEndHour = settings.nightEndHour,
+            tvaTransportRate = settings.tvaTransportRate,
+            tvaWaitTimeRate = settings.tvaWaitTimeRate
+        )
+    }
+
+    val fuelCost = ride.distanceKm * settings.fuelCostPerKm
+    val estimatedDurationHours = ride.distanceKm / if (ride.distanceKm < 10) 30.0 else 50.0
+    val operatingCost = estimatedDurationHours * settings.operatingCostPerHour
+    val totalCost = fuelCost + operatingCost
+    val netProfit = priceBreakdown.totalTTC - totalCost
+    val profitability = if (priceBreakdown.totalTTC > 0) {
+        (netProfit / priceBreakdown.totalTTC) * 100
     } else 0.0
 
     Scaffold(
@@ -117,7 +140,21 @@ fun RideDetailScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Commencer", fontWeight = FontWeight.Bold)
                         }
+                    } else if (ride.status == com.drawtaxi.app.data.RideStatus.CONFIRMED || 
+                               ride.status == com.drawtaxi.app.data.RideStatus.IN_PROGRESS) {
+                        // Course confirmée → Démarrer la navigation
+                        Button(
+                            onClick = { onStartRide(ride) },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                        ) {
+                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Démarrer", fontWeight = FontWeight.Bold)
+                        }
                     } else {
+                        // Course terminée → Envoyer le reçu
                         Button(
                             onClick = { onShareReceipt(ride) },
                             modifier = Modifier.weight(1f).height(48.dp),
@@ -163,9 +200,16 @@ fun RideDetailScreen(
 
             RideDetailPriceCard(ride = ride, settings = settings, brandColor = brandColor)
 
-            if (ride.price > 0 && !isPending) {
-                RideDetailProfitabilityCard(ride = ride, profitability = profitability, brandColor = brandColor)
-            }
+            // Afficher la rentabilité calculée avec PriceEngine (même calcul que avant envoi devis)
+            RideDetailProfitabilityCard(
+                ride = ride,
+                profitability = profitability,
+                netProfit = netProfit,
+                fuelCost = fuelCost,
+                operatingCost = operatingCost,
+                totalPrice = priceBreakdown.totalTTC,
+                brandColor = brandColor
+            )
 
             Spacer(modifier = Modifier.height(80.dp))
         }
@@ -173,10 +217,18 @@ fun RideDetailScreen(
 }
 
 @Composable
-fun RideDetailProfitabilityCard(ride: RideRequest, profitability: Double, brandColor: Color) {
+fun RideDetailProfitabilityCard(
+    ride: RideRequest,
+    profitability: Double,
+    netProfit: Double,
+    fuelCost: Double,
+    operatingCost: Double,
+    totalPrice: Double,
+    brandColor: Color
+) {
     val profitColor = when {
-        profitability >= 70 -> Green500
-        profitability >= 50 -> Color(0xFFFFA500)
+        profitability >= 50 -> Green500
+        profitability >= 30 -> Color(0xFFFFA500)
         else -> Red500
     }
 
@@ -208,14 +260,13 @@ fun RideDetailProfitabilityCard(ride: RideRequest, profitability: Double, brandC
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ProfitabilityStatItem(label = "Revenu", value = String.format("%.2f €", ride.price), modifier = Modifier.weight(1f))
-                ProfitabilityStatItem(label = "Carburant", value = String.format("%.2f €", ride.fuelCost), modifier = Modifier.weight(1f))
-                ProfitabilityStatItem(label = "Coûts ops", value = String.format("%.2f €", ride.operatingCost), modifier = Modifier.weight(1f))
+                ProfitabilityStatItem(label = "Prix TTC", value = String.format("%.2f €", totalPrice), modifier = Modifier.weight(1f))
+                ProfitabilityStatItem(label = "Carburant", value = String.format("%.2f €", fuelCost), modifier = Modifier.weight(1f))
+                ProfitabilityStatItem(label = "Coûts ops", value = String.format("%.2f €", operatingCost), modifier = Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            val netProfit = ride.price - ride.fuelCost - ride.operatingCost
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Bénéfice net", style = MaterialTheme.typography.bodyMedium, color = Slate500)
                 Text(

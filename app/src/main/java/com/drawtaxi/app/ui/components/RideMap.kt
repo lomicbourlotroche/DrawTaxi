@@ -1,8 +1,6 @@
 package com.drawtaxi.app.ui.components
 
-import com.drawtaxi.app.logic.fetchRoute
-
-import android.location.Geocoder
+import android.location.Location
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,17 +12,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
-import com.drawtaxi.app.ui.theme.Slate400
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.drawtaxi.app.logic.GeocodingService
+import com.drawtaxi.app.logic.OsrmRoutingService
+import com.drawtaxi.app.ui.theme.Slate400
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
-import java.util.Locale
 
 @Composable
 fun RideMap(
@@ -40,19 +40,23 @@ fun RideMap(
     LaunchedEffect(departure, arrival) {
         withContext(Dispatchers.IO) {
             try {
-                val geocoder = Geocoder(context, Locale.getDefault())
-                // Simple geocoding implementation
-                val depList = geocoder.getFromLocationName(departure, 1)
-                val arrList = geocoder.getFromLocationName(arrival, 1)
+                // Géocodage avec GeocodingService
+                val fromLocation = GeocodingService.geocode(departure)
+                val toLocation = GeocodingService.geocode(arrival)
 
-                val depPoint = if (!depList.isNullOrEmpty()) GeoPoint(depList[0].latitude, depList[0].longitude) else null
-                val arrPoint = if (!arrList.isNullOrEmpty()) GeoPoint(arrList[0].latitude, arrList[0].longitude) else null
-                
-                points = depPoint to arrPoint
+                if (fromLocation != null && toLocation != null) {
+                    points = GeoPoint(fromLocation.latitude, fromLocation.longitude) to
+                            GeoPoint(toLocation.latitude, toLocation.longitude)
 
-                if (depPoint != null && arrPoint != null) {
-                    val routeInfo = fetchRoute(depPoint, arrPoint)
-                    routePoints = routeInfo.points
+                    // Calcul itinéraire via OSRM (trajet réel, pas ligne droite)
+                    val routeResult = OsrmRoutingService.calculateRoute(fromLocation, toLocation)
+
+                    if (routeResult.success && routeResult.geometry.isNotEmpty()) {
+                        routePoints = routeResult.geometry.map { GeoPoint(it.first, it.second) }
+                    } else {
+                        // Fallback: ligne directe si OSRM échoue
+                        routePoints = listOf(points.first!!, points.second!!)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -64,12 +68,15 @@ fun RideMap(
 
     Box(modifier = modifier.background(Slate400.copy(0.1f))) {
         if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
         } else {
             val (start, end) = points
             if (start != null || end != null) {
                 AndroidView(
                     factory = { ctx ->
+                        Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid_ride_detail", 0))
                         MapView(ctx).apply {
                             setTileSource(TileSourceFactory.MAPNIK)
                             setMultiTouchControls(true)
@@ -78,8 +85,8 @@ fun RideMap(
                     },
                     update = { mapView ->
                         mapView.overlays.clear()
-                        
-                        // Add start marker
+
+                        // Marqueur départ
                         if (start != null) {
                             val startMarker = Marker(mapView)
                             startMarker.position = start
@@ -88,7 +95,7 @@ fun RideMap(
                             mapView.overlays.add(startMarker)
                         }
 
-                        // Add end marker
+                        // Marqueur arrivée
                         if (end != null) {
                             val endMarker = Marker(mapView)
                             endMarker.position = end
@@ -96,27 +103,29 @@ fun RideMap(
                             endMarker.title = "Arrivée: $arrival"
                             mapView.overlays.add(endMarker)
                         }
-                        
-                        // Draw line if both exist
+
+                        // Tracé itinéraire réel (OSRM)
                         if (routePoints.isNotEmpty()) {
                             val line = Polyline()
                             line.setPoints(routePoints)
                             line.color = android.graphics.Color.BLUE
                             line.width = 12.0f
                             mapView.overlays.add(line)
-                            
+
                             mapView.post {
-                                mapView.zoomToBoundingBox(line.bounds, true, 50)
+                                if (line.bounds != null) {
+                                    mapView.zoomToBoundingBox(line.bounds, true, 50)
+                                }
                             }
                         } else if (start != null && end != null) {
+                            // Fallback: ligne directe
                             val line = Polyline()
                             line.addPoint(start)
                             line.addPoint(end)
                             line.color = android.graphics.Color.RED
-                            line.width = 5.0f // removed mismatched type assignment if necessary, ensure float
+                            line.width = 5.0f
                             mapView.overlays.add(line)
-                            
-                            // Zoom to fit
+
                             mapView.post {
                                 mapView.zoomToBoundingBox(line.bounds, true, 100)
                             }
@@ -132,18 +141,5 @@ fun RideMap(
                 Text("Impossible de localiser les adresses", modifier = Modifier.align(Alignment.Center))
             }
         }
-    }
-}
-@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
-@Composable
-fun RideMapPreview() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp)
-            .background(com.drawtaxi.app.ui.theme.Slate100),
-        contentAlignment = Alignment.Center
-    ) {
-        Text("Aperçu de la Carte (Statique)", color = com.drawtaxi.app.ui.theme.Slate400)
     }
 }
