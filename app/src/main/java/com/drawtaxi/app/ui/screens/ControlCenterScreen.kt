@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.drawtaxi.app.data.*
+import com.drawtaxi.app.ui.components.QuoteProfitabilityDialog
 import com.drawtaxi.app.ui.components.RideCard
 import com.drawtaxi.app.ui.theme.*
 
@@ -27,6 +28,7 @@ fun ControlCenterScreen(
     onRideClick: (RideRequest) -> Unit,
     brandColor: Color,
     onCreateRide: () -> Unit,
+    settings: AppSettings = AppSettings(),
     onCheckSms: () -> Unit = {},
     onSendQuote: (RideRequest) -> Unit = {},
     onAcceptQuote: (RideRequest) -> Unit = {},
@@ -38,6 +40,8 @@ fun ControlCenterScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var rideToDelete by remember { mutableStateOf<RideRequest?>(null) }
     var selectedTemplate by remember { mutableStateOf("") }
+    var showQuoteDialog by remember { mutableStateOf(false) }
+    var rideForQuote by remember { mutableStateOf<RideRequest?>(null) }
 
     Column(
         modifier = Modifier
@@ -171,7 +175,11 @@ fun ControlCenterScreen(
                             rideToDelete = ride
                             showDeleteDialog = true
                         },
-                        onSendQuote = { onSendQuote(ride) },
+                        onSendQuote = {
+                            // Afficher l'analyse de rentabilité avant envoi
+                            rideForQuote = ride
+                            showQuoteDialog = true
+                        },
                         onAcceptQuote = { onAcceptQuote(ride) },
                         onRejectQuote = { onRejectQuote(ride) },
                         onClick = { onRideClick(ride) }
@@ -255,6 +263,23 @@ fun ControlCenterScreen(
                 }) {
                     Text("Annuler")
                 }
+            }
+        )
+    }
+    
+    // Dialog d'analyse de rentabilité avant envoi du devis
+    if (showQuoteDialog && rideForQuote != null) {
+        QuoteProfitabilityDialog(
+            ride = rideForQuote!!,
+            settings = settings,
+            onConfirm = {
+                onSendQuote(rideForQuote!!)
+                showQuoteDialog = false
+                rideForQuote = null
+            },
+            onCancel = {
+                showQuoteDialog = false
+                rideForQuote = null
             }
         )
     }

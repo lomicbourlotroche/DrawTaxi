@@ -27,19 +27,11 @@ import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.data.RideStatus
-import com.drawtaxi.app.logic.OsmRoute
-import com.drawtaxi.app.logic.OsmRoutingService
+import com.drawtaxi.app.logic.OsrmRoutingService
+import com.drawtaxi.app.ui.components.NavigationMapView
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.*
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import com.mapbox.mapboxsdk.Mapbox
 
 // Étapes de navigation simplifiées
 enum class NavigationStep(val label: String, val description: String) {
@@ -66,11 +58,9 @@ fun ActiveRideScreen(
     var pickupLocation by remember { mutableStateOf<Location?>(null) }
     var destLocation by remember { mutableStateOf<Location?>(null) }
     var homeLocation by remember { mutableStateOf<Location?>(null) }
-    var currentRoute by remember { mutableStateOf<OsmRoute?>(null) }
     var remainingDistance by remember { mutableStateOf(0.0) }
     var eta by remember { mutableStateOf("--") }
     var speed by remember { mutableStateOf("0 km/h") }
-    var mapView by remember { mutableStateOf<MapView?>(null) }
     var rideStartTime by remember { mutableStateOf(System.currentTimeMillis()) }
     var totalDistance by remember { mutableStateOf(0.0) }
     var showCancelDialog by remember { mutableStateOf(false) }
@@ -106,74 +96,71 @@ fun ActiveRideScreen(
             else -> null
         }
 
-        if (start != null && end != null) {
-            val route = OsmRoutingService.getRoute(start, end)
-            currentRoute = route
-            if (route != null) {
-                remainingDistance = route.distance
-                val etaMinutes = route.duration / 60.0
-                eta = if (etaMinutes < 1) "< 1 min" else "~${etaMinutes.toInt()} min"
-            }
-        }
+        // Les distances et ETA seront calculés par le NavigationMapView via OSRM
+        // On met juste à jour les stats de base
     }
 
     // Mise à jour position et stats
-    LaunchedEffect(currentLocation, currentRoute) {
+    LaunchedEffect(currentLocation) {
         currentLocation?.let { loc ->
             speed = if (loc.hasSpeed()) {
                 String.format("%.0f km/h", loc.speed * 3.6)
             } else "0 km/h"
-
-            currentRoute?.let { route ->
-                val nearestIndex = OsmRoutingService.findNearestRoutePoint(loc, route.geometry)
-                val remaining = OsmRoutingService.calculateRemainingRoute(nearestIndex, route.geometry)
-                remainingDistance = remaining
-
-                val avgSpeedKmh = if (loc.hasSpeed() && loc.speed > 0) loc.speed * 3.6 else 40.0
-                val etaMinutes = (remaining / 1000.0 / avgSpeedKmh) * 60
-                eta = if (etaMinutes < 1) "< 1 min" else "~${etaMinutes.toInt()} min"
-
-                updateMapPosition(mapView, loc)
-            }
         }
     }
 
+    // Initialiser Mapbox (MapLibre)
+    LaunchedEffect(Unit) {
+        Mapbox.getInstance(context)
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        // Carte en plein écran
-        if (currentLocation != null) {
-            AndroidView(
-                factory = { ctx ->
-                    Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
-                    MapView(ctx).apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setMultiTouchControls(true)
-                        controller.setZoom(15.0)
-
-                        val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
-                        overlays.add(locationOverlay)
-                        locationOverlay.enableMyLocation()
-
-                        currentLocation?.let { loc ->
-                            controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
+        // Carte de navigation avec vrai itinéraire OSRM
+        when (currentStep) {
+            NavigationStep.TO_PICKUP -> {
+                if (pickupLocation != null) {
+                    NavigationMapView(
+                        departure = "Ma position",
+                        arrival = ride.departure,
+                        brandColor = brandColor,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = brandColor)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Calcul de l'itinéraire...", color = Slate700)
                         }
-
-                        mapView = this
                     }
-                },
-                update = { map ->
-                    currentRoute?.let { route ->
-                        drawRouteOnMap(map, route, currentStep, pickupLocation, destLocation, homeLocation, ride)
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = brandColor)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Acquisition GPS...", color = Slate700)
                 }
+            }
+            NavigationStep.TO_DESTINATION -> {
+                if (destLocation != null) {
+                    NavigationMapView(
+                        departure = ride.departure,
+                        arrival = ride.arrival,
+                        brandColor = brandColor,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = brandColor)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Calcul de l'itinéraire...", color = Slate700)
+                        }
+                    }
+                }
+            }
+            else -> {
+                // Pour les autres étapes, afficher simplement la carte avec le dernier itinéraire
+                NavigationMapView(
+                    departure = ride.departure,
+                    arrival = ride.arrival,
+                    brandColor = brandColor,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
 
@@ -419,71 +406,6 @@ private fun StatItem(value: String, label: String) {
             style = MaterialTheme.typography.labelSmall,
             color = Slate500
         )
-    }
-}
-
-private fun drawRouteOnMap(
-    map: MapView,
-    route: OsmRoute,
-    step: NavigationStep,
-    pickup: Location?,
-    dest: Location?,
-    home: Location?,
-    ride: RideRequest
-) {
-    // Nettoyer les anciennes routes
-    val existingRoutes = map.overlays.filterIsInstance<Polyline>().toList()
-    existingRoutes.forEach { map.overlays.remove(it) }
-
-    val existingMarkers = map.overlays.filterIsInstance<Marker>().toList()
-    existingMarkers.forEach { map.overlays.remove(it) }
-
-    // Dessiner la route
-    val polyline = Polyline().apply {
-        setPoints(route.geometry.map { GeoPoint(it.first, it.second) })
-        outlinePaint.color = androidx.compose.ui.graphics.Color(0xFF6366F1).toArgb()
-        outlinePaint.strokeWidth = 12f
-        isGeodesic = true
-    }
-    map.overlays.add(0, polyline)
-
-    // Ajouter le marqueur de destination selon l'étape
-    when (step) {
-        NavigationStep.TO_PICKUP -> {
-            pickup?.let { loc ->
-                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Départ: ${ride.departure}")
-            }
-        }
-        NavigationStep.TO_DESTINATION -> {
-            dest?.let { loc ->
-                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Destination: ${ride.arrival}")
-            }
-        }
-        NavigationStep.TO_HOME -> {
-            home?.let { loc ->
-                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Domicile")
-            }
-        }
-        else -> {}
-    }
-
-    map.invalidate()
-}
-
-private fun addMarker(map: MapView, point: GeoPoint, title: String) {
-    val marker = Marker(map).apply {
-        position = point
-        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-        this.title = title
-        icon = map.context.getDrawable(android.R.drawable.ic_menu_compass)
-    }
-    map.overlays.add(marker)
-}
-
-private fun updateMapPosition(map: MapView?, location: Location) {
-    map?.let { mv ->
-        mv.controller.setCenter(GeoPoint(location.latitude, location.longitude))
-        mv.invalidate()
     }
 }
 

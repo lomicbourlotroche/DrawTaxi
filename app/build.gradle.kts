@@ -103,8 +103,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // MapLibre (alternative open source à Mapbox)
-    implementation("org.maplibre.gl:android-sdk:11.0.0")
-    implementation("org.maplibre.gl:android-plugin-annotation-v9:3.0.0")
+    implementation("org.maplibre.gl:android-sdk:10.3.1")
+    implementation("org.maplibre.gl:android-plugin-annotation-v9:2.0.2")
 
     // JavaMail pour SMTP/IMAP (OVH)
     implementation("com.sun.mail:android-mail:1.6.7")

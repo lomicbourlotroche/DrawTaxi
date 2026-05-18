@@ -370,6 +370,7 @@ class MainActivity : ComponentActivity() {
                                                 editingRide = ride
                                             },
                                             brandColor = settings.brandColor,
+                                            settings = settings,
                                             onCreateRide = {
                                                 isCreatingRide = true
                                                 creationText = ""

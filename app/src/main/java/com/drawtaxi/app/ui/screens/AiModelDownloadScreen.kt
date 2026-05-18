@@ -193,28 +193,89 @@ fun AiModelDownloadScreen(
 
             // Action buttons
             if (!isComplete) {
+                // Afficher le type de connexion
+                val connectionType = remember { LlamaModelManager.getConnectionType(context) }
+                if (connectionType != "WiFi") {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Amber100,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Amber600,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Connexion $connectionType - ~2 Go à télécharger",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Amber700
+                            )
+                        }
+                    }
+                }
+
+                var retryCount by remember { mutableStateOf(0) }
+                var lastError by remember { mutableStateOf("") }
+
                 Button(
                     onClick = {
                         isDownloading = true
                         hasError = false
-                        statusText = "Connexion au serveur..."
+                        retryCount = 0
+                        statusText = "Vérification de la connexion..."
                         scope.launch {
-                            val success = LlamaModelManager.downloadModel(context) { prog ->
-                                progress = prog
-                                statusText = when {
-                                    prog < 0.1f -> "Connexion au serveur..."
-                                    prog < 0.5f -> "Téléchargement en cours..."
-                                    prog < 0.9f -> "Presque terminé..."
-                                    else -> "Finalisation..."
+                            val success = LlamaModelManager.downloadModel(
+                                context = context,
+                                maxRetries = 5,
+                                onProgress = { prog ->
+                                    progress = prog
+                                    statusText = when {
+                                        prog < 0.05f -> "Préparation du téléchargement..."
+                                        prog < 0.3f -> "Téléchargement en cours (${(prog * 100).toInt()}%)"
+                                        prog < 0.7f -> "Téléchargement... ${(prog * 100).toInt()}%"
+                                        prog < 0.95f -> "Finalisation..."
+                                        else -> "Vérification du fichier..."
+                                    }
+                                },
+                                onRetry = { attempt, error ->
+                                    retryCount = attempt
+                                    lastError = error
+                                    statusText = "Tentative $attempt/5... ($error)"
+                                },
+                                onStatusChange = { status ->
+                                    when (status) {
+                                        LlamaModelManager.ModelStatus.DOWNLOADING -> isDownloading = true
+                                        LlamaModelManager.ModelStatus.READY -> {
+                                            isDownloading = false
+                                            isComplete = true
+                                            statusText = "Téléchargement terminé !"
+                                        }
+                                        LlamaModelManager.ModelStatus.ERROR -> {
+                                            isDownloading = false
+                                            hasError = true
+                                        }
+                                        else -> {}
+                                    }
                                 }
-                            }
+                            )
                             isDownloading = false
                             if (success) {
                                 isComplete = true
                                 statusText = "Téléchargement terminé !"
                             } else {
                                 hasError = true
-                                statusText = "Échec du téléchargement"
+                                statusText = if (retryCount > 0) {
+                                    "Échec après 5 tentatives - $lastError"
+                                } else {
+                                    "Échec du téléchargement - Vérifiez votre connexion"
+                                }
                             }
                         }
                     },
@@ -237,7 +298,7 @@ fun AiModelDownloadScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Text(
-                        text = if (isDownloading) "Téléchargement..." else "TÉLÉCHARGER LE MODÈLE",
+                        text = if (isDownloading) "Téléchargement..." else if (modelSize > 0) "REPRENDRE LE TÉLÉCHARGEMENT" else "TÉLÉCHARGER LE MODÈLE",
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
@@ -245,12 +306,37 @@ fun AiModelDownloadScreen(
 
                 if (hasError) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Vérifiez votre connexion internet et réessayez.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Rose500,
-                        textAlign = TextAlign.Center
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Rose100,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = Rose600,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = statusText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Rose700,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Conseils : Vérifiez votre connexion WiFi, désactivez le VPN, ou réessayez plus tard.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Rose600,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
