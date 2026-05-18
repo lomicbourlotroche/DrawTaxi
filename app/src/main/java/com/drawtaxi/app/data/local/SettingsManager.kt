@@ -60,6 +60,23 @@ class SettingsManager(private val context: Context) {
         val HOME_ADDRESS = stringPreferencesKey("home_address")
         val SMS_SCAN_INTERVAL = intPreferencesKey("sms_scan_interval")
         val AI_ENABLED = booleanPreferencesKey("ai_enabled")
+        
+        // OVH SMTP
+        val OVH_SMTP_ENABLED = booleanPreferencesKey("ovh_smtp_enabled")
+        val OVH_SMTP_SERVER = stringPreferencesKey("ovh_smtp_server")
+        val OVH_SMTP_PORT = intPreferencesKey("ovh_smtp_port")
+        val OVH_SMTP_USERNAME = stringPreferencesKey("ovh_smtp_username")
+        val OVH_SMTP_PASSWORD = stringPreferencesKey("ovh_smtp_password")
+        val OVH_SMTP_USE_SSL = booleanPreferencesKey("ovh_smtp_use_ssl")
+        val OVH_FROM_EMAIL = stringPreferencesKey("ovh_from_email")
+        val OVH_FROM_NAME = stringPreferencesKey("ovh_from_name")
+        
+        // OVH IMAP
+        val OVH_IMAP_ENABLED = booleanPreferencesKey("ovh_imap_enabled")
+        val OVH_IMAP_SERVER = stringPreferencesKey("ovh_imap_server")
+        val OVH_IMAP_PORT = intPreferencesKey("ovh_imap_port")
+        val OVH_IMAP_CHECK_INTERVAL = intPreferencesKey("ovh_imap_check_interval")
+        val OVH_IMAP_FOLDER = stringPreferencesKey("ovh_imap_folder")
     }
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { preferences ->
@@ -115,7 +132,24 @@ class SettingsManager(private val context: Context) {
             tvaWaitTimeRate = preferences[Keys.TVA_WAIT]?.toDouble() ?: 0.20,
             homeAddress = preferences[Keys.HOME_ADDRESS] ?: "",
             smsScanIntervalMinutes = preferences[Keys.SMS_SCAN_INTERVAL] ?: 60,
-            aiEnabled = preferences[Keys.AI_ENABLED] ?: true
+            aiEnabled = preferences[Keys.AI_ENABLED] ?: true,
+            
+            // OVH SMTP
+            ovhSmtpEnabled = preferences[Keys.OVH_SMTP_ENABLED] ?: false,
+            ovhSmtpServer = preferences[Keys.OVH_SMTP_SERVER] ?: "ssl0.ovh.net",
+            ovhSmtpPort = preferences[Keys.OVH_SMTP_PORT] ?: 587,
+            ovhSmtpUsername = preferences[Keys.OVH_SMTP_USERNAME] ?: "",
+            ovhSmtpPassword = preferences[Keys.OVH_SMTP_PASSWORD] ?: "",
+            ovhSmtpUseSsl = preferences[Keys.OVH_SMTP_USE_SSL] ?: true,
+            ovhFromEmail = preferences[Keys.OVH_FROM_EMAIL] ?: "",
+            ovhFromName = preferences[Keys.OVH_FROM_NAME] ?: "DrawTaxi",
+            
+            // OVH IMAP
+            ovhImapEnabled = preferences[Keys.OVH_IMAP_ENABLED] ?: false,
+            ovhImapServer = preferences[Keys.OVH_IMAP_SERVER] ?: "ssl0.ovh.net",
+            ovhImapPort = preferences[Keys.OVH_IMAP_PORT] ?: 993,
+            ovhImapCheckInterval = preferences[Keys.OVH_IMAP_CHECK_INTERVAL] ?: 5,
+            ovhImapFolder = preferences[Keys.OVH_IMAP_FOLDER] ?: "INBOX"
         )
     }
 
@@ -167,6 +201,23 @@ class SettingsManager(private val context: Context) {
             preferences[Keys.HOME_ADDRESS] = settings.homeAddress
             preferences[Keys.SMS_SCAN_INTERVAL] = settings.smsScanIntervalMinutes
             preferences[Keys.AI_ENABLED] = settings.aiEnabled
+            
+            // OVH SMTP
+            preferences[Keys.OVH_SMTP_ENABLED] = settings.ovhSmtpEnabled
+            preferences[Keys.OVH_SMTP_SERVER] = settings.ovhSmtpServer
+            preferences[Keys.OVH_SMTP_PORT] = settings.ovhSmtpPort
+            preferences[Keys.OVH_SMTP_USERNAME] = settings.ovhSmtpUsername
+            preferences[Keys.OVH_SMTP_PASSWORD] = settings.ovhSmtpPassword
+            preferences[Keys.OVH_SMTP_USE_SSL] = settings.ovhSmtpUseSsl
+            preferences[Keys.OVH_FROM_EMAIL] = settings.ovhFromEmail
+            preferences[Keys.OVH_FROM_NAME] = settings.ovhFromName
+            
+            // OVH IMAP
+            preferences[Keys.OVH_IMAP_ENABLED] = settings.ovhImapEnabled
+            preferences[Keys.OVH_IMAP_SERVER] = settings.ovhImapServer
+            preferences[Keys.OVH_IMAP_PORT] = settings.ovhImapPort
+            preferences[Keys.OVH_IMAP_CHECK_INTERVAL] = settings.ovhImapCheckInterval
+            preferences[Keys.OVH_IMAP_FOLDER] = settings.ovhImapFolder
         }
     }
 

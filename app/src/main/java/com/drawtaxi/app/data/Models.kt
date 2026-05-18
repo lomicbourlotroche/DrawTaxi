@@ -72,7 +72,24 @@ data class AppSettings(
     val tvaWaitTimeRate: Double = 0.20,
     val homeAddress: String = "",
     val smsScanIntervalMinutes: Int = 60,
-    val aiEnabled: Boolean = true
+    val aiEnabled: Boolean = true,
+    
+    // Configuration OVH SMTP (envoi mails)
+    val ovhSmtpEnabled: Boolean = false,
+    val ovhSmtpServer: String = "ssl0.ovh.net",
+    val ovhSmtpPort: Int = 587,
+    val ovhSmtpUsername: String = "",
+    val ovhSmtpPassword: String = "",
+    val ovhSmtpUseSsl: Boolean = true,
+    val ovhFromEmail: String = "",
+    val ovhFromName: String = "DrawTaxi",
+    
+    // Configuration OVH IMAP (réception mails)
+    val ovhImapEnabled: Boolean = false,
+    val ovhImapServer: String = "ssl0.ovh.net",
+    val ovhImapPort: Int = 993,
+    val ovhImapCheckInterval: Int = 5, // minutes
+    val ovhImapFolder: String = "INBOX"
 ) {
     companion object {
         val defaultMessageTemplates = listOf(

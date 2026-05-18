@@ -26,7 +26,6 @@ fun SettingsMain(
     settings: AppSettings,
     onUpdate: (AppSettings) -> Unit,
     onNavigate: (String) -> Unit,
-    onTestNotification: () -> Unit,
     onRequestSmsPermission: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
     onRequestLocationPermission: () -> Unit = {}
@@ -66,57 +65,84 @@ fun SettingsMain(
     ) {
         TaxiCard(title = "Profil & Entreprise") {
             SettingsMenuItem(title = "Infos Professionnelles", icon = Icons.Default.BusinessCenter, onClick = { onNavigate("proInfo") })
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingsMenuItem(title = "Visuel & Marque", icon = Icons.Default.Palette, onClick = { onNavigate("branding") })
         }
 
         TaxiCard(title = "Tarifs & Coûts") {
-            TaxiInputField(label = "Prix par KM (€)", value = pricePerKm, onValueChange = { pricePerKm = it }, isNumber = true)
-            Spacer(modifier = Modifier.height(8.dp))
-            TaxiInputField(label = "Prise en charge (€)", value = basePrice, onValueChange = { basePrice = it }, isNumber = true)
-            Spacer(modifier = Modifier.height(12.dp))
-            TaxiInputField(label = "Coût carburant / km (€)", value = fuelCostPerKm, onValueChange = { fuelCostPerKm = it }, isNumber = true)
-            Spacer(modifier = Modifier.height(8.dp))
-            TaxiInputField(label = "Coût opérationnel / heure (€)", value = operatingCostPerHour, onValueChange = { operatingCostPerHour = it }, isNumber = true)
+            SettingsMenuItem(title = "Configuration tarifaire", icon = Icons.Default.Payments, onClick = { onNavigate("pricing") })
         }
 
         TaxiCard(title = "Communication") {
             SettingsMenuItem(title = "Templates de Messages", icon = Icons.Default.Sms, onClick = { onNavigate("messageTemplates") })
             Spacer(modifier = Modifier.height(12.dp))
-            SettingsMenuItem(title = "Carnet Client", icon = Icons.Default.People, onClick = { onNavigate("clients") })
+            SettingsMenuItem(
+                title = "Email OVH",
+                icon = Icons.Default.Email,
+                onClick = { onNavigate("ovhMail") }
+            )
         }
 
         TaxiCard(title = "Intelligence Artificielle") {
             TaxiToggleRow(
-                title = "Analyse IA des SMS",
-                subtitle = "Utiliser Phi-3 Mini pour extraire les détails des courses",
+                title = "Activer l'analyse IA",
+                subtitle = "Utiliser l'IA pour analyser les SMS automatiquement",
                 checked = settings.aiEnabled,
                 onCheckedChange = { onUpdate(settings.copy(aiEnabled = it)) },
                 icon = Icons.Default.SmartToy
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Indicateur de statut IA
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val isAiAvailable = remember(settings.aiEnabled) {
+                if (settings.aiEnabled) {
+                    com.drawtaxi.app.logic.LlamaModelManager.isModelAvailable(context)
+                } else {
+                    false
+                }
+            }
+            
+            val (statusColor, statusText, statusIcon) = when {
+                !settings.aiEnabled -> Triple(androidx.compose.ui.graphics.Color.Gray, "IA désactivée", Icons.Default.Block)
+                isAiAvailable -> Triple(androidx.compose.ui.graphics.Color(0xFF10B981), "IA opérationnelle", Icons.Default.CheckCircle)
+                else -> Triple(androidx.compose.ui.graphics.Color(0xFFF59E0B), "IA indisponible - Mode regex", Icons.Default.Warning)
+            }
+            
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Info, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
+                Icon(
+                    imageVector = statusIcon,
+                    contentDescription = null,
+                    tint = statusColor,
+                    modifier = Modifier.size(20.dp)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Modèle: Phi-3 Mini (HuggingFace API). Fallback regex si IA indisponible.",
+                    text = statusText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = statusColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Info, contentDescription = null, tint = Slate500, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Modèle: Phi-3 Mini. Fallback automatique vers regex si indisponible.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Slate500
                 )
             }
-        }
-
-        TaxiCard(title = "Apparence") {
-            TaxiToggleRow(
-                title = "Mode Sombre",
-                subtitle = "Thème sombre pour la nuit",
-                checked = settings.darkMode,
-                onCheckedChange = { onUpdate(settings.copy(darkMode = it)) },
-                icon = Icons.Default.DarkMode
-            )
         }
 
         TaxiCard(title = "Surveillance & Permissions") {
@@ -180,10 +206,6 @@ fun SettingsMain(
             SettingsMenuItem(title = "Export CSV/Excel", icon = Icons.Default.Download, onClick = { onNavigate("export") })
             Spacer(modifier = Modifier.height(12.dp))
             SettingsMenuItem(title = "Sauvegarde & Restauration", icon = Icons.Default.Backup, onClick = { onNavigate("backup") })
-        }
-
-        TaxiCard(title = "Diagnostic") {
-            SettingsMenuItem(title = "Tester la notification", icon = Icons.Default.NotificationsActive, onClick = onTestNotification)
         }
 
         Spacer(modifier = Modifier.height(24.dp))

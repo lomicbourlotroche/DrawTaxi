@@ -41,6 +41,32 @@ object SmsProcessor {
             }
 
             val parsedDetails = parseSmsAdvanced(address, body, timestamp)
+            
+            // Convertir ParsedSms en AiParsedResult pour le handler
+            val aiParsedResult = AiParsedResult(
+                departure = parsedDetails.departure,
+                arrival = parsedDetails.arrival,
+                time = parsedDetails.time,
+                date = parsedDetails.date,
+                isConfirmation = parsedDetails.isConfirmation,
+                isCancellation = parsedDetails.isCancellation,
+                isModification = parsedDetails.isModification,
+                confidence = parsedDetails.confidence,
+                missingFields = parsedDetails.missingFields
+            )
+            
+            // Vérifier si c'est une réponse à un devis (confirmation/refus/modification)
+            val isQuoteResponse = QuoteResponseHandler.handleResponse(
+                context,
+                repository,
+                address,
+                body,
+                aiParsedResult
+            )
+            if (isQuoteResponse) {
+                Log.d(TAG, "Réponse à un devis traitée")
+                return ProcessResult(Action.RIDE_UPDATED, null)
+            }
 
             if (parsedDetails.isCancellation) {
                 return handleCancellation(context, repository, address, body)

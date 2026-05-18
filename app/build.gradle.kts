@@ -53,6 +53,10 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/NOTICE.md"
+            excludes += "/META-INF/LICENSE.md"
+            excludes += "/META-INF/NOTICE"
+            excludes += "/META-INF/LICENSE"
         }
     }
 }
@@ -97,6 +101,14 @@ dependencies {
 
     // OkHttp for HTTP requests (AI inference, geocoding fallback)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // MapLibre (alternative open source à Mapbox)
+    implementation("org.maplibre.gl:android-sdk:11.0.0")
+    implementation("org.maplibre.gl:android-plugin-annotation-v9:3.0.0")
+
+    // JavaMail pour SMTP/IMAP (OVH)
+    implementation("com.sun.mail:android-mail:1.6.7")
+    implementation("com.sun.mail:android-activation:1.6.7")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

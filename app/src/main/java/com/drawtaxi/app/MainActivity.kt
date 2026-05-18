@@ -13,7 +13,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -120,6 +125,11 @@ class MainActivity : ComponentActivity() {
         val repository = (application as TaxiApplication).repository
         val factory = TaxiViewModelFactory(repository)
 
+        // Démarrage automatique du service SMS si permissions accordées
+        if (com.drawtaxi.app.logic.PermissionHelper.hasSmsPermissions(this)) {
+            (application as? TaxiApplication)?.startSmsServiceIfEnabled()
+        }
+
         setContent {
             val viewModel: TaxiViewModel = viewModel(factory = factory)
             val settings by viewModel.settings.collectAsState()
@@ -158,7 +168,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            DrawTaxiTheme(brandColor = settings.brandColor, darkTheme = settings.darkMode) {
+            DrawTaxiTheme(brandColor = settings.brandColor, darkTheme = false) {
                 var onboardingStep by remember { mutableStateOf(0) }
 
                 if (settings.isFirstLaunch) {
@@ -307,8 +317,16 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 when (activeTab) {
                                     "home" -> {
+                                        // Séparer les courses confirmées des terminées
+                                        val confirmedRides = validatedRides.filter {
+                                            it.status == RideStatus.CONFIRMED || it.status == RideStatus.IN_PROGRESS
+                                        }
+                                        val completedRides = validatedRides.filter {
+                                            it.status == RideStatus.COMPLETED
+                                        }
                                         HomeScreen(
-                                            validatedRides = validatedRides,
+                                            validatedRides = completedRides,
+                                            confirmedRides = confirmedRides,
                                             brandColor = settings.brandColor,
                                             onRideClick = { selectedRide = it },
                                             onCreateRide = {
@@ -319,8 +337,12 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                     "message" -> {
+                                        // Filtrer pour ne garder que DRAFT et QUOTED (pas CONFIRMED/IN_PROGRESS)
+                                        val messageRides = pendingRides.filter {
+                                            it.status == RideStatus.DRAFT || it.status == RideStatus.QUOTED
+                                        }
                                         ControlCenterScreen(
-                                            pendingRides = pendingRides,
+                                            pendingRides = messageRides,
                                             onValidate = { ride ->
                                                 activeRide = ride
                                                 selectedRide = null
@@ -435,7 +457,11 @@ class MainActivity : ComponentActivity() {
                                     "settings" -> {
                                         when (settingsView) {
                                             "proInfo" -> ProInfoSettings(settings, { viewModel.updateSettings(it) }, { settingsView = "main" })
-                                            "branding" -> BrandingSettings(settings, { viewModel.updateSettings(it) }, { settingsView = "main" })
+                                            "pricing" -> PricingSettingsScreen(
+                                                settings = settings,
+                                                onUpdate = { viewModel.updateSettings(it) },
+                                                onBack = { settingsView = "main" }
+                                            )
                                             "backup" -> BackupSettingsScreen(
                                                 settings = settings,
                                                 allRides = validatedRides + pendingRides,
@@ -452,9 +478,9 @@ class MainActivity : ComponentActivity() {
                                                 onUpdateSettings = { viewModel.updateSettings(it) },
                                                 onBack = { settingsView = "main" }
                                             )
-                                            "clients" -> ClientDirectoryScreen(
-                                                rides = validatedRides + pendingRides,
-                                                brandColor = settings.brandColor,
+                                            "ovhMail" -> OvhMailSettingsScreen(
+                                                settings = settings,
+                                                onUpdate = { viewModel.updateSettings(it) },
                                                 onBack = { settingsView = "main" }
                                             )
                                             "export" -> ExportScreen(
@@ -463,12 +489,10 @@ class MainActivity : ComponentActivity() {
                                                 onBack = { settingsView = "main" }
                                             )
                                             else -> {
-                                                val context = LocalContext.current
                                                 SettingsMain(
                                                     settings = settings,
                                                     onUpdate = { viewModel.updateSettings(it) },
                                                     onNavigate = { settingsView = it },
-                                                    onTestNotification = { viewModel.testNotification(context) },
                                                     onRequestSmsPermission = { requestSmsPermission() },
                                                     onRequestNotificationPermission = { requestNotificationPermission() },
                                                     onRequestLocationPermission = { requestLocationPermission() }

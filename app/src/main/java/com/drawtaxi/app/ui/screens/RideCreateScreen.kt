@@ -12,7 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.lifecycle.viewmodel.compose.viewModel
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -320,25 +320,61 @@ fun RideCreateScreen(
                         shape = RoundedCornerShape(12.dp),
                         leadingIcon = { Icon(Icons.Default.Place, contentDescription = null, tint = Color(0xFFF43F5E)) }
                     )
+                    // Date and Time pickers
+                    val calendar = remember { java.util.Calendar.getInstance() }
+                    
+                    val datePickerDialog = android.app.DatePickerDialog(
+                        context,
+                        { _, year, month, dayOfMonth ->
+                            val selectedCalendar = java.util.Calendar.getInstance().apply {
+                                set(year, month, dayOfMonth)
+                            }
+                            val dateFormat = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+                            date = dateFormat.format(selectedCalendar.time)
+                            stopTimer()
+                        },
+                        calendar.get(java.util.Calendar.YEAR),
+                        calendar.get(java.util.Calendar.MONTH),
+                        calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                    )
+                    
+                    val timePickerDialog = android.app.TimePickerDialog(
+                        context,
+                        { _, hourOfDay, minute ->
+                            time = String.format("%02dh%02d", hourOfDay, minute)
+                            stopTimer()
+                        },
+                        calendar.get(java.util.Calendar.HOUR_OF_DAY),
+                        calendar.get(java.util.Calendar.MINUTE),
+                        true
+                    )
+                    
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = date,
-                            onValueChange = { date = it; stopTimer() },
-                            label = { Text("Date") },
+                        OutlinedButton(
+                            onClick = { datePickerDialog.show() },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = brandColor) },
-                            placeholder = { Text("dd/MM/yyyy") }
-                        )
-                        OutlinedTextField(
-                            value = time,
-                            onValueChange = { time = it; stopTimer() },
-                            label = { Text("Heure") },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.CalendarToday, contentDescription = null, tint = brandColor, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (date.isNotBlank()) date else "Date",
+                                color = if (date.isNotBlank()) androidx.compose.ui.graphics.Color.Unspecified else androidx.compose.ui.graphics.Color.Gray
+                            )
+                        }
+                        
+                        OutlinedButton(
+                            onClick = { timePickerDialog.show() },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null, tint = brandColor) },
-                            placeholder = { Text("HHhMM") }
-                        )
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Schedule, contentDescription = null, tint = brandColor, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (time.isNotBlank()) time else "Heure",
+                                color = if (time.isNotBlank()) androidx.compose.ui.graphics.Color.Unspecified else androidx.compose.ui.graphics.Color.Gray
+                            )
+                        }
                     }
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

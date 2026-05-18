@@ -142,6 +142,14 @@ class TaxiRepository(
         quoteDao.deleteQuotesForRide(rideId)
     }
 
+    suspend fun getPendingQuotesForSender(sender: String): List<Quote> {
+        return quoteDao.getPendingQuotesForSender(sender).map { it.toDomain() }
+    }
+
+    suspend fun getRideById(rideId: String): RideRequest? {
+        return rideDao.getRideById(rideId)?.toDomain()
+    }
+
     suspend fun saveAbsence(absence: Absence) {
         absenceDao.insertAbsence(AbsenceEntity(
             id = absence.id,

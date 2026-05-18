@@ -71,6 +71,9 @@ interface QuoteDao {
     @Query("SELECT * FROM quotes WHERE status = 'PENDING' ORDER BY timestamp DESC")
     fun getPendingQuotes(): Flow<List<QuoteEntity>>
 
+    @Query("SELECT q.* FROM quotes q INNER JOIN rides r ON q.rideId = r.id WHERE q.status = 'PENDING' AND r.sender = :sender ORDER BY q.timestamp DESC")
+    suspend fun getPendingQuotesForSender(sender: String): List<QuoteEntity>
+
     @Query("UPDATE quotes SET status = :status, respondedAt = :respondedAt WHERE id = :quoteId")
     suspend fun updateQuoteStatus(quoteId: String, status: String, respondedAt: Long = System.currentTimeMillis())
 

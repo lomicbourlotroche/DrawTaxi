@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,9 +26,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
+import com.drawtaxi.app.data.RideStatus
 import com.drawtaxi.app.logic.OsmRoute
 import com.drawtaxi.app.logic.OsmRoutingService
-import com.drawtaxi.app.logic.RouteStep
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.*
 import org.osmdroid.config.Configuration
@@ -42,13 +40,14 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import kotlin.math.*
 
-enum class RideStage(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val description: String) {
-    TO_PICKUP("Aller au point de départ", Icons.Default.LocationOn, "Rejoignez le client"),
-    TO_DESTINATION("Aller à la destination", Icons.Default.Place, "Conduisez le client"),
-    TO_HOME("Rentrer chez soi", Icons.Default.Home, "Retournez à votre adresse"),
-    COMPLETED("Course terminée", Icons.Default.CheckCircle, "Sauvegardé pour facturation")
+// Étapes de navigation simplifiées
+enum class NavigationStep(val label: String, val description: String) {
+    TO_PICKUP("Aller chercher le client", "Navigation vers le point de départ"),
+    TO_DESTINATION("Aller à destination", "Conduire le client"),
+    CHOICE("Que faire ?", "Destination atteinte"),
+    TO_HOME("Retour à domicile", "Navigation vers votre adresse"),
+    COMPLETE("Terminer", "Récapitulatif de la course")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,30 +61,26 @@ fun ActiveRideScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
+    var currentStep by remember { mutableStateOf(NavigationStep.TO_PICKUP) }
     var currentLocation by remember { mutableStateOf<Location?>(null) }
     var pickupLocation by remember { mutableStateOf<Location?>(null) }
     var destLocation by remember { mutableStateOf<Location?>(null) }
     var homeLocation by remember { mutableStateOf<Location?>(null) }
-    var currentStage by remember { mutableStateOf(RideStage.TO_PICKUP) }
     var currentRoute by remember { mutableStateOf<OsmRoute?>(null) }
-    var currentStep by remember { mutableStateOf<RouteStep?>(null) }
-    var nextStep by remember { mutableStateOf<RouteStep?>(null) }
     var remainingDistance by remember { mutableStateOf(0.0) }
     var eta by remember { mutableStateOf("--") }
     var speed by remember { mutableStateOf("0 km/h") }
-    var isLoadingRoute by remember { mutableStateOf(false) }
-    var showCallMenu by remember { mutableStateOf(false) }
-    var showStageComplete by remember { mutableStateOf(false) }
-    var rideStartTime by remember { mutableStateOf(System.currentTimeMillis()) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
+    var rideStartTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    var totalDistance by remember { mutableStateOf(0.0) }
+    var showCancelDialog by remember { mutableStateOf(false) }
 
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
+    // Géocodage des adresses
     LaunchedEffect(Unit) {
-        rideStartTime = System.currentTimeMillis()
-
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            startActiveRideLocationUpdates(context, fusedLocationClient) { location ->
+            startLocationUpdates(context, fusedLocationClient) { location ->
                 currentLocation = location
             }
         }
@@ -101,34 +96,28 @@ fun ActiveRideScreen(
         }
     }
 
-    LaunchedEffect(currentStage, currentLocation, pickupLocation, destLocation, homeLocation) {
+    // Calcul de l'itinéraire selon l'étape
+    LaunchedEffect(currentStep, currentLocation, pickupLocation, destLocation, homeLocation) {
         val start = currentLocation
-        val end = when (currentStage) {
-            RideStage.TO_PICKUP -> pickupLocation
-            RideStage.TO_DESTINATION -> destLocation
-            RideStage.TO_HOME -> homeLocation
-            RideStage.COMPLETED -> null
+        val end = when (currentStep) {
+            NavigationStep.TO_PICKUP -> pickupLocation
+            NavigationStep.TO_DESTINATION -> destLocation
+            NavigationStep.TO_HOME -> homeLocation
+            else -> null
         }
 
         if (start != null && end != null) {
-            isLoadingRoute = true
             val route = OsmRoutingService.getRoute(start, end)
             currentRoute = route
-            isLoadingRoute = false
-
             if (route != null) {
                 remainingDistance = route.distance
                 val etaMinutes = route.duration / 60.0
                 eta = if (etaMinutes < 1) "< 1 min" else "~${etaMinutes.toInt()} min"
-
-                currentStep = route.steps.firstOrNull()
-                nextStep = route.steps.getOrNull(1)
-
-                zoomToRoute(mapView, route, start, end)
             }
         }
     }
 
+    // Mise à jour position et stats
     LaunchedEffect(currentLocation, currentRoute) {
         currentLocation?.let { loc ->
             speed = if (loc.hasSpeed()) {
@@ -144,50 +133,13 @@ fun ActiveRideScreen(
                 val etaMinutes = (remaining / 1000.0 / avgSpeedKmh) * 60
                 eta = if (etaMinutes < 1) "< 1 min" else "~${etaMinutes.toInt()} min"
 
-                val step = OsmRoutingService.getCurrentStep(loc, route.geometry, route.steps)
-                if (step != currentStep) {
-                    currentStep = step
-                    val stepIdx = route.steps.indexOf(step)
-                    nextStep = if (stepIdx >= 0) route.steps.getOrNull(stepIdx + 1) else null
-                }
-
                 updateMapPosition(mapView, loc)
             }
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().background(Slate900)
-    ) {
-        TopAppBar(
-            title = {
-                Column {
-                    Text("Navigation", color = Color.White)
-                    Text(
-                        text = currentStage.label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Slate300
-                    )
-                }
-            },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Color.White)
-                }
-            },
-            actions = {
-                IconButton(onClick = { showCallMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = Color.White)
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-        )
-
-        StageProgressIndicator(
-            currentStage = currentStage,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
-
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Carte en plein écran
         if (currentLocation != null) {
             AndroidView(
                 factory = { ctx ->
@@ -210,408 +162,322 @@ fun ActiveRideScreen(
                 },
                 update = { map ->
                     currentRoute?.let { route ->
-                        drawRouteOnMap(map, route, currentStage, pickupLocation, destLocation, homeLocation, ride)
+                        drawRouteOnMap(map, route, currentStep, pickupLocation, destLocation, homeLocation, ride)
                     }
                 },
-                modifier = Modifier.weight(1f).fillMaxWidth()
+                modifier = Modifier.fillMaxSize()
             )
         } else {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (isLoadingRoute) {
-                        CircularProgressIndicator(color = Color.White)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Calcul de l'itinéraire...", color = Color.White)
-                    } else {
-                        CircularProgressIndicator(color = Color.White)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Acquisition GPS...", color = Color.White)
-                    }
+                    CircularProgressIndicator(color = brandColor)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Acquisition GPS...", color = Slate700)
                 }
             }
         }
 
-        if (currentStep != null) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = brandColor,
-                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = when (currentStep!!.maneuverType) {
-                            "turn" -> if (currentStep!!.maneuverModifier.contains("left")) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward
-                            "roundabout", "rotary" -> Icons.AutoMirrored.Filled.RotateRight
-                            "arrive" -> Icons.Default.Place
-                            else -> Icons.Default.Navigation
-                        },
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = currentStep!!.displayInstruction,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            maxLines = 2
-                        )
-                        if (nextStep != null) {
-                            Text(
-                                text = "Puis: ${nextStep!!.displayInstruction}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.8f),
-                                maxLines = 1
-                            )
-                        }
-                    }
-                    Text(
-                        text = String.format("%.0f m", remainingDistance),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
-                }
-            }
-        }
-
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = Slate800,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        // Header overlay
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    NavStatColumn(value = eta, label = "ETA", icon = Icons.Default.Schedule)
-                    NavStatColumn(value = String.format("%.1f km", remainingDistance / 1000.0), label = "Distance", icon = Icons.Default.Route)
-                    NavStatColumn(value = speed, label = "Vitesse", icon = Icons.Default.Speed)
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                if (currentStage != RideStage.COMPLETED) {
-                    Button(
-                        onClick = {
-                            if (remainingDistance < 500) {
-                                advanceStage()
-                            } else {
-                                showStageComplete = true
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = brandColor)
-                    ) {
-                        Icon(
-                            when (currentStage) {
-                                RideStage.TO_PICKUP -> Icons.Default.Person
-                                RideStage.TO_DESTINATION -> Icons.Default.Place
-                                RideStage.TO_HOME -> Icons.Default.Home
-                                RideStage.COMPLETED -> Icons.Default.CheckCircle
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            when (currentStage) {
-                                RideStage.TO_PICKUP -> "Client récupéré"
-                                RideStage.TO_DESTINATION -> "Destination atteinte"
-                                RideStage.TO_HOME -> "Course terminée"
-                                RideStage.COMPLETED -> "Terminé"
-                            },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                } else {
-                    Button(
-                        onClick = {
-                            val duration = ((System.currentTimeMillis() - rideStartTime) / 60000).toInt()
-                            val completedRide = ride.copy(
-                                distanceKm = (ride.distanceKm * 1000 + remainingDistance) / 1000.0,
-                                durationMinutes = duration.coerceAtLeast(1),
-                                status = com.drawtaxi.app.data.RideStatus.COMPLETED,
-                                isPending = false
-                            )
-                            onComplete(completedRide)
-                        },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Green500)
-                    ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Sauvegarder & Terminer", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_DIAL).apply {
-                                data = Uri.parse("tel:${ride.sender}")
-                            }
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Appeler")
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                data = Uri.parse("smsto:${ride.sender}")
-                                putExtra("sms_body", settings.arrivalMessageTemplate)
-                            }
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Message")
-                    }
-                }
-            }
-        }
-    }
-
-    if (showCallMenu) {
-        ModalBottomSheet(onDismissRequest = { showCallMenu = false }) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("Options", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                ActionMenuItem(
-                    icon = Icons.Default.Phone,
-                    label = "Appeler le client",
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_DIAL).apply {
-                            data = Uri.parse("tel:${ride.sender}")
-                        }
-                        context.startActivity(intent)
-                        showCallMenu = false
-                    }
-                )
-
-                ActionMenuItem(
-                    icon = Icons.Default.Sms,
-                    label = "Envoyer un message",
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("smsto:${ride.sender}")
-                            putExtra("sms_body", settings.arrivalMessageTemplate)
-                        }
-                        context.startActivity(intent)
-                        showCallMenu = false
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Button(
-                    onClick = onCancel,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Red500),
-                    shape = RoundedCornerShape(12.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledIconButton(
+                    onClick = onBack,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.White.copy(alpha = 0.9f)
+                    )
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Annuler la course")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.White.copy(alpha = 0.9f)
+                ) {
+                    Text(
+                        text = currentStep.label,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = brandColor,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+
+                FilledIconButton(
+                    onClick = { showCancelDialog = true },
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.White.copy(alpha = 0.9f)
+                    )
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Annuler", tint = Rose500)
+                }
+            }
+        }
+
+        // Overlay stats en bas
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .padding(16.dp)
+        ) {
+            // Carte d'info
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    // Stats
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        StatItem(value = eta, label = "ETA")
+                        StatItem(value = String.format("%.1f km", remainingDistance / 1000.0), label = "Distance")
+                        StatItem(value = speed, label = "Vitesse")
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Bouton d'action principal selon l'étape
+                    when (currentStep) {
+                        NavigationStep.TO_PICKUP -> {
+                            Button(
+                                onClick = {
+                                    totalDistance += remainingDistance
+                                    currentStep = NavigationStep.TO_DESTINATION
+                                },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = brandColor)
+                            ) {
+                                Icon(Icons.Default.Person, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Client récupéré", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        NavigationStep.TO_DESTINATION -> {
+                            Button(
+                                onClick = {
+                                    totalDistance += remainingDistance
+                                    currentStep = NavigationStep.CHOICE
+                                },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = brandColor)
+                            ) {
+                                Icon(Icons.Default.Place, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Destination atteinte", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        NavigationStep.CHOICE -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (homeLocation != null) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            currentStep = NavigationStep.TO_HOME
+                                        },
+                                        modifier = Modifier.weight(1f).height(56.dp),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(Icons.Default.Home, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Rentrer", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Button(
+                                    onClick = {
+                                        currentStep = NavigationStep.COMPLETE
+                                    },
+                                    modifier = Modifier.weight(1f).height(56.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Green500)
+                                ) {
+                                    Icon(Icons.Default.Check, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Terminer", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        NavigationStep.TO_HOME -> {
+                            Button(
+                                onClick = {
+                                    totalDistance += remainingDistance
+                                    currentStep = NavigationStep.COMPLETE
+                                },
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Green500)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Terminer la course", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        NavigationStep.COMPLETE -> {
+                            val duration = ((System.currentTimeMillis() - rideStartTime) / 60000).toInt()
+                            val finalDistance = (ride.distanceKm * 1000 + totalDistance) / 1000.0
+
+                            Column {
+                                Text(
+                                    "Récapitulatif",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Distance totale:", color = Slate600)
+                                    Text(String.format("%.1f km", finalDistance), fontWeight = FontWeight.Bold)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Durée:", color = Slate600)
+                                    Text("$duration min", fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        val completedRide = ride.copy(
+                                            distanceKm = finalDistance,
+                                            durationMinutes = duration.coerceAtLeast(1),
+                                            status = RideStatus.COMPLETED,
+                                            isPending = false
+                                        )
+                                        onComplete(completedRide)
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Green500)
+                                ) {
+                                    Icon(Icons.Default.Save, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Sauvegarder & Fermer", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
-    if (showStageComplete) {
+    if (showCancelDialog) {
         AlertDialog(
-            onDismissRequest = { showStageComplete = false },
-            title = { Text("Étape terminée ?") },
-            text = { Text("Confirmez-vous avoir atteint la destination ?") },
+            onDismissRequest = { showCancelDialog = false },
+            title = { Text("Annuler la course ?") },
+            text = { Text("Cette action est irréversible.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        advanceStage()
-                        showStageComplete = false
+                        showCancelDialog = false
+                        onCancel()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = brandColor)
+                    colors = ButtonDefaults.buttonColors(containerColor = Rose500)
                 ) {
-                    Text("Confirmer")
+                    Text("Oui, annuler")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showStageComplete = false }) {
-                    Text("Annuler")
+                TextButton(onClick = { showCancelDialog = false }) {
+                    Text("Non")
                 }
             }
         )
     }
 }
 
-private var _advanceStage: (() -> Unit)? = null
-
 @Composable
-private fun rememberAdvanceStage(): () -> Unit {
-    var currentStage by remember { mutableStateOf(RideStage.TO_PICKUP) }
-    var remainingDistance by remember { mutableStateOf(0.0) }
-    var totalDistance by remember { mutableStateOf(0.0) }
-
-    return remember {
-        {
-            currentStage = when (currentStage) {
-                RideStage.TO_PICKUP -> {
-                    totalDistance += remainingDistance
-                    RideStage.TO_DESTINATION
-                }
-                RideStage.TO_DESTINATION -> {
-                    totalDistance += remainingDistance
-                    RideStage.TO_HOME
-                }
-                RideStage.TO_HOME -> {
-                    totalDistance += remainingDistance
-                    RideStage.COMPLETED
-                }
-                RideStage.COMPLETED -> RideStage.COMPLETED
-            }
-        }
-    }
-}
-
-private fun advanceStage() {
-    _advanceStage?.invoke()
-}
-
-@Composable
-private fun StageProgressIndicator(currentStage: RideStage, modifier: Modifier = Modifier) {
-    val stages = listOf(RideStage.TO_PICKUP, RideStage.TO_DESTINATION, RideStage.TO_HOME, RideStage.COMPLETED)
-    val currentIndex = stages.indexOf(currentStage)
-
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        stages.forEachIndexed { index, _ ->
-            val isActive = index <= currentIndex
-            val isCurrent = index == currentIndex
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(4.dp)
-                    .background(
-                        color = when {
-                            isCurrent -> Color.White
-                            isActive -> Color.White.copy(alpha = 0.5f)
-                            else -> Slate600
-                        },
-                        shape = RoundedCornerShape(2.dp)
-                    )
-            )
-        }
-    }
-}
-
-@Composable
-private fun ActionMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, contentDescription = null, tint = Slate700, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-        }
+private fun StatItem(value: String, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = Slate700
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Slate500
+        )
     }
 }
 
 private fun drawRouteOnMap(
     map: MapView,
     route: OsmRoute,
-    stage: RideStage,
+    step: NavigationStep,
     pickup: Location?,
     dest: Location?,
     home: Location?,
     ride: RideRequest
 ) {
+    // Nettoyer les anciennes routes
     val existingRoutes = map.overlays.filterIsInstance<Polyline>().toList()
     existingRoutes.forEach { map.overlays.remove(it) }
 
     val existingMarkers = map.overlays.filterIsInstance<Marker>().toList()
     existingMarkers.forEach { map.overlays.remove(it) }
 
+    // Dessiner la route
     val polyline = Polyline().apply {
         setPoints(route.geometry.map { GeoPoint(it.first, it.second) })
-        outlinePaint.color = Color(0xFF6366F1).toArgb()
+        outlinePaint.color = androidx.compose.ui.graphics.Color(0xFF6366F1).toArgb()
         outlinePaint.strokeWidth = 12f
         isGeodesic = true
     }
     map.overlays.add(0, polyline)
 
-    when (stage) {
-        RideStage.TO_PICKUP -> {
+    // Ajouter le marqueur de destination selon l'étape
+    when (step) {
+        NavigationStep.TO_PICKUP -> {
             pickup?.let { loc ->
-                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Départ: ${ride.departure}", android.R.drawable.ic_menu_compass)
+                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Départ: ${ride.departure}")
             }
         }
-        RideStage.TO_DESTINATION -> {
+        NavigationStep.TO_DESTINATION -> {
             dest?.let { loc ->
-                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Destination: ${ride.arrival}", android.R.drawable.ic_menu_compass)
+                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Destination: ${ride.arrival}")
             }
         }
-        RideStage.TO_HOME -> {
+        NavigationStep.TO_HOME -> {
             home?.let { loc ->
-                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Retour: ${ride.homeAddress}", android.R.drawable.ic_menu_directions)
+                addMarker(map, GeoPoint(loc.latitude, loc.longitude), "Domicile")
             }
         }
-        RideStage.COMPLETED -> {}
+        else -> {}
     }
 
     map.invalidate()
 }
 
-private fun addMarker(map: MapView, point: GeoPoint, title: String, iconRes: Int) {
+private fun addMarker(map: MapView, point: GeoPoint, title: String) {
     val marker = Marker(map).apply {
         position = point
         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
         this.title = title
-        icon = map.context.getDrawable(iconRes)
+        icon = map.context.getDrawable(android.R.drawable.ic_menu_compass)
     }
     map.overlays.add(marker)
-}
-
-private fun zoomToRoute(map: MapView?, route: OsmRoute, start: Location, end: Location) {
-    map?.let { mv ->
-        val bbox = BoundingBox.fromGeoPoints(
-            listOf(
-                GeoPoint(start.latitude, start.longitude),
-                GeoPoint(end.latitude, end.longitude)
-            )
-        )
-        mv.zoomToBoundingBox(bbox, true, 100)
-        mv.invalidate()
-    }
 }
 
 private fun updateMapPosition(map: MapView?, location: Location) {
@@ -621,7 +487,7 @@ private fun updateMapPosition(map: MapView?, location: Location) {
     }
 }
 
-private fun startActiveRideLocationUpdates(context: Context, client: FusedLocationProviderClient, onLocation: (Location) -> Unit) {
+private fun startLocationUpdates(context: Context, client: FusedLocationProviderClient, onLocation: (Location) -> Unit) {
     val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L).apply {
         setMinUpdateIntervalMillis(1000L)
     }.build()
@@ -636,15 +502,5 @@ private fun startActiveRideLocationUpdates(context: Context, client: FusedLocati
                 result.lastLocation?.let(onLocation)
             }
         }, Looper.getMainLooper())
-    }
-}
-
-@Composable
-private fun NavStatColumn(value: String, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(imageVector = icon, contentDescription = null, tint = Slate400, modifier = Modifier.size(24.dp))
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(text = value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Slate400)
     }
 }

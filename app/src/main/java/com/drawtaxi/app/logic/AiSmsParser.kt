@@ -336,4 +336,28 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
             this
         } else ""
     }
+
+    // Parse un email comme un SMS (même logique)
+    suspend fun parseEmail(context: Context, emailBody: String, aiEnabled: Boolean = true): AiParsedResult {
+        Log.d(TAG, "Parsing email avec AI enabled: $aiEnabled")
+        
+        // Nettoyer le corps de l'email (enlever signatures, etc.)
+        val cleanedBody = cleanEmailBody(emailBody)
+        
+        // Utiliser le même parsing que pour SMS
+        return parseWithAI(context, cleanedBody, aiEnabled)
+    }
+
+    private fun cleanEmailBody(body: String): String {
+        return body
+            .replace(Regex("(?i)--\\s*\\n.*", RegexOption.DOT_MATCHES_ALL), "") // Signature après "--"
+            .replace(Regex("(?i)Envoyé depuis.*"), "") // "Envoyé depuis mon iPhone"
+            .replace(Regex("(?i)Sent from.*"), "") // "Sent from my iPhone"
+            .replace(Regex("(?i)Le\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}.*"), "") // Date de citation
+            .replace(Regex("(?i)De :.*"), "") // "De :"
+            .replace(Regex("(?i)À :.*"), "") // "À :"
+            .replace(Regex("(?i)Objet :.*"), "") // "Objet :"
+            .replace(Regex("(?i)_______________"), "") // Séparateurs
+            .trim()
+    }
 }

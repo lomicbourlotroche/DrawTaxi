@@ -29,6 +29,7 @@ import java.util.*
 @Composable
 fun HomeScreen(
     validatedRides: List<RideRequest>,
+    confirmedRides: List<RideRequest>,
     brandColor: Color,
     onRideClick: (RideRequest) -> Unit,
     onCreateRide: () -> Unit,
@@ -156,6 +157,28 @@ fun HomeScreen(
             }
         }
 
+        // Section Courses Confirmées
+        if (confirmedRides.isNotEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = "Courses confirmées",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Emerald500,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+            }
+
+            items(confirmedRides) { ride ->
+                ConfirmedRideCard(
+                    ride = ride,
+                    brandColor = brandColor,
+                    onClick = { onRideClick(ride) }
+                )
+            }
+        }
+
         if (todayRides.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(20.dp))
@@ -233,6 +256,70 @@ fun HomeScreen(
 
         item {
             Spacer(modifier = Modifier.height(100.dp))
+        }
+    }
+}
+
+@Composable
+private fun ConfirmedRideCard(
+    ride: RideRequest,
+    brandColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Indicateur vert
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Emerald500)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = ride.arrival.ifBlank { "Destination" },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                if (ride.departure.isNotBlank()) {
+                    Text(
+                        text = "Depuis ${ride.departure}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Slate500,
+                        maxLines = 1
+                    )
+                }
+                Text(
+                    text = "${ride.date} à ${ride.time}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = brandColor
+                )
+            }
+
+            if (ride.price > 0) {
+                Text(
+                    text = String.format("%.2f €", ride.price),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = brandColor
+                )
+            }
         }
     }
 }
