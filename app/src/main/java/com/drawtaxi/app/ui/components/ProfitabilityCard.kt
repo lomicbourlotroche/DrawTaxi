@@ -16,7 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
-import com.drawtaxi.app.logic.PriceEngine
+import com.drawtaxi.app.logic.pricing.PriceEngine
 import com.drawtaxi.app.ui.theme.*
 
 /**
@@ -28,9 +28,9 @@ fun ProfitabilityAnalysisCard(
     settings: AppSettings,
     modifier: Modifier = Modifier
 ) {
-    // Calculs détaillés
-    val priceBreakdown = remember(ride, settings) {
-        PriceEngine.calculate(
+    // Utiliser le prix réel de la course s'il existe, sinon calculer
+    val actualPrice = ride.price.takeIf { it > 0 } ?: run {
+        val priceBreakdown = PriceEngine.calculate(
             distanceKm = ride.distanceKm,
             dateTime = java.util.Calendar.getInstance(),
             pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
@@ -44,15 +44,19 @@ fun ProfitabilityAnalysisCard(
             tvaTransportRate = settings.tvaTransportRate,
             tvaWaitTimeRate = settings.tvaWaitTimeRate
         )
+        priceBreakdown.totalTTC
     }
     
     val fuelCost = ride.distanceKm * settings.fuelCostPerKm
-    val estimatedDurationHours = ride.distanceKm / if (ride.distanceKm < 10) 30.0 else 50.0
-    val operatingCost = estimatedDurationHours * settings.operatingCostPerHour
+    val durationMinutes = ride.durationMinutes.takeIf { it > 0 } ?: run {
+        val estimatedDurationHours = ride.distanceKm / if (ride.distanceKm < 10) 30.0 else 50.0
+        (estimatedDurationHours * 60).toInt()
+    }
+    val operatingCost = (durationMinutes / 60.0) * settings.operatingCostPerHour
     val totalCost = fuelCost + operatingCost
-    val netProfit = priceBreakdown.totalTTC - totalCost
-    val profitabilityPercent = if (priceBreakdown.totalTTC > 0) {
-        (netProfit / priceBreakdown.totalTTC) * 100
+    val netProfit = actualPrice - totalCost
+    val profitabilityPercent = if (actualPrice > 0) {
+        (netProfit / actualPrice) * 100
     } else 0.0
     
     // Couleur selon rentabilité
@@ -147,7 +151,7 @@ fun ProfitabilityAnalysisCard(
             // Détail des revenus
             CostRow(
                 label = "Prix total TTC",
-                value = priceBreakdown.totalTTC,
+                value = actualPrice,
                 color = Emerald500,
                 isPositive = true
             )
@@ -176,7 +180,7 @@ fun ProfitabilityAnalysisCard(
             Spacer(modifier = Modifier.height(4.dp))
             
             CostRow(
-                label = "Opérationnel (${String.format("%.1f", estimatedDurationHours * 60)} min × ${String.format("%.2f", settings.operatingCostPerHour / 60)} €/min)",
+                label = "Opérationnel (${durationMinutes} min × ${String.format("%.2f", settings.operatingCostPerHour / 60)} €/min)",
                 value = operatingCost,
                 color = Slate600,
                 isPositive = false
@@ -205,7 +209,7 @@ fun ProfitabilityAnalysisCard(
                 InfoChip(
                     icon = Icons.Default.Schedule,
                     label = "Durée",
-                    value = "${(estimatedDurationHours * 60).toInt()} min"
+                    value = "$durationMinutes min"
                 )
                 InfoChip(
                     icon = Icons.Default.LocalGasStation,

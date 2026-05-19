@@ -13,10 +13,10 @@ import com.drawtaxi.app.data.local.SettingsManager
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import com.drawtaxi.app.logic.SmsForegroundService
-import com.drawtaxi.app.logic.OvhImapService
-import com.drawtaxi.app.logic.SmsProcessor
-import com.drawtaxi.app.logic.SmsScanWorker
+import com.drawtaxi.app.service.foreground.SmsForegroundService
+import com.drawtaxi.app.service.foreground.OvhImapService
+import com.drawtaxi.app.logic.sms.SmsProcessor
+import com.drawtaxi.app.service.worker.SmsScanWorker
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
@@ -257,7 +257,7 @@ class TaxiApplication : Application() {
 
                 when (result.action) {
                     SmsProcessor.Action.NEW_RIDE -> {
-                        com.drawtaxi.app.logic.NotificationHelper.showNewRideNotification(
+                        com.drawtaxi.app.logic.messaging.NotificationHelper.showNewRideNotification(
                             this@TaxiApplication,
                             result.ride?.id ?: "",
                             result.ride?.arrival ?: "",
@@ -266,7 +266,7 @@ class TaxiApplication : Application() {
                     }
                     SmsProcessor.Action.RIDE_UPDATED -> {
                         result.notificationTitle?.let { title ->
-                            com.drawtaxi.app.logic.NotificationHelper.showInfoNotification(
+                            com.drawtaxi.app.logic.messaging.NotificationHelper.showInfoNotification(
                                 this@TaxiApplication,
                                 title,
                                 result.notificationBody ?: "",
@@ -276,7 +276,7 @@ class TaxiApplication : Application() {
                     }
                     SmsProcessor.Action.RIDE_DELETED -> {
                         result.notificationTitle?.let { title ->
-                            com.drawtaxi.app.logic.NotificationHelper.showInfoNotification(
+                            com.drawtaxi.app.logic.messaging.NotificationHelper.showInfoNotification(
                                 this@TaxiApplication,
                                 title,
                                 result.notificationBody ?: "",

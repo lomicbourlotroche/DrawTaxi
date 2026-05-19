@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.drawtaxi.app.logic.fetchRoute
+import com.drawtaxi.app.logic.routing.fetchRoute
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers

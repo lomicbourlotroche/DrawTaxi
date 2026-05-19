@@ -1,114 +1,183 @@
 # DrawTaxi
 
-Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi/VTC. Réception automatique des commandes par SMS, suivi de rentabilité, synchronisation comptable Kolecto, et navigation GPS intégrée.
+Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi/VTC. Réception automatique des commandes par SMS (avec parsing IA locale), suivi de rentabilité, navigation GPS intégrée, comptabilité et support Android Auto.
 
 ---
 
 ## Fonctionnalités
 
-### Gestion des Courses
-- **Réception automatique SMS** - Détection en temps réel des nouvelles commandes via `BroadcastReceiver` + `ContentObserver` avec debounce et déduplication
-- **Parsing intelligent** - Analyse contextuelle des SMS avec scoring de confiance, détection d'annulation/modification/confirmation
-- **Création manuelle** - Ajout de courses via formulaire ou partage depuis d'autres apps
-- **Cycle de vie complet** - En attente → Confirmée → En cours → Terminée
-- **Devis** - Génération et envoi de devis par SMS/WhatsApp/Email
+### Réception & Parsing SMS (3 couches)
+- **SmsReceiver** — BroadcastReceiver temps réel avec priorité 999, déduplication 30s
+- **SmsWatcher** — ContentObserver avec debounce 2s, utilisé par le foreground service
+- **SmsForegroundService** — Service foreground avec polling 10s + ContentObserver, vérifie boîte réception **et** envoyés
+- **Parsing regex** — Analyse contextuelle avancée (salutations, politesse, urgence), scoring de confiance, détection annulation/modification/confirmation
+- **Parsing IA** — Llama 3.2 3B (Q4_K_M, ~2 Go) exécuté localement pour classification et extraction structurée
 
-### Rentabilité & Comptabilité
-- **Calcul de rentabilité** - Pourcentage de marge par course (revenu - carburant - coûts opérationnels)
-- **Coûts configurables** - Coût carburant/km et coût opérationnel/heure dans les paramètres
-- **Statistiques** - Revenus, bénéfices nets, rentabilité par jour/semaine/mois
-- **Écran Factures** - Liste des courses terminées avec filtres, détails pour création manuelle sur Kolecto
-- **Reçus** - Envoi de reçus textuels par SMS/WhatsApp/Email
+### Gestion des Courses
+- **Devis** — Génération et envoi par SMS/WhatsApp/Email
+- **Cycle de vie** — Brouillon → Devis envoyé → Confirmée → En cours → Terminée / Annulée / Absent
+- **RideMatcher** — Détection automatique : nouvelle course, doublon, modification, annulation, clarification
+- **Création manuelle** — Formulaire + partage depuis d'autres apps
+
+### Tarification & Rentabilité
+- **PriceEngine** — Calcul complet : prise en charge + km + surcharges nuit/dimanche/jour férié + attente + TVA (10% transport, 20% attente)
+- **Rentabilité** — `((prix - coûts) / prix) × 100` avec carburant (0,12 €/km) et coûts opérationnels (15 €/h)
+- **Statistiques** — Revenus, bénéfices, rentabilité par jour/semaine/mois
 
 ### Navigation & Pilotage
-- **Mode Pilotage** - Écran GPS intégré avec osmdroid/OpenStreetMap
-- **Suivi en temps réel** - Position GPS, vitesse, ETA, distance restante
-- **Fused Location** - Utilisation de Google Play Services pour une localisation précise
+- **osmdroid** — Carte OpenStreetMap avec itinéraire OSRM
+- **FusedLocationProvider** — Localisation précise en temps réel
+- **Mode pilotage** — Vitesse, ETA, distance restante
+- **Geocoding** — Multi-provider (Photon, Nominatim, Android Geocoder)
+- **LocationTrackingService** — Service foreground de suivi GPS avec historique
 
-### Interface Moderne
-- **Design React-like** - Cards avec ombres, gradients, badges de statut, icônes dans des conteneurs arrondis
-- **Palette Tailwind** - Couleurs Indigo, Emerald, Rose, Amber, Violet
-- **Mode sombre** - Support complet du dark mode
-- **Navigation bottom** - Barre flottante avec indicateur de messages en attente
+### Comptabilité & Factures
+- **Écran Factures** — Liste des courses terminées avec filtres, préparation des données pour saisie manuelle sur Kolecto (pas d'API)
+- **AccountingScreen** — Analyse revenus/coûts
+- **Pas de reçus** — Le chauffeur saisit les données manuellement sur Kolecto
+
+### Messagerie
+- **4 canaux** — SMS, WhatsApp, Email, Formulaire web
+- **Templates personnalisables** — Devis, refus, arrivée, absence, demande d'infos
+- **OVH** — SMTP (envoi) + IMAP (réception des réservations web)
+
+### Intelligence Artificielle (Locale)
+- **Llama 3.2 3B Instruct** — Modèle GGUF téléchargé depuis HuggingFace (~2 Go)
+- **Téléchargement** — DownloadManager + fallback OkHttp, reprise, 5 tentatives
+- **Gestion** — Auto-déchargement après 10 min d'inactivité, statuts : NOT_DOWNLOADED → DOWNLOADING → READY → UNLOADED
+- **Utilisation** — Classification SMS (TAXI/NON_TAXI), parsing SMS (JSON structuré), parsing email
+
+### Android Auto
+- **3 écrans** — Liste des courses, détail, édition
+- **CarAppService** — Session Android Auto avec ListTemplate
+
+### Services Background
+| Service | Type | Rôle |
+|---------|------|------|
+| SmsForegroundService | Foreground | Surveillance SMS avec ContentObserver + polling 10s |
+| OvhImapService | Foreground | Vérification IMAP OVH (toutes les 5 min) |
+| LocationTrackingService | Foreground | Suivi GPS en temps réel |
+| SmsScanWorker | WorkManager | Scan périodique SMS (60 min) |
+| StatsReportScheduler | WorkManager | Rapports stats programmés |
+
+### Autres
+- **Agenda** — Gestion des absences avec envoi automatique aux clients en attente
+- **Sauvegarde/Restauration** — JSON, export/import fichier, auto-backup (journalier/hebdomadaire/mensuel)
+- **Carnet clients** — Historique des courses par client
+- **Onboarding** — Configuration permissions + téléchargement modèle IA
+- **Mode sombre** — Support complet
+- **BootReceiver** — Redémarrage automatique des services au boot
 
 ---
 
 ## Architecture
 
+**MVVM + Repository + 3 couches de détection SMS**
+
 ```
 com.drawtaxi.app/
-├── MainActivity.kt              # Point d'entrée, navigation
-├── TaxiApplication.kt           # Application class, init DB/Repository
-├── data/
-│   ├── Models.kt                # RideRequest, AppSettings, Quote, Absence, Client
-│   ├── TaxiRepository.kt        # Couche repository (Flow, StateFlow)
-│   ├── BackupManager.kt         # Sauvegarde/restauration JSON
+├── MainActivity.kt              # Single Activity, navigation state-machine
+├── TaxiApplication.kt           # Init DB/Repository + callback onNewSms()
+├── car/                         # Android Auto
+│   ├── TaxiCarAppService.kt
+│   ├── RideListScreen.kt
+│   ├── RideDetailCarScreen.kt
+│   └── EditRideCarScreen.kt
+├── data/                        # Data layer
+│   ├── Models.kt                # RideRequest, AppSettings, Quote, Absence, Client, StatsReport
+│   ├── TaxiRepository.kt        # Repository (Flow → StateFlow)
+│   ├── BackupManager.kt         # Backup/restore JSON
 │   └── local/
-│       ├── AppDatabase.kt       # Room Database (v6)
-│       ├── RideDao.kt           # Opérations CRUD rides
-│       ├── RideEntity.kt        # Entity Room + mappings
-│       └── SettingsManager.kt   # DataStore Preferences
-├── logic/
-│   ├── ParseSms.kt              # Parsing SMS avec IA contextuelle
-│   ├── SmsReceiver.kt           # BroadcastReceiver SMS entrants
-│   ├── SmsWatcher.kt            # ContentObserver avec debounce
-│   ├── SmsForegroundService.kt  # Service foreground surveillance SMS
-│   ├── SmsScanner.kt            # Scan historique SMS
-│   ├── RideMatcher.kt           # Matching SMS ↔ courses existantes
-│   ├── ShareUtils.kt            # Partage reçus (SMS/WhatsApp/Email)
-│   ├── MessageSender.kt         # Envoi SMS/WhatsApp/Email
-│   ├── SmsUtils.kt              # Utilitaires SMS
-│   ├── NotificationHelper.kt    # Notifications système
-│   ├── PermissionHelper.kt      # Gestion des permissions
-│   ├── LocationTrackingService.kt # Suivi de position
-│   ├── FetchRoute.kt            # Récupération d'itinéraire
-│   ├── BootReceiver.kt          # Redémarrage au boot
-│   ├── StatsReportScheduler.kt  # Planification rapports
-│   └── WebFormApiHandler.kt     # Gestion formulaires web
+│       ├── AppDatabase.kt       # Room v6 (rides, quotes, absences)
+│       ├── RideEntity.kt        # Entities + domain mappers
+│       ├── RideDao.kt           # CRUD : RideDao, QuoteDao, AbsenceDao
+│       └── SettingsManager.kt   # DataStore (~50 clés)
+├── logic/                       # Business logic
+│   ├── ai/
+│   │   ├── LlamaModelManager.kt # Download & manage Llama 3.2
+│   │   └── LlmRunner.kt         # Native inference runner
+│   ├── geocoding/
+│   │   ├── GeocodingService.kt  # Multi-provider geocoding
+│   │   └── AddressNormalizer.kt
+│   ├── messaging/
+│   │   ├── MessageSender.kt     # SMS/WhatsApp/Email
+│   │   ├── ShareUtils.kt        # Partage (non utilisé pour reçus)
+│   │   ├── NotificationHelper.kt
+│   │   ├── EmailFormParser.kt   # Web form email parser
+│   │   ├── OvhMailSender.kt     # SMTP OVH
+│   │   └── WebFormApiHandler.kt
+│   ├── pricing/
+│   │   ├── PriceEngine.kt       # Full pricing with surcharges & TVA
+│   │   ├── QuoteResponseHandler.kt
+│   │   └── RideCalculator.kt    # Period stats & daily breakdown
+│   ├── routing/
+│   │   ├── OsrmRoutingService.kt
+│   │   ├── FetchRoute.kt        # OSRM route fetch
+│   │   └── OsmRoutingService.kt
+│   └── sms/
+│       ├── ParseSms.kt          # Regex parser (contextual, 30+ keywords)
+│       ├── AiSmsParser.kt       # AI parser (Llama 3.2)
+│       ├── SmsProcessor.kt      # Processing pipeline orchestrator
+│       ├── SmsWatcher.kt        # ContentObserver
+│       ├── SmsScanner.kt        # One-time historical scan
+│       ├── SmsUtils.kt
+│       └── RideMatcher.kt       # Match SMS → existing rides
+├── receiver/
+│   ├── SmsReceiver.kt           # BroadcastReceiver (priority 999)
+│   └── BootReceiver.kt          # Boot + package replaced
+├── service/
+│   ├── foreground/
+│   │   ├── SmsForegroundService.kt
+│   │   └── OvhImapService.kt
+│   ├── tracking/
+│   │   └── LocationTrackingService.kt
+│   └── worker/
+│       ├── SmsScanWorker.kt
+│       └── StatsReportScheduler.kt
 ├── ui/
-│   ├── TaxiViewModel.kt         # ViewModel principal + Factory
+│   ├── TaxiViewModel.kt         # ViewModel principal
 │   ├── components/
-│   │   ├── BottomNavigation.kt  # Navigation bottom flottante
-│   │   ├── TaxiCard.kt          # Cards modernes avec ombres
-│   │   ├── RideCard.kt          # Cards courses avec rentabilité
-│   │   ├── TaxiInputField.kt    # Champs de saisie stylisés
-│   │   ├── TaxiLogo.kt          # Logo de l'app
-│   │   ├── RideCreateForm.kt    # Formulaire création course
-│   │   ├── RideDetailMapSection.kt # Section map détail
-│   │   ├── RideMap.kt           # Map osmdroid
-│   │   └── RouteToClientMap.kt  # Map itinéraire client
+│   │   ├── BottomNavigation.kt  # 4 tabs flottants
+│   │   ├── MainTopBar.kt
+│   │   ├── RideCard.kt / TaxiCard.kt
+│   │   ├── RideMap.kt / RouteToClientMap.kt / NavigationMapView.kt
+│   │   ├── RideDetailMapSection.kt / RideDetailInfoCard.kt
+│   │   ├── RideCreateForm.kt / RideCreateTimerButton.kt
+│   │   ├── TaxiInputField.kt / TaxiLogo.kt
+│   │   └── ProfitabilityCard.kt
 │   ├── screens/
-│   │   ├── HomeScreen.kt        # Accueil avec gradient header
-│   │   ├── ControlCenterScreen.kt # Centre de contrôle (en attente)
-│   │   ├── StatsScreen.kt       # Statistiques avec rentabilité
-│   │   ├── AccountingScreen.kt  # Comptabilité + rentabilité
-│   │   ├── InvoiceScreen.kt     # Liste factures + détails Kolecto
-│   │   ├── RideDetailScreen.kt  # Détail course + rentabilité
-│   │   ├── RideCompletionScreen.kt # Fin de course + Kolecto
-│   │   ├── RideCreateScreen.kt  # Création manuelle
-│   │   ├── GpsNavigationScreen.kt # Navigation GPS
-│   │   ├── SettingsMain.kt      # Paramètres principaux
-│   │   ├── QuoteScreen.kt       # Gestion des devis
-│   │   ├── AgendaScreen.kt      # Gestion absences
-│   │   ├── ActiveRideScreen.kt  # Course en cours
-│   │   ├── OnboardingScreen.kt  # Premier lancement
-│   │   ├── BackupSettingsScreen.kt # Sauvegarde
-│   │   ├── BrandingSettings.kt  # Personnalisation visuelle
-│   │   ├── ClientDirectoryScreen.kt # Carnet clients
-│   │   ├── ExportScreen.kt      # Export données
-│   │   ├── MessageTemplatesScreen.kt # Templates messages
-│   │   ├── ProInfoSettings.kt   # Infos professionnelles
-│   │   └── ProfileScreen.kt     # Profil
+│   │   ├── dashboard/DashboardScreen.kt
+│   │   ├── home/HomeScreen.kt
+│   │   ├── invoices/InvoiceScreen.kt + AccountingScreen.kt
+│   │   ├── messages/ControlCenterScreen.kt + QuoteScreen.kt
+│   │   ├── navigation/GpsNavigationScreen.kt + RideNavigationScreen.kt
+│   │   ├── onboarding/OnboardingScreen.kt + AiModelDownloadScreen.kt
+│   │   ├── rides/
+│   │   │   ├── ActiveRideScreen.kt / RideCreateScreen.kt
+│   │   │   ├── RideDetailScreen.kt / RideCompletionScreen.kt
+│   │   │   ├── RideHistoryItem.kt / PendingRideItem.kt
+│   │   │   └── ReturnHomeScreen.kt
+│   │   └── settings/ (~15 écrans)
 │   └── theme/
-│       ├── Color.kt             # Palette de couleurs
-│       ├── Theme.kt             # Thème Material3
-│       └── Typography.kt        # Typographie
-└── car/
-    ├── TaxiCarAppService.kt     # Android Auto
-    ├── RideListScreen.kt        # Liste courses Android Auto
-    ├── RideDetailCarScreen.kt   # Détail Android Auto
-    └── EditRideCarScreen.kt     # Édition Android Auto
+│       ├── Color.kt             # Palette Tailwind
+│       ├── Theme.kt
+│       └── Typography.kt
+└── util/
+    └── PermissionHelper.kt
 ```
+
+### Navigation (sans Jetpack Navigation)
+
+Navigation par **state machine** dans MainActivity avec variables `mutableStateOf` :
+
+```
+activeTab ∈ { home, message, dashboard, settings }
+settingsView ∈ { main, proInfo, pricing, backup, messageTemplates, ovhMail, aiDownload, export }
+overlays → selectedRide, activeRide, isCreatingRide, editingRide,
+           showAgendaScreen, showCompletionScreen, showReturnHomeScreen
+```
+
+**4 onglets bottom navigation** : Accueil | Messages | Dashboard | Paramètres
 
 ---
 
@@ -118,40 +187,58 @@ com.drawtaxi.app/
 | Champ | Type | Description |
 |-------|------|-------------|
 | `id` | String | UUID stable (hash sender+body+timestamp) |
-| `sender` | String | Numéro de téléphone du client |
-| `body` | String | Contenu du SMS original |
+| `sender` | String | Numéro téléphone client |
+| `body` | String | Contenu SMS original |
 | `departure` | String | Lieu de départ |
-| `arrival` | String | Lieu d'arrivée |
-| `time` | String | Heure de prise en charge |
-| `date` | String | Date de la course |
-| `distanceKm` | Double | Distance en kilomètres |
-| `price` | Double | Prix de la course |
-| `status` | RideStatus | PENDING, QUOTED, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, ABSENT |
+| `arrival` | String | Destination |
+| `time` | String | Heure prise en charge |
+| `date` | String | Date course |
+| `distanceKm` | Double | Distance estimée |
+| `price` | Double | Prix |
+| `status` | RideStatus | DRAFT → QUOTED → CONFIRMED → IN_PROGRESS → COMPLETED / CANCELLED / ABSENT |
 | `fuelCost` | Double | Coût carburant estimé |
-| `operatingCost` | Double | Coûts opérationnels estimés |
-| `durationMinutes` | Int | Durée de la course en minutes |
-| `profitabilityPercent` | Double | Pourcentage de rentabilité |
-| `clientEmail` | String | Email du client |
-| `messageChannel` | MessageChannel | SMS, WHATSAPP, EMAIL, WEB_FORM |
-| `quoteId` | String | ID du devis associé |
-| `notes` | String | Notes sur la course |
+| `operatingCost` | Double | Coûts opérationnels |
+| `durationMinutes` | Int | Durée estimée |
+| `profitabilityPercent` | Double | Rentabilité % |
+| `clientEmail` | String | Email client |
+| `messageChannel` | MessageChannel | Canal de communication |
+| `quoteId` | String | Devis associé |
+| `clientName` | String | Nom client |
+| `clientFirstName` | String | Prénom client |
+| `clientPhone` | String | Téléphone client |
+| `homeAddress` | String | Adresse retour |
+| `distanceReelleKm` | Double | Distance réelle (GPS) |
+| `waitMinutes` | Int | Temps d'attente |
+| `priceBreakdown` | String | Détail prix (JSON) |
+| `latitudeDepart` / `longitudeDepart` | Double | Coordonnées départ |
+| `latitudeDestination` / `longitudeDestination` | Double | Coordonnées destination |
+| `startedAt` / `endedAt` | Long | Timestamps début/fin |
+| `isTracking` | Boolean | Suivi GPS actif |
+| `lastLatitude` / `lastLongitude` | Double | Dernière position |
+| `destinationModifiee` | String | Destination modifiée |
+| `hasMissingInfo` | Boolean | Infos manquantes |
+| `missingFieldsList` | String | Champs manquants (JSON list) |
+| `invoiceNumber` | String | Numéro facture |
+| `notes` | String | Notes |
+| `absenceMessageSent` | Boolean | Message d'absence envoyé |
 
-### AppSettings
-| Champ | Type | Description |
-|-------|------|-------------|
-| `companyName` | String | Nom de l'entreprise |
-| `name` | String | Nom du chauffeur |
-| `siret` | String | Numéro SIRET |
-| `vehicle` | String | Véhicule |
-| `pricePerKm` | String | Prix par kilomètre |
-| `basePrice` | String | Prise en charge |
-| `brandColor` | Color | Couleur principale |
-| `darkMode` | Boolean | Mode sombre |
-| `monitorSms` | Boolean | Surveillance SMS |
-| `kolectoSyncEnabled` | Boolean | Sync Kolecto activée |
-| `kolectoApiKey` | String | Clé API Kolecto |
-| `fuelCostPerKm` | Double | Coût carburant/km (défaut: 0.12) |
-| `operatingCostPerHour` | Double | Coût opérationnel/heure (défaut: 15.0) |
+> **Note** : Les reçus textes ne sont plus envoyés par l'application. Le chauffeur remplit Kolecto manuellement en fin de course.
+
+### AppSettings (~50 champs)
+| Catégorie | Exemples |
+|-----------|----------|
+| Pro | `companyName`, `name`, `siret`, `tva`, `vehicle`, `address`, `city`, `signature` |
+| Tarifs | `pricePerKm`, `basePrice`, `fuelCostPerKm`, `operatingCostPerHour`, `euroPerMinute` |
+| Surcharges | `nightSurchargePercent`, `sundaySurchargePercent`, `holidaySurchargePercent` |
+| TVA | `tvaTransportRate` (10%), `tvaWaitTimeRate` (20%) |
+| SMS | `monitorSms`, `enableNotifications`, `smsScanIntervalMinutes`, `aiEnabled` |
+| Templates | `quoteTemplate`, `missingInfoTemplate`, `arrivalMessageTemplate`, `rejectionTemplate`, `invoiceTemplate`, `absenceMessageTemplate` |
+| OVH SMTP | `ovhSmtpEnabled`, `ovhSmtpServer`, `ovhSmtpPort`, `ovhSmtpUsername`, `ovhSmtpPassword` |
+| OVH IMAP | `ovhImapEnabled`, `ovhImapServer`, `ovhImapPort`, `ovhImapCheckInterval` |
+| Backup | `autoBackupEnabled`, `autoBackupInterval` |
+| Apparence | `brandColor`, `darkMode`, `showLogo` |
+| Localisation | `trackLocation`, `homeAddress` |
+| Divers | `isFirstLaunch`, `autoGenerateStatsReport`, `statsReportTime` |
 
 ---
 
@@ -171,16 +258,57 @@ fun calculateProfitability(price: Double, fuelCost: Double, operatingCost: Doubl
 
 ---
 
+## Pricing Engine (PriceEngine)
+
+Le moteur de tarification calcule le prix complet avec :
+
+| Composante | Description |
+|------------|-------------|
+| **Prise en charge** | Tarif de base (`basePrice`) |
+| **Kilométrique** | `distance × pricePerKm` |
+| **Nuit** | Surcharge % si heure entre nightStartHour et nightEndHour |
+| **Dimanche** | Surcharge % si jour = dimanche |
+| **Jour férié** | Surcharge % si jour férié français (calcul calendrier incl. Pâques) |
+| **Attente** | `waitMinutes × euroPerMinute` |
+| **TVA transport** | 10% sur montant transport |
+| **TVA attente** | 20% sur montant attente |
+
+---
+
 ## Parsing SMS
 
-Le parser utilise une approche contextuelle avec :
-
-1. **Détection de mots-clés** taxi, départ, arrivée, heure
-2. **Analyse de contexte** : salutations, politesse, urgence, longueur du message
+### Regex (ParseSms)
+1. **30+ mots-clés** par catégorie (départ, arrivée, heure, confirmation, annulation, modification)
+2. **Analyse de contexte** : salutations, politesse, urgence, longueur
 3. **Scoring de confiance** par champ et global
-4. **Déduplication** : cache des SMS traités (fenêtre 30s)
-5. **Détection d'intention** : confirmation, annulation, modification
-6. **Extraction de date** : aujourd'hui, demain, dates relatives
+4. **Cache déduplication** : fenêtre 30s
+5. **Extraction date/heure** : aujourd'hui, demain, dates relatives, formats `14h30`, `14:30`
+
+### IA (AiSmsParser)
+- Modèle Llama 3.2 3B quantifié (Q4_K_M) exécuté en local
+- Classification binaire : TAXI / NON_TAXI
+- Extraction JSON structurée : départ, arrivée, heure, date, passagers, prix, nom, email
+- Fallback automatique vers regex si modèle non disponible
+
+---
+
+## Flux SMS Complet
+
+```
+SMS entrant
+    │
+    ├─ SmsReceiver (BroadcastReceiver, temps réel)
+    ├─ SmsWatcher (ContentObserver, debounce 2s)
+    └─ SmsForegroundService (polling 10s)
+    │
+    └─ TaxiApplication.onNewSms()
+        │
+        └─ SmsProcessor.processSms()
+            ├─ AiSmsParser.parseWithAI() (ou regex fallback)
+            ├─ QuoteResponseHandler.handleResponse() (réponse à devis ?)
+            ├─ RideMatcher.matchSmsToRides() → NEW / DUPLICATE / MODIFICATION / DELETION
+            └─ NotificationHelper (alerte nouvelle course / mise à jour)
+```
 
 ---
 
@@ -189,54 +317,47 @@ Le parser utilise une approche contextuelle avec :
 | Permission | Usage |
 |------------|-------|
 | `RECEIVE_SMS` | Réception automatique des commandes |
-| `READ_SMS` | Lecture de l'historique SMS |
-| `SEND_SMS` | Envoi de réponses aux clients |
-| `POST_NOTIFICATIONS` | Notifications de nouvelles courses |
+| `READ_SMS` | Lecture historique + scan périodique |
+| `SEND_SMS` | Envoi réponses aux clients |
+| `POST_NOTIFICATIONS` | Notifications nouvelles courses |
 | `ACCESS_FINE_LOCATION` | GPS mode pilotage |
 | `ACCESS_COARSE_LOCATION` | Localisation approximative |
-| `FOREGROUND_SERVICE` | Surveillance SMS en background |
-
----
-
-## Configuration Technique
-
-- **Kotlin** : 1.9.23
-- **JVM Target** : 1.8
-- **Compose Compiler** : 1.5.11
-- **Min SDK** : 24
-- **Target SDK** : 34
-- **Compile SDK** : 34
-- **Room** : 2.6.1
-- **Navigation Compose** : 2.7.7
-- **osmdroid** : 6.1.20
-- **Google Play Location** : 21.1.0
+| `FOREGROUND_SERVICE` | Surveillance SMS + suivi GPS en background |
+| `INTERNET` | OSRM, géocodage, OVH SMTP/IMAP |
 
 ---
 
 ## Dépendances Clés
 
 ```kotlin
-// Compose
-implementation("androidx.compose:compose-bom:2024.02.01")
+// Compose BOM 2024.05.00
 implementation("androidx.compose.material3:material3")
 implementation("androidx.navigation:navigation-compose:2.7.7")
+implementation("androidx.compose.material:material-icons-extended")
 
-// Room
-implementation("androidx.room:room-runtime:2.6.1")
-implementation("androidx.room:room-ktx:2.6.1")
+// Room 2.6.1
 kapt("androidx.room:room-compiler:2.6.1")
 
-// DataStore
+// DataStore Preferences 1.0.0
 implementation("androidx.datastore:datastore-preferences:1.0.0")
 
-// Maps
-implementation("org.osmdroid:osmdroid-android:6.1.20")
+// osmdroid 6.1.20 (cartes OSM)
+// MapLibre 10.3.1 (alternative)
 
-// Location
-implementation("com.google.android.gms:play-services-location:21.1.0")
+// Google Play Services Location 21.1.0
+implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
-// Android Auto
+// Android Auto 1.4.0
 implementation("androidx.car.app:app:1.4.0")
+
+// WorkManager 2.9.0
+implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+// OkHttp 4.12.0 (IA inference, géocodage fallback)
+implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+// JavaMail 1.6.7 (OVH SMTP/IMAP)
+implementation("com.sun.mail:android-mail:1.6.7")
 ```
 
 ---
@@ -246,11 +367,12 @@ implementation("androidx.car.app:app:1.4.0")
 ```bash
 # Debug APK
 ./gradlew assembleDebug
+# Output: app/build/outputs/apk/debug/app-debug.apk
 
 # Release APK
 ./gradlew assembleRelease
 
-# Tests
+# Tests unitaires
 ./gradlew test
 
 # Lint
@@ -260,22 +382,27 @@ implementation("androidx.car.app:app:1.4.0")
 ./gradlew clean
 ```
 
+### Configuration Technique
+| Paramètre | Valeur |
+|-----------|--------|
+| Kotlin | 1.9.23 |
+| JVM Target | 1.8 |
+| Compose Compiler | 1.5.11 |
+| Min SDK | 24 |
+| Target SDK | 34 |
+| Compile SDK | 34 |
+| Room | 2.6.1 |
+| Database version | 6 |
+
 ---
 
-## Changelog
+## Notes Importantes
 
-### v2.0 (Mise à jour majeure)
-- **Suppression** de la génération de factures PDF
-- **Suppression** de l'intégration API Kolecto (remplacée par saisie manuelle)
-- **Ajout** de l'écran Factures avec liste filtrable et détails pour Kolecto
-- **Ajout** du calcul de rentabilité en pourcentage
-- **Amélioration** du parsing SMS avec analyse contextuelle
-- **Amélioration** de la réception SMS (debounce, déduplication)
-- **Ajout** du mode navigation GPS avec osmdroid
-- **Redesign** complet de l'UI (style moderne React-like, palette Tailwind)
-
-### v1.0
-- Gestion de courses avec réception SMS
-- Génération de factures PDF
-- Statistiques de base
-- Android Auto
+- **Pas de PDF** — Pas de génération de factures dans l'app
+- **Pas d'API Kolecto** — L'écran factures prépare les données pour saisie manuelle sur Kolecto web
+- **Pas de reçus automatiques** — Le chauffeur remplit Kolecto manuellement, aucun reçu texte n'est envoyé par l'app
+- **Modèle IA** — Llama 3.2 3B (~2 Go) téléchargé au premier lancement, stocké dans `filesDir`
+- **SMS permissions critiques** — L'app ne fonctionne pas sans `RECEIVE_SMS`, `READ_SMS`, `SEND_SMS`
+- **Foreground service** — SmsForegroundService se redémarre automatiquement si tué
+- **Rentabilité** — `fuelCostPerKm = 0.12 €`, `operatingCostPerHour = 15 €` (configurables)
+- **Base de données** — Version 6, migration destructive (`fallbackToDestructiveMigration()`)

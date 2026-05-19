@@ -14,8 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.drawtaxi.app.logic.GeocodingService
-import com.drawtaxi.app.logic.OsrmRoutingService
+import com.drawtaxi.app.logic.geocoding.GeocodingService
+import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.theme.Slate400
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

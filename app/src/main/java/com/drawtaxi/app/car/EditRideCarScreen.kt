@@ -10,7 +10,7 @@ import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.local.AppDatabase
 import com.drawtaxi.app.data.local.SettingsManager
 import com.drawtaxi.app.data.TaxiRepository
-import com.drawtaxi.app.logic.ShareUtils
+
 import kotlinx.coroutines.*
 
 class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Screen(carContext) {
@@ -98,19 +98,6 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
                     .build()
             )
 
-            paneBuilder.addAction(
-                Action.Builder()
-                    .setTitle("Envoyer reçu")
-                    .setBackgroundColor(CarColor.BLUE)
-                    .setOnClickListener {
-                        scope.launch {
-                            shareReceipt()
-                        }
-                    }
-                    .build()
-            )
-        }
-
         paneBuilder.addAction(
             Action.Builder()
                 .setTitle("Annuler")
@@ -124,23 +111,6 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
         return PaneTemplate.Builder(paneBuilder.build())
             .setTitle("Modifier Course")
             .build()
-    }
-
-    private suspend fun shareReceipt() {
-        val currentRide = ride
-        val currentSettings = settings
-        if (currentRide != null && currentSettings != null) {
-            val completedRide = currentRide.copy(
-                distanceKm = distanceKm,
-                price = price,
-                isPending = false
-            )
-            repository?.updateRide(completedRide)
-            withContext(Dispatchers.Main) {
-                ShareUtils.shareReceipt(carContext, completedRide, currentSettings)
-                screenManager.popToRoot()
-            }
-        }
     }
 
     private fun loadRideAndSettings() {

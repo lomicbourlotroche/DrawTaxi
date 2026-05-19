@@ -30,7 +30,38 @@ import com.drawtaxi.app.data.Quote
 import com.drawtaxi.app.ui.TaxiViewModel
 import com.drawtaxi.app.ui.TaxiViewModelFactory
 import com.drawtaxi.app.ui.components.BottomNavigationBar
-import com.drawtaxi.app.ui.screens.*
+import com.drawtaxi.app.ui.screens.dashboard.DashboardScreen
+import com.drawtaxi.app.ui.screens.home.HomeScreen
+import com.drawtaxi.app.ui.screens.invoices.AccountingScreen
+import com.drawtaxi.app.ui.screens.invoices.InvoiceScreen
+import com.drawtaxi.app.ui.screens.messages.ControlCenterScreen
+import com.drawtaxi.app.ui.screens.messages.QuoteScreen
+import com.drawtaxi.app.ui.screens.navigation.GpsNavigationScreen
+import com.drawtaxi.app.ui.screens.navigation.RideNavigationScreen
+import com.drawtaxi.app.ui.screens.onboarding.AiModelDownloadScreen
+import com.drawtaxi.app.ui.screens.onboarding.OnboardingScreen
+import com.drawtaxi.app.ui.screens.rides.ActiveRideScreen
+import com.drawtaxi.app.ui.screens.rides.PendingRideItem
+import com.drawtaxi.app.ui.screens.rides.RideCompletionScreen
+import com.drawtaxi.app.ui.screens.rides.RideCreateScreen
+import com.drawtaxi.app.ui.screens.rides.RideDetailScreen
+import com.drawtaxi.app.ui.screens.rides.RideHistoryItem
+import com.drawtaxi.app.ui.screens.rides.ReturnHomeScreen
+import com.drawtaxi.app.ui.screens.settings.AgendaScreen
+import com.drawtaxi.app.ui.screens.settings.BackupSettingsScreen
+import com.drawtaxi.app.ui.screens.settings.BrandingSettings
+import com.drawtaxi.app.ui.screens.settings.ClientDirectoryScreen
+import com.drawtaxi.app.ui.screens.settings.ExportScreen
+import com.drawtaxi.app.ui.screens.settings.MessageTemplatesScreen
+import com.drawtaxi.app.ui.screens.settings.OvhMailSettingsScreen
+import com.drawtaxi.app.ui.screens.settings.PricingSettingsScreen
+import com.drawtaxi.app.ui.screens.settings.ProfileScreen
+import com.drawtaxi.app.ui.screens.settings.ProInfoSettings
+import com.drawtaxi.app.ui.screens.settings.SettingsMain
+import com.drawtaxi.app.ui.screens.settings.SettingsMenuItem
+import com.drawtaxi.app.ui.screens.settings.StatsScreen
+import com.drawtaxi.app.ui.screens.settings.TaxiToggleRow
+import com.drawtaxi.app.ui.screens.settings.ThemeToggleButton
 import com.drawtaxi.app.ui.theme.DrawTaxiTheme
 class MainActivity : ComponentActivity() {
 
@@ -81,26 +112,26 @@ class MainActivity : ComponentActivity() {
     }
 
     fun requestSmsPermission() {
-        if (com.drawtaxi.app.logic.PermissionHelper.hasSmsPermissions(this)) {
+        if (com.drawtaxi.app.util.PermissionHelper.hasSmsPermissions(this)) {
             pendingSettingsUpdate(currentSettings().copy(monitorSms = true))
         } else {
-            com.drawtaxi.app.logic.PermissionHelper.requestSmsPermissions(smsPermissionLauncher)
+            com.drawtaxi.app.util.PermissionHelper.requestSmsPermissions(smsPermissionLauncher)
         }
     }
 
     fun requestNotificationPermission() {
-        if (com.drawtaxi.app.logic.PermissionHelper.hasNotificationPermission(this)) {
+        if (com.drawtaxi.app.util.PermissionHelper.hasNotificationPermission(this)) {
             pendingSettingsUpdate(currentSettings().copy(enableNotifications = true))
         } else {
-            com.drawtaxi.app.logic.PermissionHelper.requestNotificationPermission(notificationPermissionLauncher)
+            com.drawtaxi.app.util.PermissionHelper.requestNotificationPermission(notificationPermissionLauncher)
         }
     }
 
     fun requestLocationPermission() {
-        if (com.drawtaxi.app.logic.PermissionHelper.hasLocationPermissions(this)) {
+        if (com.drawtaxi.app.util.PermissionHelper.hasLocationPermissions(this)) {
             pendingSettingsUpdate(currentSettings().copy(trackLocation = true))
         } else {
-            com.drawtaxi.app.logic.PermissionHelper.requestLocationPermissions(locationPermissionLauncher)
+            com.drawtaxi.app.util.PermissionHelper.requestLocationPermissions(locationPermissionLauncher)
         }
     }
 
@@ -126,7 +157,7 @@ class MainActivity : ComponentActivity() {
         val factory = TaxiViewModelFactory(repository)
 
         // Démarrage automatique des services de surveillance
-        if (com.drawtaxi.app.logic.PermissionHelper.hasSmsPermissions(this)) {
+        if (com.drawtaxi.app.util.PermissionHelper.hasSmsPermissions(this)) {
             (application as? TaxiApplication)?.startSmsServiceIfEnabled()
         }
         (application as? TaxiApplication)?.startImapServiceIfEnabled()
@@ -162,8 +193,27 @@ class MainActivity : ComponentActivity() {
                     if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
                         val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
                         if (sharedText != null) {
-                            creationText = sharedText
-                            isCreatingRide = true
+                            // Traiter le texte partagé avec l'IA
+                            val aiResult = com.drawtaxi.app.logic.sms.AiSmsParser.parseWithAI(
+                                this@MainActivity,
+                                sharedText,
+                                settings.aiEnabled
+                            )
+                            val ride = aiResult.toRideRequest(
+                                "shared",
+                                System.currentTimeMillis(),
+                                settings
+                            )
+                            if (ride != null) {
+                                // Course détectée par l'IA, l'ajouter directement
+                                viewModel.addRide(ride)
+                                activeTab = "message"
+                                Toast.makeText(this@MainActivity, "Course détectée depuis le partage !", Toast.LENGTH_LONG).show()
+                            } else {
+                                // Pas de course détectée, ouvrir l'écran de création
+                                creationText = sharedText
+                                isCreatingRide = true
+                            }
                             intentState.value = null
                         }
                     }
@@ -172,7 +222,7 @@ class MainActivity : ComponentActivity() {
 
             // Redémarrer les services quand les paramètres changent
             LaunchedEffect(settings.monitorSms, settings.ovhImapEnabled) {
-                if (settings.monitorSms && com.drawtaxi.app.logic.PermissionHelper.hasSmsPermissions(this@MainActivity)) {
+                if (settings.monitorSms && com.drawtaxi.app.util.PermissionHelper.hasSmsPermissions(this@MainActivity)) {
                     (application as? TaxiApplication)?.startSmsServiceIfEnabled()
                 }
                 if (settings.ovhImapEnabled) {
@@ -231,23 +281,14 @@ class MainActivity : ComponentActivity() {
                     RideCompletionScreen(
                         ride = completionRide!!,
                         settings = settings,
-                        onComplete = { updatedRide, sendEmail, sendSms, sendWhatsApp ->
-                            viewModel.completeRideWithReceipt(
-                                updatedRide,
-                                this@MainActivity,
-                                sendEmail,
-                                sendSms,
-                                sendWhatsApp
-                            )
-                            showCompletionScreen = false
+                        onComplete = { ride ->
+                            viewModel.completeRide(this@MainActivity, ride)
                             completionRide = null
+                            showCompletionScreen = false
                             showReturnHomeScreen = true
                             Toast.makeText(this@MainActivity, "Course terminée !", Toast.LENGTH_SHORT).show()
                         },
-                        onBack = {
-                            showCompletionScreen = false
-                            completionRide = null
-                        }
+                        onBack = { completionRide = null; showCompletionScreen = false }
                     )
                 } else if (isCreatingRide || editingRide != null) {
                     RideCreateScreen(
@@ -314,15 +355,7 @@ class MainActivity : ComponentActivity() {
                                         viewModel.deleteRide(it)
                                         selectedRide = null
                                     },
-                                    onShareReceipt = { ride ->
-                                        if (isPendingRide) {
-                                            viewModel.validateRide(ride.id)
-                                            com.drawtaxi.app.logic.ShareUtils.shareReceipt(this@MainActivity, ride, settings)
-                                            selectedRide = null
-                                        } else {
-                                            com.drawtaxi.app.logic.ShareUtils.shareReceipt(this@MainActivity, ride, settings)
-                                        }
-                                    },
+
                                     onEdit = { ride ->
                                         editingRide = ride
                                         selectedRide = null
@@ -390,7 +423,7 @@ class MainActivity : ComponentActivity() {
                                                 Toast.makeText(this@MainActivity, "Vérification des SMS en cours...", Toast.LENGTH_SHORT).show()
                                             },
                                             onSendQuote = { ride ->
-                                                val priceBreakdown = com.drawtaxi.app.logic.PriceEngine.calculate(
+                                                val priceBreakdown = com.drawtaxi.app.logic.pricing.PriceEngine.calculate(
                                                     distanceKm = ride.distanceKm,
                                                     dateTime = java.util.Calendar.getInstance(),
                                                     pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
@@ -409,7 +442,7 @@ class MainActivity : ComponentActivity() {
                                                     .replace("[ARRIVEE]", ride.arrival.ifBlank { "—" })
                                                     .replace("[DISTANCE]", String.format("%.1f", ride.distanceKm))
                                                     .replace("[PRIX]", String.format("%.2f", priceBreakdown.totalTTC))
-                                                com.drawtaxi.app.logic.MessageSender.sendMessage(
+                                                com.drawtaxi.app.logic.messaging.MessageSender.sendMessage(
                                                     this@MainActivity,
                                                     ride.messageChannel,
                                                     ride.sender,
@@ -442,7 +475,7 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onRejectQuote = { ride ->
                                                 val message = settings.rejectionTemplate
-                                                com.drawtaxi.app.logic.MessageSender.sendMessage(
+                                                com.drawtaxi.app.logic.messaging.MessageSender.sendMessage(
                                                     this@MainActivity,
                                                     ride.messageChannel,
                                                     ride.sender,

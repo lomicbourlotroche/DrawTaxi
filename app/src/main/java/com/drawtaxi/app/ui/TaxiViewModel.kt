@@ -1,5 +1,7 @@
 package com.drawtaxi.app.ui
 
+import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -7,19 +9,18 @@ import com.drawtaxi.app.data.Absence
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.MessageChannel
 import com.drawtaxi.app.data.Quote
-import com.drawtaxi.app.data.QuoteStatus
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.data.RideStatus
 import com.drawtaxi.app.data.StatsReport
+import com.drawtaxi.app.data.QuoteStatus
 import com.drawtaxi.app.data.TaxiRepository
+import com.drawtaxi.app.logic.messaging.NotificationHelper
+import com.drawtaxi.app.logic.sms.parseSms
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import com.drawtaxi.app.logic.NotificationHelper
-import android.content.Context
-import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -101,7 +102,7 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
 
     fun refreshRides(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
-            val scannedRides = com.drawtaxi.app.logic.SmsScanner.scanLastHourSms(context)
+            val scannedRides = com.drawtaxi.app.logic.sms.SmsScanner.scanLastHourSms(context)
             scannedRides.forEach { ride ->
                 repository.saveRide(ride)
             }
@@ -111,9 +112,9 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
     fun scanSmsNow(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                com.drawtaxi.app.logic.SmsForegroundService.triggerScan()
+                com.drawtaxi.app.service.foreground.SmsForegroundService.triggerScan()
 
-                val scannedRides = com.drawtaxi.app.logic.SmsScanner.scanLastHourSms(context)
+                val scannedRides = com.drawtaxi.app.logic.sms.SmsScanner.scanLastHourSms(context)
                 scannedRides.forEach { ride ->
                     repository.saveRide(ride)
                 }
@@ -128,14 +129,14 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val settings = repository.getSettingsSync()
-                val ride = com.drawtaxi.app.logic.SmsScanner.parseSmsWithAI(context, sender, body, timestamp, settings.aiEnabled)
+                val ride = com.drawtaxi.app.logic.sms.SmsScanner.parseSmsWithAI(context, sender, body, timestamp, settings.aiEnabled)
                 ride?.let {
                     repository.saveRide(it)
                     Log.d("TaxiViewModel", "Course AI ajoutée: ${it.departure} → ${it.arrival}")
                 }
             } catch (e: Exception) {
                 Log.e("TaxiViewModel", "Erreur parsing AI: ${e.message}")
-                val fallbackRide = com.drawtaxi.app.logic.parseSms(sender, body, timestamp)
+                val fallbackRide = parseSms(sender, body, timestamp)
                 fallbackRide?.let { repository.saveRide(it) }
             }
         }
@@ -171,7 +172,7 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
                 .replace("[DISTANCE]", String.format("%.1f", quote.distanceKm))
                 .replace("[PRIX]", String.format("%.2f", quote.price))
 
-            com.drawtaxi.app.logic.MessageSender.sendMessage(
+            com.drawtaxi.app.logic.messaging.MessageSender.sendMessage(
                 context = context,
                 channel = quote.messageChannel,
                 phone = ride.sender,
@@ -222,7 +223,7 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
         viewModelScope.launch {
             repository.updateRideStatus(ride.id, RideStatus.CANCELLED)
             repository.deleteRide(ride)
-            com.drawtaxi.app.logic.MessageSender.sendMessage(
+            com.drawtaxi.app.logic.messaging.MessageSender.sendMessage(
                 context = context,
                 channel = ride.messageChannel,
                 phone = ride.sender,
@@ -255,29 +256,7 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
         viewModelScope.launch {
             repository.validateRide(ride.id)
             repository.updateRide(ride)
-            com.drawtaxi.app.logic.ShareUtils.shareReceipt(context, ride, repository.getSettingsSync())
             Log.d("TaxiViewModel", "Course terminée: ${ride.id}")
-        }
-    }
-
-    fun completeRideWithReceipt(ride: RideRequest, context: Context, sendEmail: Boolean = false, sendSms: Boolean = false, sendWhatsApp: Boolean = false) {
-        viewModelScope.launch {
-            repository.validateRide(ride.id)
-            repository.updateRide(ride)
-            val settings = repository.getSettingsSync()
-            
-            com.drawtaxi.app.logic.ShareUtils.shareReceipt(context, ride, settings)
-
-            if (sendEmail && ride.clientEmail.isNotBlank()) {
-                com.drawtaxi.app.logic.ShareUtils.shareReceiptViaEmail(context, ride, settings)
-            }
-            if (sendSms) {
-                com.drawtaxi.app.logic.ShareUtils.shareReceiptViaSms(context, ride, settings)
-            }
-            if (sendWhatsApp) {
-                com.drawtaxi.app.logic.ShareUtils.shareReceiptViaWhatsApp(context, ride, settings)
-            }
-            Log.d("TaxiViewModel", "Course terminée avec reçu: ${ride.id}")
         }
     }
 

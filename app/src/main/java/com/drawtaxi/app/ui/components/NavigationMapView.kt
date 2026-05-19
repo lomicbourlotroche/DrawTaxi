@@ -21,8 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.drawtaxi.app.logic.GeocodingService
-import com.drawtaxi.app.logic.OsrmRoutingService
+import com.drawtaxi.app.logic.geocoding.GeocodingService
+import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.*
 import kotlinx.coroutines.delay
