@@ -98,9 +98,10 @@ Java_com_drawtaxi_app_logic_ai_LlmRunner_llamaRunInference(JNIEnv* env, jobject 
     env->ReleaseStringUTFChars(prompt, promptStr);
 
     // Tokenize prompt
-    const int n_vocab = llama_n_vocab(llama_get_model(session->ctx));
+    const auto* vocab = llama_model_get_vocab(session->model);
+    const int n_vocab = llama_vocab_n_tokens(vocab);
     std::vector<llama_token> prompt_tokens(n_vocab);
-    int n_tokens = llama_tokenize(session->ctx, promptCpp.c_str(), promptCpp.size(),
+    int n_tokens = llama_tokenize(vocab, promptCpp.c_str(), promptCpp.size(),
                                    prompt_tokens.data(), prompt_tokens.size(), true, true);
     if (n_tokens < 0) {
         LOGE("Failed to tokenize prompt");
@@ -111,7 +112,7 @@ Java_com_drawtaxi_app_logic_ai_LlmRunner_llamaRunInference(JNIEnv* env, jobject 
     LOGD("Prompt tokenized: %d tokens", n_tokens);
 
     // Decode prompt
-    auto batch = llama_batch_get_one(prompt_tokens.data(), n_tokens, 0, 0);
+    auto batch = llama_batch_get_one(prompt_tokens.data(), n_tokens);
     if (llama_decode(session->ctx, batch) != 0) {
         LOGE("Failed to decode prompt");
         return nullptr;
@@ -130,7 +131,7 @@ Java_com_drawtaxi_app_logic_ai_LlmRunner_llamaRunInference(JNIEnv* env, jobject 
 
         // Convert token to text
         char buf[256];
-        int n = llama_token_to_piece(session->ctx, new_token_id, buf, sizeof(buf), 0, true);
+        int n = llama_token_to_piece(vocab, new_token_id, buf, sizeof(buf), 0, true);
         if (n > 0) {
             result.append(buf, n);
         } else if (n < 0) {
@@ -139,7 +140,7 @@ Java_com_drawtaxi_app_logic_ai_LlmRunner_llamaRunInference(JNIEnv* env, jobject 
 
         // Prepare next batch
         prompt_tokens.push_back(new_token_id);
-        batch = llama_batch_get_one(&prompt_tokens.back(), 1, n_cur, 0);
+        batch = llama_batch_get_one(&prompt_tokens.back(), 1);
         n_cur += 1;
 
         if (llama_decode(session->ctx, batch) != 0) {

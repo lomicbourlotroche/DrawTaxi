@@ -3,8 +3,14 @@ package com.drawtaxi.app.logic.sms
 import android.content.Context
 import android.util.Log
 import com.drawtaxi.app.data.RideRequest
-import com.drawtaxi.app.logic.ai.LlamaModelManager
+import com.drawtaxi.app.logic.ai.LlmRunner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
+import java.io.File
+import kotlin.text.Regex
+import kotlin.text.RegexOption
 
 data class AiParsedResult(
     val departure: String = "",
@@ -128,9 +134,9 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
             return isTaxiRelatedRegex(smsBody)
         }
 
-        LlamaModelManager.markUsed()
-
-        if (!LlamaModelManager.isModelAvailable(context)) {
+        // Check if model file exists
+        val modelFile = getModelFile(context)
+        if (!modelFile.exists()) {
             return isTaxiRelatedRegex(smsBody)
         }
 
@@ -143,21 +149,14 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
                 val cleaned = response.trim().uppercase()
                 return cleaned.contains("TAXI") && !cleaned.contains("NON_TAXI")
             } catch (e: Exception) {
-                Log.e(TAG, "Classification AI error attempt $attempt: ${e.message}")
+                Log.w(TAG, "AI attempt $attempt failed: ${e.message}")
+                if (attempt == MAX_RETRIES) {
+                    return isTaxiRelatedRegex(smsBody)
+                }
+                kotlinx.coroutines.delay(500)
             }
         }
-
         return isTaxiRelatedRegex(smsBody)
-    }
-
-    private fun isTaxiRelatedRegex(body: String): Boolean {
-        val lower = body.lowercase()
-        val taxiKeywords = listOf(
-            "taxi", "course", "chauffeur", "vtc", "uber", "bolt", "heetch",
-            "aller", "départ", "depart", "réservation", "reservation",
-            "transport", "trajet", "prise en charge", "aéroport", "gare"
-        )
-        return taxiKeywords.any { lower.contains(it) }
     }
 
     suspend fun parseWithAI(context: Context, smsBody: String, aiEnabled: Boolean = true): AiParsedResult {
@@ -166,9 +165,9 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
             return parseWithFallback(smsBody)
         }
 
-        LlamaModelManager.markUsed()
-
-        if (!LlamaModelManager.isModelAvailable(context)) {
+        // Check if model file exists
+        val modelFile = getModelFile(context)
+        if (!modelFile.exists()) {
             Log.d(TAG, "AI model not available, falling back to regex parser")
             return parseWithFallback(smsBody)
         }
@@ -228,14 +227,16 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
     }
 
     private suspend fun runInferenceWithTimeout(context: Context, prompt: String, timeoutSeconds: Int): String? {
-        return kotlinx.coroutines.withTimeoutOrNull(timeoutSeconds * 1000L) {
-            runAiInferenceSync(context, prompt)
+        return withContext(Dispatchers.IO) {
+            withTimeoutOrNull(timeoutSeconds * 1000L) {
+                runAiInferenceSync(context, prompt)
+            }
         }
     }
 
     private suspend fun runAiInferenceSync(context: Context, prompt: String): String? {
         return try {
-            val modelFile = LlamaModelManager.getModelFile(context)
+            val modelFile = getModelFile(context)
 
             if (!modelFile.exists()) {
                 Log.e(TAG, "Model file not found")
@@ -244,46 +245,21 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 
             Log.d(TAG, "Running inference with model: ${modelFile.name} (${modelFile.length() / 1024 / 1024} MB)")
 
-            val result = runLlmInference(modelFile.absolutePath, prompt)
+            val result = LlmRunner.run(modelFile.absolutePath, prompt)
             result
         } catch (e: UnsatisfiedLinkError) {
-            Log.w(TAG, "LLM native library not available: ${e.message}")
-            null
+            Log.e(TAG, "Failed to load native library: ${e.message}")
+            return null
         } catch (e: Exception) {
-            Log.e(TAG, "Inference failed: ${e.message}")
-            null
+            Log.e(TAG, "Inference error: ${e.message}")
+            return null
         }
     }
 
-    private fun runLlmInference(modelPath: String, prompt: String): String? {
-        return LlmRunner.run(modelPath, prompt)
-    }
-
-    private fun extractJsonFromResponse(response: String): String? {
-        val jsonBlockRegex = Regex("```(?:json)?\\s*([\\s\\S]*?)\\s*```")
-        val match = jsonBlockRegex.find(response)
-        if (match != null) {
-            return match.groupValues[1].trim()
-        }
-
-        var depth = 0
-        var start = -1
-        for (i in response.indices) {
-            when (response[i]) {
-                '{' -> {
-                    if (depth == 0) start = i
-                    depth++
-                }
-                '}' -> {
-                    depth--
-                    if (depth == 0 && start >= 0) {
-                        return response.substring(start, i + 1)
-                    }
-                }
-            }
-        }
-
-        return null
+    private fun getModelFile(context: Context): File {
+        // Model file is stored in assets, copy to app-specific directory if needed
+        val modelName = "llama-3.2-3b-instruct-q4_k_m.gguf"
+        return File(context.filesDir, modelName)
     }
 
     private fun parseWithFallback(smsBody: String): AiParsedResult {
@@ -308,6 +284,16 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
             missingFields = missingFields,
             aiReasoning = "Parsed with regex fallback (AI not available)"
         )
+    }
+
+    private fun isTaxiRelatedRegex(body: String): Boolean {
+        val lower = body.lowercase()
+        val taxiKeywords = listOf(
+            "taxi", "course", "chauffeur", "vtc", "uber", "bolt", "heetch",
+            "aller", "départ", "depart", "réservation", "reservation",
+            "transport", "trajet", "prise en charge", "aéroport", "gare"
+        )
+        return taxiKeywords.any { lower.contains(it) }
     }
 
     private fun String.validatePhone(): String {
@@ -345,5 +331,32 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
             .replace(Regex("(?i)Objet :.*"), "") // "Objet :"
             .replace(Regex("(?i)_______________"), "") // Séparateurs
             .trim()
+    }
+
+    private fun extractJsonFromResponse(response: String): String? {
+        val jsonBlockRegex = Regex("```(?:json)?\\s*([\\s\\S]*?)\\s*```")
+        val match = jsonBlockRegex.find(response)
+        if (match != null) {
+            return match.groupValues[1].trim()
+        }
+
+        var depth = 0
+        var start = -1
+        for (i in response.indices) {
+            when (response[i]) {
+                '{' -> {
+                    if (depth == 0) start = i
+                    depth++
+                }
+                '}' -> {
+                    depth--
+                    if (depth == 0 && start >= 0) {
+                        return response.substring(start, i + 1)
+                    }
+                }
+            }
+        }
+
+        return null
     }
 }
