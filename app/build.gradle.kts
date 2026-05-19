@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.drawtaxi.app"
     compileSdk = 34
+    ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "com.drawtaxi.app"
@@ -18,6 +19,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+        ndk {
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -57,6 +61,14 @@ android {
             excludes += "/META-INF/LICENSE.md"
             excludes += "/META-INF/NOTICE"
             excludes += "/META-INF/LICENSE"
+        }
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 }

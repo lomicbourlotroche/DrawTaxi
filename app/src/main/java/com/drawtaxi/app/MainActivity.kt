@@ -282,7 +282,7 @@ class MainActivity : ComponentActivity() {
                         ride = completionRide!!,
                         settings = settings,
                         onComplete = { ride ->
-                            viewModel.completeRide(this@MainActivity, ride)
+                            viewModel.completeRide(ride, this@MainActivity)
                             completionRide = null
                             showCompletionScreen = false
                             showReturnHomeScreen = true

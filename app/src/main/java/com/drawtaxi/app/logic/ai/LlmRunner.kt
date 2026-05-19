@@ -1,102 +1,46 @@
 package com.drawtaxi.app.logic.ai
 
 import android.util.Log
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
-import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
 object LlmRunner {
 
     private const val TAG = "LlmRunner"
-    private const val HF_API_URL = "https://api-inference.huggingface.co/models/microsoft/Phi-3-mini-4k-instruct"
-    private const val TIMEOUT_SECONDS = 90L
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
-
-    fun cleanup() {
-        client.dispatcher.executorService.shutdown()
-        client.connectionPool.evictAll()
+    init {
+        try {
+            System.loadLibrary("llama-jni")
+            llamaBackendInit()
+            Log.d(TAG, "llama native library loaded successfully")
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Failed to load llama native library: ${e.message}")
+        }
     }
+
+    // JNI native methods
+    external fun llamaBackendInit()
+    external fun llamaBackendFree()
+    external fun llamaLoadModel(modelPath: String, nCtx: Int): Long
+    external fun llamaFreeModel(contextPtr: Long)
+    external fun llamaRunInference(contextPtr: Long, prompt: String, maxTokens: Int): String?
 
     fun run(modelPath: String, prompt: String): String? {
+        val ctx = llamaLoadModel(modelPath, nCtx = 512)
+        if (ctx == 0L) {
+            Log.e(TAG, "Failed to load model: $modelPath")
+            return null
+        }
         return try {
-            Log.d(TAG, "Running inference via HuggingFace API (model: $modelPath)")
-            runHuggingFaceInference(prompt)
+            Log.d(TAG, "Running local inference with llama.cpp")
+            llamaRunInference(ctx, prompt, maxTokens = 256)
         } catch (e: Exception) {
-            Log.e(TAG, "HuggingFace API failed: ${e.message}")
+            Log.e(TAG, "Inference failed: ${e.message}")
             null
+        } finally {
+            llamaFreeModel(ctx)
         }
     }
 
-    private fun runHuggingFaceInference(prompt: String): String? {
-        val body = JSONObject().apply {
-            put("inputs", prompt)
-            put("parameters", JSONObject().apply {
-                put("max_new_tokens", 512)
-                put("temperature", 0.1)
-                put("return_full_text", false)
-                put("do_sample", true)
-            })
-        }
-
-        val request = Request.Builder()
-            .url(HF_API_URL)
-            .header("Content-Type", "application/json")
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                val errorBody = response.body?.string() ?: "Unknown error"
-                Log.w(TAG, "HF API error: ${response.code} - $errorBody")
-
-                if (response.code == 503) {
-                    Log.w(TAG, "Model is loading, retrying in 20s...")
-                    kotlinx.coroutines.runBlocking {
-                        kotlinx.coroutines.delay(20000)
-                    }
-                    return runHuggingFaceInference(prompt)
-                }
-                return null
-            }
-
-            val responseBody = response.body?.string() ?: return null
-            Log.d(TAG, "HF API response length: ${responseBody.length}")
-
-            return parseHuggingFaceResponse(responseBody)
-        }
-    }
-
-    private fun parseHuggingFaceResponse(responseBody: String): String? {
-        return try {
-            val json = JSONArray(responseBody)
-            if (json.length() > 0) {
-                val first = json.getJSONObject(0)
-                if (first.has("generated_text")) {
-                    first.getString("generated_text").trim()
-                } else {
-                    null
-                }
-            } else null
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse HF response: ${e.message}")
-            try {
-                val json = JSONObject(responseBody)
-                if (json.has("error")) {
-                    Log.w(TAG, "HF API error: ${json.getString("error")}")
-                }
-                null
-            } catch (e2: Exception) {
-                null
-            }
-        }
+    fun cleanup() {
+        llamaBackendFree()
     }
 }

@@ -162,7 +162,7 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 
     suspend fun parseWithAI(context: Context, smsBody: String, aiEnabled: Boolean = true): AiParsedResult {
         if (!aiEnabled) {
-            Log.d(TAG, "AI disabled in settings, using regex fallback")
+            Log.d(TAG, "AI disabled, using regex fallback")
             return parseWithFallback(smsBody)
         }
 
@@ -170,11 +170,6 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 
         if (!LlamaModelManager.isModelAvailable(context)) {
             Log.d(TAG, "AI model not available, falling back to regex parser")
-            return parseWithFallback(smsBody)
-        }
-
-        if (LlamaModelManager.shouldAutoUnload()) {
-            LlamaModelManager.unload()
             return parseWithFallback(smsBody)
         }
 
@@ -261,17 +256,7 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
     }
 
     private fun runLlmInference(modelPath: String, prompt: String): String? {
-        try {
-            val llmClass = Class.forName("com.drawtaxi.app.logic.ai.LlmRunner")
-            val runMethod = llmClass.getDeclaredMethod("run", String::class.java, String::class.java)
-            return runMethod.invoke(null, modelPath, prompt) as? String
-        } catch (e: ClassNotFoundException) {
-            Log.d(TAG, "LlmRunner class not found - AI inference not available")
-            return null
-        } catch (e: Exception) {
-            Log.e(TAG, "LlmRunner execution failed: ${e.message}")
-            return null
-        }
+        return LlmRunner.run(modelPath, prompt)
     }
 
     private fun extractJsonFromResponse(response: String): String? {

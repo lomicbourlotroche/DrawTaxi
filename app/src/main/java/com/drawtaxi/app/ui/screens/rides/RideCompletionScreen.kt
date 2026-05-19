@@ -33,6 +33,7 @@ fun RideCompletionScreen(
     var distanceKm by remember { mutableStateOf(ride.distanceKm.toString()) }
     var price by remember { mutableStateOf(ride.price.toString()) }
     var durationMinutes by remember { mutableStateOf(ride.durationMinutes.toString()) }
+    var clientEmail by remember { mutableStateOf(ride.clientEmail) }
     var showConfirmDialog by remember { mutableStateOf(false) }
 
     val hasChanges = departure != ride.departure ||

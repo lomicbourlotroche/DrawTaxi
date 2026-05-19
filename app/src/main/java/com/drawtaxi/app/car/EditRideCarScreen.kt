@@ -98,6 +98,8 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
                     .build()
             )
 
+        }
+
         paneBuilder.addAction(
             Action.Builder()
                 .setTitle("Annuler")

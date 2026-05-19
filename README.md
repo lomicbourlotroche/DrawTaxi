@@ -101,7 +101,6 @@ com.drawtaxi.app/
 │   │   └── AddressNormalizer.kt
 │   ├── messaging/
 │   │   ├── MessageSender.kt     # SMS/WhatsApp/Email
-│   │   ├── ShareUtils.kt        # Partage (non utilisé pour reçus)
 │   │   ├── NotificationHelper.kt
 │   │   ├── EmailFormParser.kt   # Web form email parser
 │   │   ├── OvhMailSender.kt     # SMTP OVH

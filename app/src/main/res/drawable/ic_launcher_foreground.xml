@@ -19,33 +19,22 @@
         android:pathData="M55,35 L55,45 L70,45 L70,35 Z" />
 
     <!-- Wheels (red with white center) -->
-    <circle
-        android:cx="25"
-        android:cy="55"
-        android:r="8"
-        android:fillColor="#FF0000" />
-    <circle
-        android:cx="25"
-        android:cy="55"
-        android:r="5"
-        android:fillColor="#FFFFFF" />
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M25,47 A8,8 0 1,0 25,63 A8,8 0 1,0 25,47 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M25,50 A5,5 0 1,0 25,60 A5,5 0 1,0 25,50 Z" />
 
-    <circle
-        android:cx="75"
-        android:cy="55"
-        android:r="8"
-        android:fillColor="#FF0000" />
-    <circle
-        android:cx="75"
-        android:cy="55"
-        android:r="5"
-        android:fillColor="#FFFFFF" />
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M75,47 A8,8 0 1,0 75,63 A8,8 0 1,0 75,47 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M75,50 A5,5 0 1,0 75,60 A5,5 0 1,0 75,50 Z" />
 
     <!-- Taxi sign (yellow rectangle) -->
-    <rect
-        android:left="40"
-        android:top="25"
-        android:right="60"
-        android:bottom="30"
-        android:fillColor="#FFD700" />
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M40,25 L60,25 L60,30 L40,30 Z" />
 </vector>
