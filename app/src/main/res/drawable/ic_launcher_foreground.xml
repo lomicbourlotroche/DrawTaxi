@@ -5,34 +5,47 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Taxi roof sign -->
+    <!-- Car body (red) -->
     <path
-        android:fillColor="#FCD34D"
-        android:pathData="M48,38 L48,34 C48,33 48.8,32 50,32 L58,32 C59.2,32 60,33 60,34 L60,38 Z" />
+        android:fillColor="#FF0000"
+        android:pathData="M20,50 L20,40 C20,35 25,30 30,30 L70,30 C75,30 80,35 80,40 L80,50 C80,55 75,60 70,60 L30,60 C25,60 20,55 20,50 Z" />
 
-    <!-- Car body (RED) -->
-    <path
-        android:fillColor="#DC2626"
-        android:pathData="M34,58 L34,48 C34,47 34.5,46 35.5,46 L39,46 L42,40 C42.5,39 43.5,38 44.5,38 L63.5,38 C64.5,38 65.5,39 66,40 L69,46 L72.5,46 C73.5,46 74,47 74,48 L74,58 C74,59 73.1,60 72,60 L70,60 L70,63 C70,64.1 69.1,65 68,65 L65,65 C63.9,65 63,64.1 63,63 L63,60 L45,60 L45,63 C45,64.1 44.1,65 43,65 L40,65 C38.9,65 38,64.1 38,63 L38,60 L36,60 C34.9,60 34,59 34,58 Z" />
-
-    <!-- Windshield (WHITE) -->
+    <!-- Windows (white) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M42.5,46 L44.5,41 C44.8,40.4 45.3,40 46,40 L62,40 C62.7,40 63.2,40.4 63.5,41 L65.5,46 Z" />
-
-    <!-- Left headlight -->
+        android:pathData="M35,35 L35,45 L50,45 L50,35 Z" />
     <path
-        android:fillColor="#FCD34D"
-        android:pathData="M37,48 L42,48 L42,51 L37,51 Z" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,35 L55,45 L70,45 L70,35 Z" />
 
-    <!-- Right headlight -->
-    <path
-        android:fillColor="#FCD34D"
-        android:pathData="M66,48 L71,48 L71,51 L66,51 Z" />
+    <!-- Wheels (red with white center) -->
+    <circle
+        android:cx="25"
+        android:cy="55"
+        android:r="8"
+        android:fillColor="#FF0000" />
+    <circle
+        android:cx="25"
+        android:cy="55"
+        android:r="5"
+        android:fillColor="#FFFFFF" />
 
-    <!-- Bumper -->
-    <path
-        android:fillColor="#E5E7EB"
-        android:pathData="M38,57 L70,57 L70,58.5 L38,58.5 Z" />
+    <circle
+        android:cx="75"
+        android:cy="55"
+        android:r="8"
+        android:fillColor="#FF0000" />
+    <circle
+        android:cx="75"
+        android:cy="55"
+        android:r="5"
+        android:fillColor="#FFFFFF" />
 
+    <!-- Taxi sign (yellow rectangle) -->
+    <rect
+        android:left="40"
+        android:top="25"
+        android:right="60"
+        android:bottom="30"
+        android:fillColor="#FFD700" />
 </vector>
