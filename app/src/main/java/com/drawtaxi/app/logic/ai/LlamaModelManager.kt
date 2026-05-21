@@ -25,6 +25,7 @@ object LlamaModelManager {
     private const val EXPECTED_SIZE_BYTES = 2_000_000_000L
     private const val MIN_VALID_SIZE = 1_800_000_000L
     private const val CHUNK_SIZE = 8192
+    private const val EXPECTED_SHA256 = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
 
     enum class ModelStatus {
         NOT_DOWNLOADED,
@@ -61,7 +62,29 @@ object LlamaModelManager {
 
     fun isModelAvailable(context: Context): Boolean {
         val file = getModelFile(context)
-        return file.exists() && file.length() > MIN_VALID_SIZE && LlmRunner.isNativeLibraryAvailable()
+        if (!file.exists() || file.length() < MIN_VALID_SIZE || !LlmRunner.isNativeLibraryAvailable()) {
+            return false
+        }
+        // Optional: validate checksum if needed for extra security
+        // return calculateSha256(file) == EXPECTED_SHA256
+        return true
+    }
+
+    private fun calculateSha256(file: File): String {
+        return try {
+            val md = java.security.MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(8192)
+                var read: Int
+                while (input.read(buffer).also { read = it } != -1) {
+                    md.update(buffer, 0, read)
+                }
+            }
+            md.digest().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to calculate SHA256: ${e.message}")
+            ""
+        }
     }
 
     fun isAiAvailable(context: Context): Boolean {

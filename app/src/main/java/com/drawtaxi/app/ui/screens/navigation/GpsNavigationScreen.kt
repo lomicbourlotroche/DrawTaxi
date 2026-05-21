@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.location.Location
-import android.os.Looper
+import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -23,13 +23,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.ui.theme.*
-import com.google.android.gms.location.*
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.Style
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.annotations.MarkerOptions
 import java.util.*
 import kotlin.math.*
 
@@ -46,18 +49,20 @@ fun GpsNavigationScreen(
     var eta by remember { mutableStateOf("--") }
     var distanceToDest by remember { mutableStateOf("--") }
     var speed by remember { mutableStateOf("0 km/h") }
+    var isMapReady by remember { mutableStateOf(false) }
+    var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
 
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
 
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(48.39, -4.49), 12f)
+    val mapView = remember {
+        MapView(context)
     }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.values.all { it }) {
-            startLocationUpdates(context, fusedLocationClient) { location ->
+            startLocationUpdates(context, locationManager) { location ->
                 currentLocation = location
             }
         }
@@ -68,7 +73,7 @@ fun GpsNavigationScreen(
         val coarseLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
 
         if (fineLocation == PackageManager.PERMISSION_GRANTED && coarseLocation == PackageManager.PERMISSION_GRANTED) {
-            startLocationUpdates(context, fusedLocationClient) { location ->
+            startLocationUpdates(context, locationManager) { location ->
                 currentLocation = location
             }
         } else {
@@ -94,10 +99,33 @@ fun GpsNavigationScreen(
                 val etaMinutes = (dist / avgSpeedKmh) * 60
                 eta = if (etaMinutes < 1) "< 1 min" else "~${etaMinutes.toInt()} min"
             }
+        }
+    }
 
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(
-                LatLng(loc.latitude, loc.longitude), 15f
-            )
+    LaunchedEffect(isMapReady, currentLocation) {
+        if (!isMapReady || mapInstance == null || currentLocation == null) return@LaunchedEffect
+        mapInstance?.animateCamera(CameraUpdateFactory.newLatLngZoom(
+            LatLng(currentLocation!!.latitude, currentLocation!!.longitude), 15.0
+        ))
+    }
+
+    LaunchedEffect(isMapReady, destLocation) {
+        if (!isMapReady || mapInstance == null) return@LaunchedEffect
+        destLocation?.let { dest ->
+            mapInstance?.addMarker(MarkerOptions()
+                .setPosition(LatLng(dest.latitude, dest.longitude))
+                .setTitle(ride.arrival))
+        }
+    }
+
+    DisposableEffect(Unit) {
+        mapView.onCreate(null)
+        mapView.onStart()
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onStop()
+            mapView.onDestroy()
         }
     }
 
@@ -123,22 +151,18 @@ fun GpsNavigationScreen(
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            GoogleMap(
+            AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState,
-                properties = MapProperties(isMyLocationEnabled = true),
-                uiSettings = MapUiSettings(
-                    myLocationButtonEnabled = true,
-                    zoomControlsEnabled = true
-                )
-            ) {
-                destLocation?.let { dest ->
-                    Marker(
-                        state = MarkerState(position = LatLng(dest.latitude, dest.longitude)),
-                        title = ride.arrival
-                    )
+                factory = {
+                    mapView.getMapAsync { map ->
+                        mapInstance = map
+                        map.setStyle(Style.Builder().fromUrl("https://tiles.openfreemap.org/styles/liberty")) {
+                            isMapReady = true
+                        }
+                    }
+                    mapView
                 }
-            }
+            )
 
             if (currentLocation == null) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -230,21 +254,17 @@ private fun haversineDistance(from: Location, to: Location): Double {
     return r * c
 }
 
-private fun startLocationUpdates(context: Context, client: FusedLocationProviderClient, onLocation: (Location) -> Unit) {
-    val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L).apply {
-        setMinUpdateIntervalMillis(2000L)
-    }.build()
-
+private fun startLocationUpdates(context: Context, locationManager: LocationManager, onLocation: (Location) -> Unit) {
     if (ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     ) {
-        client.requestLocationUpdates(request, object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let(onLocation)
-            }
-        }, Looper.getMainLooper())
+        val listener = android.location.LocationListener { location ->
+            onLocation(location)
+        }
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000L, 0f, listener)
+        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000L, 0f, listener)
     }
 }
 

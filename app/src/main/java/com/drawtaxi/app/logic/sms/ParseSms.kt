@@ -17,6 +17,8 @@ data class ParsedSms(
     val arrival: String = "",
     val time: String = "",
     val date: String = "",
+    val clientFirstName: String = "",
+    val clientLastName: String = "",
     val nbPassengers: Int = 0,
     val price: Double = 0.0,
     val isConfirmation: Boolean = false,
@@ -37,24 +39,29 @@ private val departureKeywords = listOf(
     "depuis ", "de :", "de:", "dep :", "dep:", "adresse :", "adresse:",
     "départ :", "départ:", "depart :", "depart:", "enlèvement :", "enlèvement:",
     "prise en charge :", "prise en charge:", "depart de ", "dep. ", "-de ",
-    "je suis à ", "je suis ", "出发", " starting from", " starting at",
+    "je suis à ", "je suis au ", "je suis rue ", "je suis avenue ", "je suis boulevard ",
+    "出发", " starting from", " starting at",
     "mon adresse", "notre adresse", "à partir de ", "partant de ",
     "je pars de ", "pars de ", "au départ ", "point de départ ",
     "departing from", "from ", "from:", "depart from ", "pick up at ",
-    "pickup at ", "address: ", "address :", "addr: ", "addr:"
+    "pickup at ", "address: ", "address :", "addr: ", "addr:",
+    "rdv à ", "rdv au ", "rdv rue ", "rdv avenue ", "rendez-vous à ",
+    "prendre à ", "prendre au ", "prendre rue ", "prendre avenue "
 )
 
 private val arrivalKeywords = listOf(
-    "vers ", "pour ", "aller à ", "destination :", "destination:",
+    "vers ", "pour ", "aller à ", "aller au ", "destination :", "destination:",
     "arrivée :", "arrivée:", "arrivee :", "arrivee:", "dest :", "dest:", "à :", "-vers ",
+    "direction ", "direction:", "direction :",
     "destination", "chez ", "arriver", "rendez-vous", "rdv",
-    "terminus", "gare", "l'a", "aeroport", "airport", "hotel",
-    "restaurant", "hopital", "hôpital", "clinique", "to: ", "to ",
-    "drop off at ", "dropoff at "
+    "terminus", "gare", "aéroport", "airport", "hôtel", "hotel",
+    "restaurant", "hôpital", "hopital", "clinique", "to: ", "to ",
+    "drop off at ", "dropoff at ", "descendre à ", "descendre au ",
+    "jusqu'à ", "jusqu'au ", "récupérer à ", "récupérer au "
 )
 
 private val timeKeywords = listOf(
-    " à ", " a ", "heure :", "heure:", " h ", "h ", "h:",
+    " à ", " a ", "heure :", "heure:", " h ", "h ", "h:", "hh",
     "maintenant", "rdv :", "rdv:", "prévu à", "prevu a", "prevu ",
     "dès que", "des que",
     "immediatement", "immédiatement", "urgent", "vite", " asap ",
@@ -62,7 +69,7 @@ private val timeKeywords = listOf(
     "cet aprem", "cette aprem", "ce matin", "ce soir", "ce midi",
     "demain", "aujourd'hui", "aujourd hui", "aujourdhui",
     "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
-    "at ", "time: ", "time :"
+    "at ", "time: ", "time :", "vers ", "aux alentours de "
 )
 
 private val confirmationKeywords = listOf(
@@ -100,6 +107,13 @@ private val nbPassengersKeywords = listOf(
     "voyageurs", " occupants", " occupants", " personne", " personnes",
     "2 personnes", "3 personnes", "4 personnes", "1 personne", "1pers", "2pers", "3pers", "4pers",
     " à ", " personnes", "passagers", "personne"
+)
+
+private val nameKeywords = listOf(
+    "je m'appelle ", "je m'apelle ", "mon nom est ", "mon prénom est ",
+    "c'est ", "moi c'est ", "ici ", "nom :", "nom:", "prénom :", "prenom:",
+    "mr ", "mme ", "mlle ", "monsieur ", "madame ", "mademoiselle ",
+    "my name is ", "this is ", "name: ", "name "
 )
 
 private val priceKeywords = listOf(
@@ -142,6 +156,8 @@ fun parseSms(sender: String, body: String, timestamp: Long = System.currentTimeM
         arrival = parsed.arrival,
         time = parsed.time,
         date = parsed.date,
+        clientName = parsed.clientLastName,
+        clientFirstName = parsed.clientFirstName,
         distanceKm = estimatedDistance,
         price = estimatedPrice,
         durationMinutes = estimatedDuration,
@@ -285,6 +301,10 @@ fun parseSmsAdvanced(sender: String, body: String, timestamp: Long = System.curr
     val departure = departurePhrase.replaceFirstChar { it.uppercase() }
     val versRaw = results[SmsField.VERS]
     val arrival = versRaw?.cleanLocation()?.takeFirstPhrase()?.replaceFirstChar { it.uppercase() } ?: ""
+    
+    // Extraction des noms
+    val (firstName, lastName) = extractNamesFromBody(body)
+    
     val isConfirmation = containsConfirmation(body.lowercase())
     val isCancellation = isCancellationMessage(body)
     val isModification = isModificationMessage(body)
@@ -301,6 +321,8 @@ fun parseSmsAdvanced(sender: String, body: String, timestamp: Long = System.curr
         arrival = arrival,
         time = timeResult,
         date = dateResult,
+        clientFirstName = firstName,
+        clientLastName = lastName,
         isConfirmation = isConfirmation,
         isCancellation = isCancellation,
         isModification = isModification,
@@ -450,67 +472,175 @@ private fun extractTimeFromBody(body: String): String {
     val lowerBody = body.lowercase()
     val times = mutableListOf<String>()
     
-    val timeMarkers = listOf("h", ":", "min", "dans", "demain", "aujourd'hui", "midi", "soir", "après-midi", "cet aprèm")
-    
-    val hPattern = Regex("(\\d{1,2})h(\\d{2})")
+    // Format 14h30
+    val hPattern = Regex("(\\d{1,2})h(\\d{0,2})")
     for (m in hPattern.findAll(lowerBody)) {
-        val h = m.groupValues[1]
-        val min = m.groupValues[2]
-        if (min.isNotEmpty() && min.toIntOrNull() != null && min.toInt() < 60) {
-            times.add("${h}h$min")
+        val h = m.groupValues[1].toIntOrNull() ?: continue
+        val min = m.groupValues[2].ifEmpty { "00" }
+        if (h in 0..23 && min.toInt() in 0..59) {
+            times.add("${h}h${min}")
         }
     }
     
+    // Format 14:30
     val colonPattern = Regex("(\\d{1,2}):(\\d{2})")
     for (m in colonPattern.findAll(lowerBody)) {
-        val h = m.groupValues[1]
-        val min = m.groupValues[2]
-        if (min.isNotEmpty() && min.toIntOrNull() != null && min.toInt() < 60) {
+        val h = m.groupValues[1].toIntOrNull() ?: continue
+        val min = m.groupValues[2].toIntOrNull() ?: continue
+        if (h in 0..23 && min in 0..59) {
             times.add("$h:$min")
         }
     }
     
-    val dansMinPattern = Regex("dans (\\d+) min")
-    for (m in dansMinPattern.findAll(lowerBody)) {
-        val num = m.groupValues[1]
-        times.add("dans $num min")
+    // Format "dans 30min" ou "dans 1h"
+    val dansPattern = Regex("dans\\s+(\\d+)\\s*(min|heure|h)")
+    for (m in dansPattern.findAll(lowerBody)) {
+        val value = m.groupValues[1]
+        val unit = m.groupValues[2]
+        times.add("dans ${value}${if (unit.startsWith("h")) "h" else "min"}")
     }
     
+    // Mots-clés temporels
     if (lowerBody.contains("demain")) times.add("demain")
     if (lowerBody.contains("aujourd'hui") || lowerBody.contains("aujourd hui")) times.add("aujourd'hui")
-    
-    if (lowerBody.contains("cet apr") || lowerBody.contains("cet après") || lowerBody.contains("cet aprem")) times.add("après-midi")
-    if (lowerBody.contains("ce midi") || lowerBody.contains("a midi")) times.add("12h")
-    if (lowerBody.contains("ce soir")) times.add("soir")
+    if (lowerBody.contains("ce soir")) times.add("ce soir")
+    if (lowerBody.contains("ce matin")) times.add("ce matin")
+    if (lowerBody.contains("ce midi") || lowerBody.contains("à midi")) times.add("12h")
+    if (lowerBody.contains("cet après") || lowerBody.contains("cet aprem")) times.add("cet après-midi")
+    if (lowerBody.contains("maintenant") || lowerBody.contains("immédiatement") || lowerBody.contains("urgent")) times.add("maintenant")
     
     return times.firstOrNull() ?: ""
 }
 
 private fun extractDateFromBody(body: String): String {
     val lowerBody = body.lowercase()
+    val cal = java.util.Calendar.getInstance()
     
-    if (lowerBody.contains("aujourd'hui") || lowerBody.contains("aujourd hui")) {
-        val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
-        return sdf.format(java.util.Date())
+    // Aujourd'hui
+    if (lowerBody.contains("aujourd'hui") || lowerBody.contains("aujourd hui") || lowerBody.contains("ce jour")) {
+        return java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date())
     }
     
+    // Demain
     if (lowerBody.contains("demain")) {
-        val calendar = java.util.Calendar.getInstance()
-        calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
-        val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
-        return sdf.format(calendar.time)
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        return java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(cal.time)
     }
     
-    val datePattern = Regex("(\\d{1,2})/(\\d{1,2})(?:/(\\d{2,4}))?")
+    // Après-demain
+    if (lowerBody.contains("après-demain") || lowerBody.contains("apres-demain")) {
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 2)
+        return java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(cal.time)
+    }
+    
+    // Jours de la semaine (ex: "lundi", "mardi prochain")
+    val days = mapOf(
+        "lundi" to java.util.Calendar.MONDAY,
+        "mardi" to java.util.Calendar.TUESDAY,
+        "mercredi" to java.util.Calendar.WEDNESDAY,
+        "jeudi" to java.util.Calendar.THURSDAY,
+        "vendredi" to java.util.Calendar.FRIDAY,
+        "samedi" to java.util.Calendar.SATURDAY,
+        "dimanche" to java.util.Calendar.SUNDAY
+    )
+    
+    for ((dayName, dayConst) in days) {
+        if (lowerBody.contains(dayName)) {
+            val currentDayOfWeek = cal.get(java.util.Calendar.DAY_OF_WEEK)
+            val targetDayOfWeek = when (dayConst) {
+                java.util.Calendar.MONDAY -> java.util.Calendar.MONDAY
+                java.util.Calendar.TUESDAY -> java.util.Calendar.TUESDAY
+                java.util.Calendar.WEDNESDAY -> java.util.Calendar.WEDNESDAY
+                java.util.Calendar.THURSDAY -> java.util.Calendar.THURSDAY
+                java.util.Calendar.FRIDAY -> java.util.Calendar.FRIDAY
+                java.util.Calendar.SATURDAY -> java.util.Calendar.SATURDAY
+                java.util.Calendar.SUNDAY -> java.util.Calendar.SUNDAY
+                else -> currentDayOfWeek
+            }
+            var daysToAdd = targetDayOfWeek - currentDayOfWeek
+            if (daysToAdd <= 0) daysToAdd += 7
+            if (lowerBody.contains("prochain")) {
+                daysToAdd += 7
+            }
+            cal.add(java.util.Calendar.DAY_OF_YEAR, daysToAdd)
+            return java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(cal.time)
+        }
+    }
+    
+    // Format numérique JJ/MM/AAAA ou JJ/MM
+    val datePattern = Regex("(\\d{1,2})[./-](\\d{1,2})(?:[./-](\\d{2,4}))?")
     val match = datePattern.find(lowerBody)
     if (match != null) {
         val day = match.groupValues[1]
         val month = match.groupValues[2]
-        val year = match.groupValues.getOrNull(3) ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR).toString().takeLast(2)
+        val year = match.groupValues.getOrNull(3)?.let { 
+            if (it.length == 2) "20$it" else it 
+        } ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR).toString()
         return "$day/$month/$year"
     }
     
+    // Format texte "15 janvier", "15 jan"
+    val months = mapOf(
+        "janvier" to "01", "jan" to "01",
+        "février" to "02", "fevrier" to "02", "fev" to "02",
+        "mars" to "03",
+        "avril" to "04", "avr" to "04",
+        "mai" to "05",
+        "juin" to "06",
+        "juillet" to "07", "jul" to "07",
+        "août" to "08", "aout" to "08",
+        "septembre" to "09", "sep" to "09",
+        "octobre" to "10", "oct" to "10",
+        "novembre" to "11", "nov" to "11",
+        "décembre" to "12", "decembre" to "12", "dec" to "12"
+    )
+    
+    for ((monthName, monthNum) in months) {
+        val pattern = Regex("(\\d{1,2})\\s+$monthName")
+        val m = pattern.find(lowerBody)
+        if (m != null) {
+            val day = m.groupValues[1]
+            val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR).toString()
+            return "$day/$monthNum/$year"
+        }
+    }
+    
     return ""
+}
+
+private fun extractNamesFromBody(body: String): Pair<String, String> {
+    val lowerBody = body.lowercase()
+    var firstName = ""
+    var lastName = ""
+
+    // Mot-clés explicites
+    for (keyword in nameKeywords) {
+        val idx = lowerBody.indexOf(keyword)
+        if (idx != -1) {
+            val start = idx + keyword.length
+            val end = lowerBody.indexOfAny(charArrayOf('.', ',', '!', '?', ';'), start)
+            val rawName = if (end != -1) body.substring(start, end) else body.substring(start)
+            val cleanName = rawName.trim().replaceFirstChar { it.uppercase() }
+            
+            if (keyword.contains("nom") || keyword.contains("mr") || keyword.contains("mme")) {
+                lastName = cleanName
+            } else {
+                firstName = cleanName
+            }
+            break
+        }
+    }
+
+    // Détection après salutation (ex: "Bonjour Jean,")
+    if (firstName.isBlank()) {
+        val greetingPattern = Regex("(?:bonjour|slt|salut|hello|hi)\\s+([A-Z][a-z]+)")
+        val match = greetingPattern.find(body)
+        if (match != null) {
+            firstName = match.groupValues[1]
+        }
+    }
+
+    return Pair(firstName, lastName)
 }
 
 private fun calculateFieldConfidence(field: SmsField, value: String, tokenConfidence: Float = 0.8f): Float {

@@ -35,7 +35,9 @@ class SmsReceiver : BroadcastReceiver() {
         private const val RECENT_RIDE_WINDOW_MS = 3600000L
         private const val DEDUP_WINDOW_MS = 30000L
         private const val MAX_DEDUP_CACHE = 200
+        private const val SMS_REPLY_RATE_LIMIT_MS = 60_000L
         private val processedMessages = ConcurrentHashMap<String, Long>()
+        private val replyTimestamps = ConcurrentHashMap<String, Long>()
         private val smsProcessingDispatcher = java.util.concurrent.Executors
             .newSingleThreadExecutor()
             .asCoroutineDispatcher()
@@ -496,6 +498,15 @@ class SmsReceiver : BroadcastReceiver() {
                 Log.w(TAG, "Permission SEND_SMS non accordée")
                 return
             }
+
+            // Rate limiting: max 1 reply per number per 60s
+            val now = System.currentTimeMillis()
+            val lastReply = replyTimestamps[phoneNumber]
+            if (lastReply != null && (now - lastReply) < SMS_REPLY_RATE_LIMIT_MS) {
+                Log.d(TAG, "Rate limit: skip reply to $phoneNumber (wait ${SMS_REPLY_RATE_LIMIT_MS - (now - lastReply)}ms)")
+                return
+            }
+            replyTimestamps[phoneNumber] = now
 
             val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 context.getSystemService(android.telephony.SmsManager::class.java)

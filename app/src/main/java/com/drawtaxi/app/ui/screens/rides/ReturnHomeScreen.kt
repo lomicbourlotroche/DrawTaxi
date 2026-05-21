@@ -2,9 +2,10 @@ package com.drawtaxi.app.ui.screens.rides
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
-import android.os.Looper
+import android.location.LocationManager
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -24,17 +25,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.geocoding.GeocodingService
 import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.screens.navigation.NavigationPhase
 import com.drawtaxi.app.ui.theme.*
-import com.google.android.gms.location.*
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
 import kotlinx.coroutines.launch
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.Style
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.annotations.MarkerOptions
+import org.maplibre.android.annotations.PolylineOptions
 
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
@@ -44,7 +49,7 @@ fun ReturnHomeScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
 
     var currentLocation by remember { mutableStateOf<Location?>(null) }
     var routeToHome by remember { mutableStateOf<OsrmRoutingService.RouteResult?>(null) }
@@ -56,9 +61,11 @@ fun ReturnHomeScreen(
     var currentInstruction by remember { mutableStateOf("") }
     var nextInstruction by remember { mutableStateOf("") }
     var nextInstructionDistance by remember { mutableStateOf("") }
+    var isMapReady by remember { mutableStateOf(false) }
+    var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
 
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(48.39, -4.49), 12f)
+    val mapView = remember {
+        MapView(context)
     }
 
     val routePoints = remember(routeToHome) {
@@ -73,28 +80,15 @@ fun ReturnHomeScreen(
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED) {
 
-            val locationRequest = LocationRequest.Builder(
-                Priority.PRIORITY_HIGH_ACCURACY, 1500L
-            ).apply {
-                setMinUpdateIntervalMillis(1000L)
-            }.build()
-
-            val locationCallback = object : LocationCallback() {
-                override fun onLocationResult(result: LocationResult) {
-                    result.lastLocation?.let { location ->
-                        currentLocation = location
-                        currentSpeed = if (location.hasSpeed()) {
-                            String.format("%.0f km/h", location.speed * 3.6)
-                        } else "0 km/h"
-                    }
-                }
+            val locationListener = android.location.LocationListener { location ->
+                currentLocation = location
+                currentSpeed = if (location.hasSpeed()) {
+                    String.format("%.0f km/h", location.speed * 3.6)
+                } else "0 km/h"
             }
 
-            fusedLocationClient.requestLocationUpdates(
-                locationRequest,
-                locationCallback,
-                Looper.getMainLooper()
-            )
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1500L, 0f, locationListener)
+            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1500L, 0f, locationListener)
         }
     }
 
@@ -107,16 +101,39 @@ fun ReturnHomeScreen(
         }
     }
 
-    LaunchedEffect(routePoints) {
+    LaunchedEffect(isMapReady, routeToHome) {
+        if (!isMapReady || mapInstance == null) return@LaunchedEffect
+        val map = mapInstance!!
+
+        map.clear()
+
         if (routePoints.isNotEmpty()) {
+            map.addPolyline(
+                PolylineOptions()
+                    .addAll(routePoints)
+                    .color(android.graphics.Color.rgb(0, 255, 0))
+                    .width(14f)
+            )
+
             val allPts = routePoints.toMutableList()
             currentLocation?.let { loc ->
                 allPts.add(LatLng(loc.latitude, loc.longitude))
             }
             val midLat = allPts.map { it.latitude }.let { (it.min() + it.max()) / 2.0 }
             val midLng = allPts.map { it.longitude }.let { (it.min() + it.max()) / 2.0 }
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(LatLng(midLat, midLng), 12f)
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 12.0))
         }
+
+        homePoint?.let {
+            map.addMarker(MarkerOptions().setPosition(it).setTitle("Domicile"))
+        }
+    }
+
+    LaunchedEffect(isMapReady, currentLocation) {
+        if (!isMapReady || mapInstance == null || currentLocation == null) return@LaunchedEffect
+        mapInstance?.animateCamera(CameraUpdateFactory.newLatLngZoom(
+            LatLng(currentLocation!!.latitude, currentLocation!!.longitude), 16.0
+        ))
     }
 
     LaunchedEffect(currentLocation, routeToHome) {
@@ -191,11 +208,14 @@ fun ReturnHomeScreen(
         }
     }
 
-    LaunchedEffect(currentLocation) {
-        currentLocation?.let { loc ->
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(
-                LatLng(loc.latitude, loc.longitude), 16f
-            )
+    DisposableEffect(Unit) {
+        mapView.onCreate(null)
+        mapView.onStart()
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onStop()
+            mapView.onDestroy()
         }
     }
 
@@ -241,30 +261,18 @@ fun ReturnHomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            GoogleMap(
+            AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState,
-                properties = MapProperties(isMyLocationEnabled = true),
-                uiSettings = MapUiSettings(
-                    myLocationButtonEnabled = true,
-                    zoomControlsEnabled = false
-                )
-            ) {
-                if (routePoints.isNotEmpty()) {
-                    Polyline(
-                        points = routePoints,
-                        color = ComposeColor(0xFF00FF00),
-                        width = 14f
-                    )
+                factory = {
+                    mapView.getMapAsync { map ->
+                        mapInstance = map
+                        map.setStyle(Style.Builder().fromUrl("https://tiles.openfreemap.org/styles/liberty")) {
+                            isMapReady = true
+                        }
+                    }
+                    mapView
                 }
-
-                homePoint?.let {
-                    Marker(
-                        state = MarkerState(position = it),
-                        title = "Domicile"
-                    )
-                }
-            }
+            )
 
             AnimatedVisibility(
                 visible = currentInstruction.isNotBlank(),
@@ -279,63 +287,22 @@ fun ReturnHomeScreen(
                     nextInstruction = nextInstruction,
                     nextDistance = nextInstructionDistance,
                     isRecalculating = isRecalculating,
-                    phase = NavigationPhase.TO_HOME
+                    eta = etaText,
+                    distance = distanceText
                 )
             }
 
-            ReturnHomeBottomPanel(
-                eta = etaText,
-                distance = distanceText,
-                homeAddress = settings.homeAddress,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ReturnHomeBottomPanel(
-    eta: String,
-    distance: String,
-    homeAddress: String,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Surface(
-            color = ComposeColor.White,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            shadowElevation = 12.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            if (isRecalculating) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .background(ComposeColor.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                        .padding(16.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Retour domicile",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Emerald500,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = homeAddress.ifBlank { "Non défini" },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        StatItem(value = eta, label = "Arrivée", icon = Icons.Default.Schedule)
-                        StatItem(value = distance, label = "Distance", icon = Icons.Default.Route)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(color = ComposeColor.White, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Recalcul...", color = ComposeColor.White)
                     }
                 }
             }
@@ -344,127 +311,68 @@ private fun ReturnHomeBottomPanel(
 }
 
 @Composable
-private fun InstructionCard(
+fun InstructionCard(
     instruction: String,
     nextInstruction: String,
     nextDistance: String,
     isRecalculating: Boolean,
-    phase: NavigationPhase
+    eta: String,
+    distance: String
 ) {
-    val phaseColor = when (phase) {
-        NavigationPhase.TO_PICKUP -> Rose500
-        NavigationPhase.TO_DESTINATION -> Indigo500
-        NavigationPhase.TO_HOME -> Emerald500
-        NavigationPhase.COMPLETED -> Slate500
-    }
-
-    if (isRecalculating) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = ComposeColor.White,
-            shadowElevation = 8.dp
-        ) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = ComposeColor.White.copy(alpha = 0.95f),
+        shadowElevation = 8.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = phaseColor, strokeWidth = 3.dp)
+                Icon(
+                    Icons.Default.Navigation,
+                    contentDescription = null,
+                    tint = ComposeColor(0xFF10B981),
+                    modifier = Modifier.size(28.dp)
+                )
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("Recalcul de l'itinéraire...", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-        }
-    } else {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = ComposeColor.White,
-            shadowElevation = 8.dp
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = phaseColor.copy(alpha = 0.15f),
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = getDirectionIcon(instruction),
-                                contentDescription = null,
-                                tint = phaseColor,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        instruction,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (nextInstruction.isNotBlank()) {
                         Text(
-                            text = instruction,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                if (nextInstruction.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider(color = Slate100)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.TrendingFlat,
-                            contentDescription = null,
-                            tint = Slate400,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Dans $nextDistance : $nextInstruction",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Slate600,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            "Puis $nextInstruction dans $nextDistance",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Slate500
                         )
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-private fun StatItem(value: String, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = Slate400, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Slate900
-            )
-        }
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Slate500)
-    }
-}
+            if (isRecalculating) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Recalcul de l'itinéraire...", style = MaterialTheme.typography.bodySmall, color = Amber500)
+                }
+            }
 
-private fun getDirectionIcon(instruction: String): androidx.compose.ui.graphics.vector.ImageVector {
-    return when {
-        instruction.contains("tourner", ignoreCase = true) -> Icons.Default.TurnRight
-        instruction.contains("gauche", ignoreCase = true) -> Icons.Default.TurnLeft
-        instruction.contains("droite", ignoreCase = true) -> Icons.Default.TurnRight
-        instruction.contains("rond-point", ignoreCase = true) -> Icons.Default.Loop
-        instruction.contains("continuer", ignoreCase = true) -> Icons.Default.Straight
-        instruction.contains("départ", ignoreCase = true) -> Icons.Default.PlayArrow
-        instruction.contains("arrivée", ignoreCase = true) -> Icons.Default.Flag
-        else -> Icons.Default.Navigation
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Distance", style = MaterialTheme.typography.labelSmall, color = Slate500)
+                    Text(distance, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("ETA", style = MaterialTheme.typography.labelSmall, color = Slate500)
+                    Text(eta, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }

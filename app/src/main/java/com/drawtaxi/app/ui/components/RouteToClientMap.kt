@@ -1,15 +1,16 @@
 package com.drawtaxi.app.ui.components
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
+import android.location.LocationManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,20 +19,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.logic.routing.fetchRoute
 import com.drawtaxi.app.logic.routing.RouteInfo
 import com.drawtaxi.app.ui.theme.*
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.Style
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.annotations.MarkerOptions
+import org.maplibre.android.annotations.PolylineOptions
 import java.util.Locale
 
 @Composable
@@ -49,19 +52,22 @@ fun RouteToClientMap(
     var isLoading by remember { mutableStateOf(true) }
     var distanceKm by remember { mutableStateOf<Double?>(null) }
     var durationMin by remember { mutableStateOf<Int?>(null) }
+    var isMapReady by remember { mutableStateOf(false) }
+    var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
 
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(48.39, -4.49), 10f)
+    val mapView = remember {
+        MapView(context)
     }
 
     LaunchedEffect(pickupAddress) {
         scope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                        val location = fusedLocationClient.lastLocation.await()
-                        location?.let {
+                        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                        val lastKnown = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                            ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                        lastKnown?.let {
                             currentLocation = LatLng(it.latitude, it.longitude)
                         }
                     }
@@ -99,16 +105,55 @@ fun RouteToClientMap(
         }
     }
 
-    LaunchedEffect(routePoints) {
+    LaunchedEffect(isMapReady, routePoints, currentLocation, pickupLocation) {
+        if (!isMapReady || mapInstance == null) return@LaunchedEffect
+        val map = mapInstance!!
+
+        map.clear()
+
+        currentLocation?.let {
+            map.addMarker(MarkerOptions().setPosition(it).setTitle("Ma position"))
+        }
+
+        pickupLocation?.let {
+            map.addMarker(MarkerOptions().setPosition(it).setTitle("Point de rendez-vous"))
+        }
+
         if (routePoints.isNotEmpty()) {
+            map.addPolyline(
+                PolylineOptions()
+                    .addAll(routePoints)
+                    .color(android.graphics.Color.rgb(76, 175, 80))
+                    .width(10f)
+            )
+
             val allPoints = routePoints.toMutableList()
             currentLocation?.let { allPoints.add(it) }
             pickupLocation?.let { allPoints.add(it) }
             if (allPoints.isNotEmpty()) {
                 val midLat = allPoints.map { it.latitude }.let { (it.min() + it.max()) / 2.0 }
                 val midLng = allPoints.map { it.longitude }.let { (it.min() + it.max()) / 2.0 }
-                cameraPositionState.position = CameraPosition.fromLatLngZoom(LatLng(midLat, midLng), 12f)
+                map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 12.0))
             }
+        } else if (currentLocation != null && pickupLocation != null) {
+            map.addPolyline(
+                PolylineOptions()
+                    .add(currentLocation!!)
+                    .add(pickupLocation!!)
+                    .color(android.graphics.Color.rgb(255, 152, 0))
+                    .width(6f)
+            )
+        }
+    }
+
+    DisposableEffect(Unit) {
+        mapView.onCreate(null)
+        mapView.onStart()
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onStop()
+            mapView.onDestroy()
         }
     }
 
@@ -163,41 +208,18 @@ fun RouteToClientMap(
                         )
                     }
                 } else if (currentLocation != null || pickupLocation != null) {
-                    GoogleMap(
+                    AndroidView(
                         modifier = Modifier.fillMaxSize(),
-                        cameraPositionState = cameraPositionState,
-                        uiSettings = MapUiSettings(zoomControlsEnabled = false)
-                    ) {
-                        currentLocation?.let {
-                            Marker(
-                                state = MarkerState(position = it),
-                                title = "Ma position",
-                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)
-                            )
+                        factory = {
+                            mapView.getMapAsync { map ->
+                                mapInstance = map
+                                map.setStyle(Style.Builder().fromUrl("https://tiles.openfreemap.org/styles/liberty")) {
+                                    isMapReady = true
+                                }
+                            }
+                            mapView
                         }
-
-                        pickupLocation?.let {
-                            Marker(
-                                state = MarkerState(position = it),
-                                title = "Point de rendez-vous",
-                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
-                            )
-                        }
-
-                        if (routePoints.isNotEmpty()) {
-                            Polyline(
-                                points = routePoints,
-                                color = Color(0xFF4CAF50),
-                                width = 10f
-                            )
-                        } else if (currentLocation != null && pickupLocation != null) {
-                            Polyline(
-                                points = listOf(currentLocation!!, pickupLocation!!),
-                                color = Color(0xFFFF9800),
-                                width = 6f
-                            )
-                        }
-                    }
+                    )
                 } else {
                     Box(
                         modifier = Modifier.fillMaxSize().background(Slate200),

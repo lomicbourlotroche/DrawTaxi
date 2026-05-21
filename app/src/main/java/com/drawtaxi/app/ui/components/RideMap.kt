@@ -1,6 +1,5 @@
 package com.drawtaxi.app.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
@@ -8,15 +7,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import com.drawtaxi.app.logic.geocoding.GeocodingService
 import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.theme.Slate400
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.annotations.MarkerOptions
+import org.maplibre.android.annotations.PolylineOptions
 
 @Composable
 fun RideMap(
@@ -24,12 +27,15 @@ fun RideMap(
     arrival: String,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var points by remember { mutableStateOf<Pair<LatLng?, LatLng?>>(null to null) }
     var routePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isMapReady by remember { mutableStateOf(false) }
+    var mapInstance by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
 
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(46.603354, 1.888334), 5f)
+    val mapView = remember {
+        MapView(context)
     }
 
     LaunchedEffect(departure, arrival) {
@@ -59,15 +65,44 @@ fun RideMap(
         }
     }
 
-    LaunchedEffect(routePoints) {
+    LaunchedEffect(isMapReady, routePoints, points) {
+        if (!isMapReady || mapInstance == null) return@LaunchedEffect
+        val map = mapInstance!!
+
         if (routePoints.isNotEmpty()) {
+            map.clear()
+            map.addPolyline(
+                PolylineOptions()
+                    .addAll(routePoints)
+                    .color(android.graphics.Color.BLUE)
+                    .width(12f)
+            )
+
             val midLat = routePoints.map { it.latitude }.let { (it.min() + it.max()) / 2.0 }
             val midLng = routePoints.map { it.longitude }.let { (it.min() + it.max()) / 2.0 }
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(LatLng(midLat, midLng), 12f)
+            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 12.0))
+        }
+
+        points.first?.let {
+            map.addMarker(MarkerOptions().setPosition(it).setTitle("Départ: $departure"))
+        }
+        points.second?.let {
+            map.addMarker(MarkerOptions().setPosition(it).setTitle("Arrivée: $arrival"))
         }
     }
 
-    Box(modifier = modifier.background(Slate400.copy(alpha = 0.1f))) {
+    DisposableEffect(Unit) {
+        mapView.onCreate(null)
+        mapView.onStart()
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onStop()
+            mapView.onDestroy()
+        }
+    }
+
+    Box(modifier = modifier) {
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
@@ -75,35 +110,20 @@ fun RideMap(
         } else {
             val (start, end) = points
             if (start != null || end != null) {
-                GoogleMap(
+                AndroidView(
                     modifier = Modifier.fillMaxSize(),
-                    cameraPositionState = cameraPositionState,
-                    uiSettings = MapUiSettings(zoomControlsEnabled = true)
-                ) {
-                    if (routePoints.isNotEmpty()) {
-                        Polyline(
-                            points = routePoints,
-                            color = Color.Blue,
-                            width = 12f
-                        )
+                    factory = {
+                        mapView.getMapAsync { map ->
+                            mapInstance = map
+                            map.setStyle(Style.Builder().fromUrl("https://tiles.openfreemap.org/styles/liberty")) {
+                                isMapReady = true
+                            }
+                        }
+                        mapView
                     }
-
-                    start?.let {
-                        Marker(
-                            state = MarkerState(position = it),
-                            title = "Départ: $departure"
-                        )
-                    }
-
-                    end?.let {
-                        Marker(
-                            state = MarkerState(position = it),
-                            title = "Arrivée: $arrival"
-                        )
-                    }
-                }
+                )
             } else {
-                Text("Impossible de localiser les adresses", modifier = Modifier.align(Alignment.Center))
+                Text("Impossible de localiser les adresses")
             }
         }
     }

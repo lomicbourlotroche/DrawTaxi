@@ -17,6 +17,7 @@ import com.drawtaxi.app.MainActivity
 import com.drawtaxi.app.R
 import com.drawtaxi.app.data.TaxiRepository
 import com.drawtaxi.app.data.local.AppDatabase
+import com.drawtaxi.app.data.local.SecureCredentialsManager
 import com.drawtaxi.app.data.local.SettingsManager
 import com.drawtaxi.app.logic.messaging.NotificationHelper
 import com.drawtaxi.app.logic.sms.AiSmsParser
@@ -151,7 +152,11 @@ class OvhImapService : Service() {
             return
         }
 
-        if (settings.ovhSmtpUsername.isBlank() || settings.ovhSmtpPassword.isBlank()) {
+        val secureCreds = SecureCredentialsManager(this)
+        val username = secureCreds.ovhSmtpUsername.ifBlank { settings.ovhSmtpUsername }
+        val password = secureCreds.ovhSmtpPassword.ifBlank { settings.ovhSmtpPassword }
+
+        if (username.isBlank() || password.isBlank()) {
             Log.w(TAG, "Identifiants OVH non configurés")
             return
         }
@@ -171,8 +176,8 @@ class OvhImapService : Service() {
             store.connect(
                 settings.ovhImapServer,
                 settings.ovhImapPort,
-                settings.ovhSmtpUsername,
-                settings.ovhSmtpPassword
+                username,
+                password
             )
 
             val inbox = store.getFolder(settings.ovhImapFolder)

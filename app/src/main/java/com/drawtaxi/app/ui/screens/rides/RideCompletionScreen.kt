@@ -46,8 +46,9 @@ fun RideCompletionScreen(
         distanceKm = distanceKm.toDoubleOrNull() ?: 0.0,
         waitMinutes = ride.waitMinutes,
         dateTime = now,
-        pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
-        baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
+        pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 2.50,
+        baseFare = settings.basePrice.toDoubleOrNull() ?: 9.00,
+        minDistanceKm = settings.minDistanceKm.toDoubleOrNull() ?: 3.6,
         nightSurchargePercent = settings.nightSurchargePercent,
         sundaySurchargePercent = settings.sundaySurchargePercent,
         holidaySurchargePercent = settings.holidaySurchargePercent,
@@ -239,15 +240,8 @@ fun RideCompletionScreen(
                         }
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("TVA transport (10%)", color = Slate500)
-                            Text(String.format("%.2f €", priceBreakdown.tvaTransport), fontWeight = FontWeight.Medium)
-                        }
-                        
-                        if (ride.waitMinutes > 0) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("TVA attente (20%)", color = Slate500)
-                                Text(String.format("%.2f €", priceBreakdown.tvaWaitTime), fontWeight = FontWeight.Medium)
-                            }
+                            Text("TVA (10%)", color = Slate500)
+                            Text(String.format("%.2f €", priceBreakdown.tvaAmount), fontWeight = FontWeight.Medium)
                         }
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

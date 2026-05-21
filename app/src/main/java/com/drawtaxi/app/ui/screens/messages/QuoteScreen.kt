@@ -22,7 +22,8 @@ import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.MessageChannel
 import com.drawtaxi.app.data.Quote
 import com.drawtaxi.app.data.QuoteStatus
-import com.drawtaxi.app.data.RideRequest
+import com.drawtaxi.app.data.RideRequest
+import com.drawtaxi.app.ui.theme.*
 import com.drawtaxi.app.ui.components.TaxiCard
 import com.drawtaxi.app.ui.theme.*
 import java.text.SimpleDateFormat
@@ -118,12 +119,13 @@ fun QuoteScreen(
                         )
 
                         val now = java.util.Calendar.getInstance()
-                        val priceBreakdown = com.drawtaxi.app.logic.pricing.PriceEngine.calculate(
-                            distanceKm = distanceKm.toDoubleOrNull() ?: 0.0,
-                            dateTime = now,
-                            pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
-                            baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
-                            nightSurchargePercent = settings.nightSurchargePercent,
+                    val priceBreakdown = com.drawtaxi.app.logic.pricing.PriceEngine.calculate(
+                        distanceKm = ride.distanceKm,
+                        dateTime = java.util.Calendar.getInstance(),
+                        pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 2.50,
+                        baseFare = settings.basePrice.toDoubleOrNull() ?: 9.00,
+                        minDistanceKm = settings.minDistanceKm.toDoubleOrNull() ?: 3.6,
+                        nightSurchargePercent = settings.nightSurchargePercent,
                             sundaySurchargePercent = settings.sundaySurchargePercent,
                             holidaySurchargePercent = settings.holidaySurchargePercent,
                             euroPerMinute = settings.euroPerMinute,
@@ -180,13 +182,46 @@ fun QuoteScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = "Canal d'envoi:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val distDomicile = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: 5.0
+                        val coutDeplacement = distDomicile * settings.coutParKmDeplacement
+                        val enteredPrice = price.toDoubleOrNull() ?: calculatedPrice
+                        val profit = if (enteredPrice > 0) ((enteredPrice - coutDeplacement) / enteredPrice) * 100 else 0.0
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = if (profit >= 70) Emerald500.copy(alpha = 0.1f) else if (profit >= 50) Amber500.copy(alpha = 0.1f) else Red500.copy(alpha = 0.1f)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Rentabilité estimée", style = MaterialTheme.typography.labelMedium, color = Slate600)
+                                    Text(
+                                        text = String.format("%.0f%%", profit),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (profit >= 70) Emerald600 else if (profit >= 50) Amber600 else Red600
+                                    )
+                                }
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Coût déplacement", style = MaterialTheme.typography.labelSmall, color = Slate500)
+                                    Text(String.format("%.2f €", coutDeplacement), style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+
+                            text = "Canal d'envoi:",
+
+                            style = MaterialTheme.typography.bodyMedium,
+
+                            fontWeight = FontWeight.Medium
+
+                        )
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),

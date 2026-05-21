@@ -38,10 +38,12 @@ import com.drawtaxi.app.ui.theme.Rose700
 import com.drawtaxi.app.ui.theme.Emerald500
 import androidx.compose.ui.platform.LocalContext
 import android.util.Log
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.*
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.annotations.MarkerOptions
+import org.maplibre.android.annotations.PolylineOptions
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,8 +85,9 @@ fun RideCreateScreen(
         val priceBreakdown = com.drawtaxi.app.logic.pricing.PriceEngine.calculate(
             distanceKm = dist,
             dateTime = now,
-            pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
-            baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
+            pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 2.50,
+            baseFare = settings.basePrice.toDoubleOrNull() ?: 9.00,
+            minDistanceKm = settings.minDistanceKm.toDoubleOrNull() ?: 3.6,
             nightSurchargePercent = settings.nightSurchargePercent,
             sundaySurchargePercent = settings.sundaySurchargePercent,
             holidaySurchargePercent = settings.holidaySurchargePercent,
@@ -503,24 +506,57 @@ fun RideCreateScreen(
                 }
 
                 if (depLatLng != null && arrLatLng != null) {
-                    val mapCameraState = rememberCameraPositionState {
-                        position = CameraPosition.fromLatLngZoom(
-                            LatLng(
-                                (depLatLng!!.latitude + arrLatLng!!.latitude) / 2,
-                                (depLatLng!!.longitude + arrLatLng!!.longitude) / 2
-                            ),
-                            11f
-                        )
+                    val context = LocalContext.current
+                    val mapView = remember {
+                        MapView(context)
                     }
 
-                    LaunchedEffect(depLatLng, arrLatLng) {
+                    var isMapReady by remember { mutableStateOf(false) }
+                    var mapInstance by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
+
+                    LaunchedEffect(isMapReady, routeLatLngs, depLatLng, arrLatLng) {
+                        if (!isMapReady || mapInstance == null) return@LaunchedEffect
+                        val map = mapInstance!!
+
+                        map.clear()
+
                         if (routeLatLngs.isNotEmpty()) {
                             val lats = routeLatLngs.map { it.latitude }
                             val lngs = routeLatLngs.map { it.longitude }
-                            mapCameraState.position = CameraPosition.fromLatLngZoom(
-                                LatLng((lats.min() + lats.max()) / 2, (lngs.min() + lngs.max()) / 2),
-                                12f
+                            map.animateCamera(CameraUpdateFactory.newLatLngZoom(
+                                LatLng((lats.min() + lats.max()) / 2, (lngs.min() + lngs.max()) / 2), 12.0
+                            ))
+                            map.addPolyline(
+                                PolylineOptions()
+                                    .addAll(routeLatLngs)
+                                    .color(android.graphics.Color.rgb(59, 130, 246))
+                                    .width(6f)
                             )
+                        } else {
+                            map.animateCamera(CameraUpdateFactory.newLatLngZoom(
+                                LatLng(
+                                    (depLatLng!!.latitude + arrLatLng!!.latitude) / 2,
+                                    (depLatLng!!.longitude + arrLatLng!!.longitude) / 2
+                                ), 11.0
+                            ))
+                        }
+
+                        depLatLng?.let {
+                            map.addMarker(MarkerOptions().setPosition(it).setTitle("Départ"))
+                        }
+                        arrLatLng?.let {
+                            map.addMarker(MarkerOptions().setPosition(it).setTitle("Arrivée"))
+                        }
+                    }
+
+                    DisposableEffect(Unit) {
+                        mapView.onCreate(null)
+                        mapView.onStart()
+                        mapView.onResume()
+                        onDispose {
+                            mapView.onPause()
+                            mapView.onStop()
+                            mapView.onDestroy()
                         }
                     }
 
@@ -528,33 +564,18 @@ fun RideCreateScreen(
                         modifier = Modifier.fillMaxWidth().height(220.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        GoogleMap(
+                        androidx.compose.ui.viewinterop.AndroidView(
                             modifier = Modifier.fillMaxSize(),
-                            cameraPositionState = mapCameraState,
-                            uiSettings = MapUiSettings(
-                                zoomControlsEnabled = true,
-                                scrollGesturesEnabled = true,
-                                myLocationButtonEnabled = false
-                            )
-                        ) {
-                            depLatLng?.let {
-                                Marker(state = MarkerState(position = it), title = "Départ")
+                            factory = {
+                                mapView.getMapAsync { map ->
+                                    mapInstance = map
+                                    map.setStyle(Style.Builder().fromUrl("https://tiles.openfreemap.org/styles/liberty")) {
+                                        isMapReady = true
+                                    }
+                                }
+                                mapView
                             }
-                            if (routeLatLngs.isNotEmpty()) {
-                                Polyline(
-                                    points = routeLatLngs,
-                                    color = Color(0xFF3B82F6),
-                                    width = 6f
-                                )
-                            }
-                            arrLatLng?.let {
-                                Marker(
-                                    state = MarkerState(position = it),
-                                    title = "Arrivée",
-                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
-                                )
-                            }
-                        }
+                        )
                     }
                 }
             }

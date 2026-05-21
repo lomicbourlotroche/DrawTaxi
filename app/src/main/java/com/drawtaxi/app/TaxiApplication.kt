@@ -4,7 +4,10 @@ import android.Manifest
 import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.TaxiRepository
@@ -28,9 +31,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.drawtaxi.app.logic.messaging.NotificationHelper
-import com.drawtaxi.app.logic.routing.OsrmRoutingService
-import com.drawtaxi.app.logic.routing.fetchRouteApiKey
-import com.drawtaxi.app.logic.geocoding.GeocodingService
+
 
 class TaxiApplication : Application() {
     private val database by lazy { AppDatabase.getDatabase(this) }
@@ -55,21 +56,29 @@ class TaxiApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels()
+        requestBatteryOptimizationExemption()
         
-        // Synchroniser la clé Google Maps depuis les paramètres
-        applicationScope.launch {
-            repository.settings.collect { settings ->
-                val key = settings.googleMapsApiKey.ifBlank { "YOUR_GOOGLE_MAPS_API_KEY" }
-                OsrmRoutingService.apiKey = key
-                GeocodingService.apiKey = key
-                fetchRouteApiKey = key
-            }
-        }
-
-        // Démarrer les services de surveillance
         startSmsServiceIfEnabled()
         startImapServiceIfEnabled()
         schedulePeriodicSmsScan()
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    Log.d(TAG, "Demande exemption batterie envoyée")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Impossible de demander exemption batterie: ${e.message}")
+                }
+            }
+        }
     }
 
     private fun schedulePeriodicSmsScan() {

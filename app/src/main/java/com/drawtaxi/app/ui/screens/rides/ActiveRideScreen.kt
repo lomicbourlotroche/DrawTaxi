@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.net.Uri
-import android.os.Looper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,7 +28,7 @@ import com.drawtaxi.app.data.RideStatus
 import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.components.NavigationMapView
 import com.drawtaxi.app.ui.theme.*
-import com.google.android.gms.location.*
+import android.location.LocationManager
 
 // Étapes de navigation simplifiées
 enum class NavigationStep(val label: String, val description: String) {
@@ -63,14 +62,15 @@ fun ActiveRideScreen(
     var totalDistance by remember { mutableStateOf(0.0) }
     var showCancelDialog by remember { mutableStateOf(false) }
 
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
 
-    // Géocodage des adresses
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            startLocationUpdates(context, fusedLocationClient) { location ->
+            val listener = android.location.LocationListener { location ->
                 currentLocation = location
             }
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 0f, listener)
+            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 2000L, 0f, listener)
         }
 
         if (ride.departure.isNotBlank()) {
@@ -402,20 +402,4 @@ private fun StatItem(value: String, label: String) {
     }
 }
 
-private fun startLocationUpdates(context: Context, client: FusedLocationProviderClient, onLocation: (Location) -> Unit) {
-    val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L).apply {
-        setMinUpdateIntervalMillis(1000L)
-    }.build()
 
-    if (ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-    ) {
-        client.requestLocationUpdates(request, object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let(onLocation)
-            }
-        }, Looper.getMainLooper())
-    }
-}

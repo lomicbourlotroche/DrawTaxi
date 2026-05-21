@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -26,8 +27,6 @@ data class GeocodingResult(
 object GeocodingService {
 
     private const val TAG = "GeocodingService"
-    private const val GOOGLE_GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
-    var apiKey: String = "YOUR_GOOGLE_MAPS_API_KEY"
     private const val PHOTON_BASE = "https://photon.komoot.io/api"
     private const val NOMINATIM_BASE = "https://nominatim.openstreetmap.org/search"
 
@@ -39,95 +38,98 @@ object GeocodingService {
 
     suspend fun geocode(address: String, context: android.content.Context? = null): Location? {
         return withContext(Dispatchers.IO) {
-            log("Geocoding: $address")
+            withTimeoutOrNull(15_000L) {
+                log("Geocoding: $address")
 
-            val variations = AddressNormalizer.normalize(address)
-            log("Generated ${variations.size} variations")
+                // 1. Essai direct avec les variations normalisées
+                val variations = AddressNormalizer.normalize(address)
+                log("Generated ${variations.size} variations")
 
-            for ((index, variation) in variations.withIndex()) {
-                log("[$index] Trying: $variation")
+                for ((index, variation) in variations.withIndex()) {
+                    log("[$index] Trying: $variation")
 
-                var result: Location? = tryGoogleGeocoding(variation)
-                if (result != null) {
-                    log("Found via Google Geocoding: ${result.latitude}, ${result.longitude}")
-                    return@withContext result
-                }
-
-                result = tryPhoton(variation)
-                if (result != null) {
-                    log("Found via Photon: ${result.latitude}, ${result.longitude}")
-                    return@withContext result
-                }
-
-                if (index < 5) {
-                    result = tryPhotonWithCity(variation)
+                    var result: Location? = tryPhoton(variation)
                     if (result != null) {
-                        log("Found via Photon+City: ${result.latitude}, ${result.longitude}")
-                        return@withContext result
+                        log("Found via Photon: ${result.latitude}, ${result.longitude}")
+                        return@withTimeoutOrNull result
+                    }
+
+                    if (index < 5) {
+                        result = tryPhotonWithCity(variation)
+                        if (result != null) {
+                            log("Found via Photon+City: ${result.latitude}, ${result.longitude}")
+                            return@withTimeoutOrNull result
+                        }
+                    }
+
+                    if (index < 3) {
+                        result = tryNominatim(variation)
+                        if (result != null) {
+                            log("Found via Nominatim: ${result.latitude}, ${result.longitude}")
+                            return@withTimeoutOrNull result
+                        }
+
+                        result = tryNominatimSimple(variation)
+                        if (result != null) {
+                            log("Found via Nominatim Simple: ${result.latitude}, ${result.longitude}")
+                            return@withTimeoutOrNull result
+                        }
                     }
                 }
 
-                if (index < 3) {
-                    result = tryNominatim(variation)
-                    if (result != null) {
-                        log("Found via Nominatim: ${result.latitude}, ${result.longitude}")
-                        return@withContext result
-                    }
+                // 2. Fallback: Si l'adresse semble incomplète (ex: juste "Gare" ou "Aéroport")
+                val incompleteResult = tryIncompleteAddress(address)
+                if (incompleteResult != null) {
+                    log("Found via incomplete address fallback: ${incompleteResult.latitude}, ${incompleteResult.longitude}")
+                    return@withTimeoutOrNull incompleteResult
+                }
 
-                    result = tryNominatimSimple(variation)
-                    if (result != null) {
-                        log("Found via Nominatim Simple: ${result.latitude}, ${result.longitude}")
-                        return@withContext result
+                // 3. Fallback: Code postal
+                val postalResult = tryPostalCodeMapping(address)
+                if (postalResult != null) {
+                    log("Found via postal code: ${postalResult.latitude}, ${postalResult.longitude}")
+                    return@withTimeoutOrNull postalResult
+                }
+
+                // 4. Fallback ultime: Android Geocoder natif
+                if (context != null) {
+                    val rawResult = tryRawAddress(address, context)
+                    if (rawResult != null) {
+                        log("Found via raw address (Android Geocoder): ${rawResult.latitude}, ${rawResult.longitude}")
+                        return@withTimeoutOrNull rawResult
                     }
                 }
-            }
 
-            val postalResult = tryPostalCodeMapping(address)
-            if (postalResult != null) {
-                log("Found via postal code: ${postalResult.latitude}, ${postalResult.longitude}")
-                return@withContext postalResult
+                log("All strategies failed for: $address")
+                null
             }
-
-            if (context != null) {
-                val rawResult = tryRawAddress(address, context)
-                if (rawResult != null) {
-                    log("Found via raw address: ${rawResult.latitude}, ${rawResult.longitude}")
-                    return@withContext rawResult
-                }
-            }
-
-            log("All strategies failed for: $address")
-            null
         }
     }
 
-    private fun tryGoogleGeocoding(address: String): Location? {
-        return try {
-            val query = java.net.URLEncoder.encode(address, "UTF-8")
-            val url = java.net.URL("$GOOGLE_GEOCODING_URL?address=$query&key=$apiKey&language=fr")
-            val json = fetchJson(url)
-            parseGoogleGeocodingResponse(json)
-        } catch (e: Exception) {
-            Log.w(TAG, "Google Geocoding failed: ${e.message}")
-            null
-        }
-    }
+    private suspend fun tryIncompleteAddress(address: String): Location? {
+        return withContext(Dispatchers.IO) {
+            val lower = address.lowercase()
+            
+            // Points d'intérêt communs à Brest (exemple)
+            val poiLocations = mapOf(
+                "gare" to Pair(48.3897, -4.4706), // Gare de Brest
+                "aéroport" to Pair(48.4475, -4.4185), // Aéroport Brest Bretagne
+                "cdg" to Pair(49.0097, 2.5479), // Charles de Gaulle
+                "orly" to Pair(48.7233, 2.3794), // Orly
+                "centre ville" to Pair(48.3904, -4.4860), // Centre Brest
+                "hôpital" to Pair(48.3775, -4.4577), // Hôpital Cavale Blanche
+                "hopital" to Pair(48.3775, -4.4577)
+            )
 
-    private fun parseGoogleGeocodingResponse(response: String): Location? {
-        return try {
-            val json = JSONObject(response)
-            if (json.optString("status") != "OK") return null
-            val results = json.getJSONArray("results")
-            if (results.length() > 0) {
-                val result = results.getJSONObject(0)
-                val geometry = result.getJSONObject("geometry")
-                val location = geometry.getJSONObject("location")
-                Location("google_geocoding").apply {
-                    latitude = location.getDouble("lat")
-                    longitude = location.getDouble("lng")
+            for ((poi, coords) in poiLocations) {
+                if (lower.contains(poi)) {
+                    log("Matched POI: $poi")
+                    return@withContext Location("poi_fallback").apply {
+                        latitude = coords.first
+                        longitude = coords.second
+                    }
                 }
-            } else null
-        } catch (e: Exception) {
+            }
             null
         }
     }

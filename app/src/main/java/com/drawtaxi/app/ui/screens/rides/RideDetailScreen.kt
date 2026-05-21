@@ -47,8 +47,9 @@ fun RideDetailScreen(
         val priceBreakdown = com.drawtaxi.app.logic.pricing.PriceEngine.calculate(
             distanceKm = ride.distanceKm,
             dateTime = java.util.Calendar.getInstance(),
-            pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 1.20,
-            baseFare = settings.basePrice.toDoubleOrNull() ?: 2.60,
+            pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 2.50,
+            baseFare = settings.basePrice.toDoubleOrNull() ?: 9.00,
+            minDistanceKm = settings.minDistanceKm.toDoubleOrNull() ?: 3.6,
             nightSurchargePercent = settings.nightSurchargePercent,
             sundaySurchargePercent = settings.sundaySurchargePercent,
             holidaySurchargePercent = settings.holidaySurchargePercent,

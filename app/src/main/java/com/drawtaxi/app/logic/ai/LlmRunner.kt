@@ -35,7 +35,7 @@ object LlmRunner {
     fun isNativeLibraryAvailable(): Boolean = nativeLibraryLoaded
 
     @Synchronized
-    fun run(modelPath: String, prompt: String): String? {
+    fun run(modelPath: String, prompt: String, timeoutMs: Long = 60_000L): String? {
         if (!nativeLibraryLoaded) {
             Log.e(TAG, "Native library not loaded, cannot run inference")
             return null
@@ -63,12 +63,24 @@ object LlmRunner {
         }
 
         _isLoaded = true
-        try {
-            Log.d(TAG, "Running local inference with llama.cpp, prompt length=${prompt.length}")
-            return llamaRunInference(ctx, prompt, maxTokens = 256)
+        return try {
+            Log.d(TAG, "Running local inference with llama.cpp, prompt length=${prompt.length}, timeout=${timeoutMs}ms")
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+                    llamaRunInference(ctx, prompt, maxTokens = 256)
+                }
+            }?.also {
+                Log.d(TAG, "Inference completed successfully")
+            } ?: run {
+                Log.w(TAG, "Inference timed out after ${timeoutMs}ms")
+                null
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            Log.w(TAG, "Inference cancelled due to timeout")
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Inference failed: ${e.message}")
-            return null
+            null
         } finally {
             try {
                 llamaFreeModel(ctx)

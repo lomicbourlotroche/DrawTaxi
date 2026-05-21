@@ -23,6 +23,7 @@ class SettingsManager(private val context: Context) {
         val VEHICLE = stringPreferencesKey("vehicle")
         val PRICE_PER_KM = stringPreferencesKey("price_per_km")
         val BASE_PRICE = stringPreferencesKey("base_price")
+        val MIN_DISTANCE_KM = stringPreferencesKey("min_distance_km")
         val BRAND_COLOR = longPreferencesKey("brand_color")
         val THEME = stringPreferencesKey("theme")
         val DARK_MODE = booleanPreferencesKey("dark_mode")
@@ -60,7 +61,6 @@ class SettingsManager(private val context: Context) {
         val HOME_ADDRESS = stringPreferencesKey("home_address")
         val SMS_SCAN_INTERVAL = intPreferencesKey("sms_scan_interval")
         val AI_ENABLED = booleanPreferencesKey("ai_enabled")
-        val GOOGLE_MAPS_API_KEY = stringPreferencesKey("google_maps_api_key")
         val COUT_PAR_KM_DEPLACEMENT = floatPreferencesKey("cout_par_km_deplacement")
         
         // OVH SMTP
@@ -96,8 +96,9 @@ class SettingsManager(private val context: Context) {
             siret = preferences[Keys.SIRET] ?: "123 456 789 00012",
             tva = preferences[Keys.TVA] ?: "FR 12 123456789",
             vehicle = preferences[Keys.VEHICLE] ?: "Tesla Model 3",
-            pricePerKm = preferences[Keys.PRICE_PER_KM] ?: "1.20",
-            basePrice = preferences[Keys.BASE_PRICE] ?: "2.60",
+            pricePerKm = preferences[Keys.PRICE_PER_KM] ?: "2.50",
+            basePrice = preferences[Keys.BASE_PRICE] ?: "9.00",
+            minDistanceKm = preferences[Keys.MIN_DISTANCE_KM] ?: "3.6",
             brandColor = preferences[Keys.BRAND_COLOR]?.let { Color(it.toULong()) } ?: TaxiRed,
             theme = preferences[Keys.THEME] ?: "modern",
             darkMode = preferences[Keys.DARK_MODE] ?: false,
@@ -135,8 +136,7 @@ class SettingsManager(private val context: Context) {
             homeAddress = preferences[Keys.HOME_ADDRESS] ?: "",
             smsScanIntervalMinutes = preferences[Keys.SMS_SCAN_INTERVAL] ?: 60,
             aiEnabled = preferences[Keys.AI_ENABLED] ?: true,
-            googleMapsApiKey = preferences[Keys.GOOGLE_MAPS_API_KEY] ?: "",
-            coutParKmDeplacement = preferences[Keys.COUT_PAR_KM_DEPLACEMENT]?.toDouble() ?: 0.15,
+            coutParKmDeplacement = preferences[Keys.COUT_PAR_KM_DEPLACEMENT]?.toDouble() ?: 0.10,
             
             // OVH SMTP
             ovhSmtpEnabled = preferences[Keys.OVH_SMTP_ENABLED] ?: false,
@@ -168,6 +168,7 @@ class SettingsManager(private val context: Context) {
             preferences[Keys.VEHICLE] = settings.vehicle
             preferences[Keys.PRICE_PER_KM] = settings.pricePerKm
             preferences[Keys.BASE_PRICE] = settings.basePrice
+            preferences[Keys.MIN_DISTANCE_KM] = settings.minDistanceKm
             preferences[Keys.BRAND_COLOR] = settings.brandColor.value.toLong()
             preferences[Keys.THEME] = settings.theme
             preferences[Keys.DARK_MODE] = settings.darkMode
@@ -205,7 +206,6 @@ class SettingsManager(private val context: Context) {
             preferences[Keys.HOME_ADDRESS] = settings.homeAddress
             preferences[Keys.SMS_SCAN_INTERVAL] = settings.smsScanIntervalMinutes
             preferences[Keys.AI_ENABLED] = settings.aiEnabled
-            preferences[Keys.GOOGLE_MAPS_API_KEY] = settings.googleMapsApiKey
             preferences[Keys.COUT_PAR_KM_DEPLACEMENT] = settings.coutParKmDeplacement.toFloat()
             
             // OVH SMTP

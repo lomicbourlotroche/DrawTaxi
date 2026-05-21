@@ -31,6 +31,7 @@ fun PricingSettingsScreen(
     // Tarifs
     var pricePerKm by remember { mutableStateOf(settings.pricePerKm) }
     var basePrice by remember { mutableStateOf(settings.basePrice) }
+    var minDistanceKm by remember { mutableStateOf(settings.minDistanceKm) }
     var nightSurcharge by remember { mutableStateOf(settings.nightSurchargePercent.toString()) }
     var sundaySurcharge by remember { mutableStateOf(settings.sundaySurchargePercent.toString()) }
     var holidaySurcharge by remember { mutableStateOf(settings.holidaySurchargePercent.toString()) }
@@ -47,7 +48,7 @@ fun PricingSettingsScreen(
     
     // Sauvegarde automatique
     LaunchedEffect(
-        pricePerKm, basePrice, nightSurcharge, sundaySurcharge, holidaySurcharge,
+        pricePerKm, basePrice, minDistanceKm, nightSurcharge, sundaySurcharge, holidaySurcharge,
         nightStartHour, nightEndHour, euroPerMinute,
         coutParKmDeplacement,
         tvaTransport, tvaWait
@@ -57,6 +58,7 @@ fun PricingSettingsScreen(
             settings.copy(
                 pricePerKm = pricePerKm,
                 basePrice = basePrice,
+                minDistanceKm = minDistanceKm,
                 nightSurchargePercent = nightSurcharge.toDoubleOrNull() ?: settings.nightSurchargePercent,
                 sundaySurchargePercent = sundaySurcharge.toDoubleOrNull() ?: settings.sundaySurchargePercent,
                 holidaySurchargePercent = holidaySurcharge.toDoubleOrNull() ?: settings.holidaySurchargePercent,
@@ -110,6 +112,12 @@ fun PricingSettingsScreen(
                         label = "Prise en charge (€)",
                         value = basePrice,
                         onValueChange = { basePrice = it },
+                        brandColor = brandColor
+                    )
+                    PricingInput(
+                        label = "Distance minimale incluse (km)",
+                        value = minDistanceKm,
+                        onValueChange = { minDistanceKm = it },
                         brandColor = brandColor
                     )
                     PricingInput(

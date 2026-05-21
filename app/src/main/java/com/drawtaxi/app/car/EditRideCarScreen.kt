@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.*
+import androidx.core.graphics.drawable.IconCompat
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.local.AppDatabase
@@ -96,6 +97,14 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
                 Row.Builder()
                     .setTitle("Distance")
                     .addText(SpannableString(String.format("%.1f km", distanceKm)))
+                    .setImage(
+                        CarIcon.Builder(
+                            IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_edit)
+                        ).build()
+                    )
+                    .setOnClickListener {
+                        adjustDistance(1.0)
+                    }
                     .build()
             )
 
@@ -103,6 +112,28 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
                 Row.Builder()
                     .setTitle("Prix")
                     .addText(SpannableString(String.format("%.2f €", price)))
+                    .setImage(
+                        CarIcon.Builder(
+                            IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_edit)
+                        ).build()
+                    )
+                    .setOnClickListener {
+                        adjustPrice(5.0)
+                    }
+                    .build()
+            )
+
+            paneBuilder.addAction(
+                Action.Builder()
+                    .setTitle("+1 km")
+                    .setOnClickListener { adjustDistance(1.0) }
+                    .build()
+            )
+
+            paneBuilder.addAction(
+                Action.Builder()
+                    .setTitle("+5€")
+                    .setOnClickListener { adjustPrice(5.0) }
                     .build()
             )
 
@@ -167,6 +198,36 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
             .setTitle("Terminer la course")
             .setHeaderAction(Action.BACK)
             .build()
+    }
+
+    private fun adjustDistance(increment: Double) {
+        distanceKm += increment
+        invalidate()
+        scope.launch {
+            try {
+                repository?.let { repo ->
+                    val rideData = repo.getRideById(rideId)
+                    rideData?.let { repo.updateRide(it.copy(distanceKm = distanceKm)) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to adjust distance", e)
+            }
+        }
+    }
+
+    private fun adjustPrice(increment: Double) {
+        price += increment
+        invalidate()
+        scope.launch {
+            try {
+                repository?.let { repo ->
+                    val rideData = repo.getRideById(rideId)
+                    rideData?.let { repo.updateRide(it.copy(price = price)) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to adjust price", e)
+            }
+        }
     }
 
     private fun completeRide() {

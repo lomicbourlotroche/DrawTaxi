@@ -10,8 +10,7 @@ data class PriceBreakdown(
     val holidaySurcharge: Double,
     val waitTimePrice: Double,
     val subtotalHT: Double,
-    val tvaTransport: Double,
-    val tvaWaitTime: Double,
+    val tvaAmount: Double,
     val totalTTC: Double,
     val isNight: Boolean,
     val isSunday: Boolean,
@@ -20,9 +19,6 @@ data class PriceBreakdown(
 ) {
     val totalSurcharges: Double
         get() = nightSurcharge + sundaySurcharge + holidaySurcharge
-
-    val totalTVA: Double
-        get() = tvaTransport + tvaWaitTime
 
     val summary: String
         get() = buildString {
@@ -33,8 +29,7 @@ data class PriceBreakdown(
             if (isHoliday) appendLine("Majoration férié: ${String.format("%.2f €", holidaySurcharge)}")
             if (waitMinutes > 0) appendLine("Attente ($waitMinutes min): ${String.format("%.2f €", waitTimePrice)}")
             appendLine("Sous-total HT: ${String.format("%.2f €", subtotalHT)}")
-            appendLine("TVA transport (10%): ${String.format("%.2f €", tvaTransport)}")
-            if (waitMinutes > 0) appendLine("TVA attente (20%): ${String.format("%.2f €", tvaWaitTime)}")
+            appendLine("TVA (10%): ${String.format("%.2f €", tvaAmount)}")
             appendLine("TOTAL TTC: ${String.format("%.2f €", totalTTC)}")
         }
 }
@@ -49,8 +44,9 @@ object PriceEngine {
         distanceKm: Double,
         waitMinutes: Int = 0,
         dateTime: Calendar = Calendar.getInstance(),
-        pricePerKm: Double = 1.20,
-        baseFare: Double = 2.60,
+        pricePerKm: Double = 2.50,
+        baseFare: Double = 9.00,
+        minDistanceKm: Double = 3.6,
         nightSurchargePercent: Double = 0.15,
         sundaySurchargePercent: Double = 0.10,
         holidaySurchargePercent: Double = 0.15,
@@ -70,7 +66,11 @@ object PriceEngine {
         val isHoliday = isFrenchHoliday(dayOfYear, year)
 
         val base = baseFare
-        val distanceCost = distanceKm * pricePerKm
+        val distanceCost = if (distanceKm <= minDistanceKm) {
+            0.0
+        } else {
+            (distanceKm - minDistanceKm) * pricePerKm
+        }
         val transportHT = base + distanceCost
 
         var nightCost = 0.0
@@ -91,10 +91,9 @@ object PriceEngine {
 
         val subtotalHT = transportHT + nightCost + sundayCost + holidayCost + waitCost
 
-        val tvaTransport = (transportHT + nightCost + sundayCost + holidayCost) * tvaTransportRate
-        val tvaWait = waitCost * tvaWaitTimeRate
+        val tvaAmount = subtotalHT * tvaTransportRate
 
-        val totalTTC = subtotalHT + tvaTransport + tvaWait
+        val totalTTC = subtotalHT + tvaAmount
 
         return PriceBreakdown(
             basePrice = base,
@@ -104,8 +103,7 @@ object PriceEngine {
             holidaySurcharge = holidayCost,
             waitTimePrice = waitCost,
             subtotalHT = subtotalHT,
-            tvaTransport = tvaTransport,
-            tvaWaitTime = tvaWait,
+            tvaAmount = tvaAmount,
             totalTTC = totalTTC,
             isNight = isNight,
             isSunday = isSunday,

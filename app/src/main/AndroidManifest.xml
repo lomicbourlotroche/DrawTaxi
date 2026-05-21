@@ -45,10 +45,6 @@
         android:theme="@style/Theme.DrawTaxi">
 
         <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="REMPLACER_PAR_VOTRE_CLE_GOOGLE_MAPS" />
-
-        <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 

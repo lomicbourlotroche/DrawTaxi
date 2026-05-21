@@ -258,7 +258,7 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 
             Log.d(TAG, "Running inference with model: ${modelFile.name} (${modelFile.length() / 1024 / 1024} MB)")
 
-            LlmRunner.run(modelFile.absolutePath, prompt)
+            LlmRunner.run(modelFile.absolutePath, prompt, timeoutMs = 60_000L)
         } catch (e: UnsatisfiedLinkError) {
             Log.e(TAG, "Native library not loaded: ${e.message}")
             return null

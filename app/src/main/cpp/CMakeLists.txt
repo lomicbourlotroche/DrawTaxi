@@ -6,8 +6,7 @@ set(JNI_LIBS_DIR ${CMAKE_SOURCE_DIR}/../jniLibs/${ANDROID_ABI})
 add_library(llama-jni SHARED llama-jni.cpp)
 
 target_include_directories(llama-jni PRIVATE 
-    ${CMAKE_SOURCE_DIR}/../../../../../llama.cpp/include
-    ${CMAKE_SOURCE_DIR}/../../../../../llama.cpp/ggml/include
+    ${CMAKE_SOURCE_DIR}
 )
 
 add_library(llama SHARED IMPORTED)

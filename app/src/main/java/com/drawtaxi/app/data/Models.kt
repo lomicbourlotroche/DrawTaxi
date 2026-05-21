@@ -34,8 +34,9 @@ data class AppSettings(
     val siret: String = "123 456 789 00012",
     val tva: String = "FR 12 123456789",
     val vehicle: String = "Tesla Model 3",
-    val pricePerKm: String = "1.20",
-    val basePrice: String = "2.60",
+    val pricePerKm: String = "2.50",
+    val basePrice: String = "9.00",
+    val minDistanceKm: String = "3.6",
     val brandColor: Color = TaxiRed,
     val theme: String = "modern",
     val darkMode: Boolean = false,
@@ -62,7 +63,7 @@ data class AppSettings(
     val statsReportTime: String = "23:59",
     val fuelCostPerKm: Double = 0.12,
     val operatingCostPerHour: Double = 15.0,
-    val coutParKmDeplacement: Double = 0.15,
+    val coutParKmDeplacement: Double = 0.10,
     val nightSurchargePercent: Double = 0.15,
     val sundaySurchargePercent: Double = 0.10,
     val holidaySurchargePercent: Double = 0.15,
@@ -74,7 +75,6 @@ data class AppSettings(
     val homeAddress: String = "",
     val smsScanIntervalMinutes: Int = 60,
     val aiEnabled: Boolean = true,
-    val googleMapsApiKey: String = "",
     
     // Configuration OVH SMTP (envoi mails)
     val ovhSmtpEnabled: Boolean = false,
@@ -158,7 +158,7 @@ data class RideRequest(
             return ((price - coutDeplacement) / price) * 100.0
         }
 
-        fun calculateCoutDeplacement(distanceDomicileKm: Double, coutParKm: Double): Double {
+        fun calculateCoutDeplacement(distanceDomicileKm: Double, coutParKm: Double = 0.10): Double {
             return distanceDomicileKm * coutParKm
         }
     }

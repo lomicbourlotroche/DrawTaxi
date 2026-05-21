@@ -1,18 +1,19 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("kotlin-kapt")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 android {
     namespace = "com.drawtaxi.app"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "com.drawtaxi.app"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -55,9 +56,6 @@ android {
     buildFeatures {
         compose = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.11"
-    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -97,19 +95,20 @@ dependencies {
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
-    kapt("androidx.room:room-compiler:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     
-    // Google Maps
-    implementation("com.google.maps.android:maps-compose:4.3.3")
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
-    implementation("com.google.maps.android:android-maps-utils:3.8.2")
+    // MapLibre Native
+    implementation("org.maplibre.gl:android-sdk:11.12.1") {
+        exclude(group = "org.maplibre.gl", module = "android-sdk-geojson")
+        exclude(group = "org.maplibre.gl", module = "android-sdk-turf")
+    }
 
-    // Location Services
-    implementation("com.google.android.gms:play-services-location:21.1.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    // MapLibre Navigation SDK (turn-by-turn, reroutage automatique)
+    implementation("org.maplibre.navigation:navigation-core:5.0.0-pre11")
+    implementation("org.maplibre.navigation:navigation-ui-android:5.0.0-pre11")
 
     // Android Auto
     implementation("androidx.car.app:app:1.4.0")
@@ -123,6 +122,9 @@ dependencies {
     // JavaMail pour SMTP/IMAP (OVH)
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
+
+    // EncryptedSharedPreferences pour credentials sensibles
+    implementation("androidx.security:security-crypto:1.0.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
