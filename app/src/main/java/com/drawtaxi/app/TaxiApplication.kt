@@ -10,6 +10,8 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
+import org.maplibre.android.MapLibre
+import org.maplibre.android.WellKnownTileServer
 import com.drawtaxi.app.data.TaxiRepository
 import com.drawtaxi.app.data.local.AppDatabase
 import com.drawtaxi.app.data.local.SettingsManager
@@ -55,6 +57,7 @@ class TaxiApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        MapLibre.getInstance(this, "", WellKnownTileServer.MapTiler)
         createNotificationChannels()
         requestBatteryOptimizationExemption()
         

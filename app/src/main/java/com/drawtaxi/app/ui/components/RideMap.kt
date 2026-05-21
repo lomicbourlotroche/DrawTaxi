@@ -111,7 +111,7 @@ fun RideMap(
             val (start, end) = points
             if (start != null || end != null) {
                 AndroidView(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.matchParentSize(),
                     factory = {
                         mapView.getMapAsync { map ->
                             mapInstance = map

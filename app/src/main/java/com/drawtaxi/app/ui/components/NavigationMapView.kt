@@ -126,7 +126,10 @@ fun NavigationMapView(
                     }
                 }
             },
-            modifier = Modifier.fillMaxSize()
+            update = { mapView ->
+                // No-op update logic if needed
+            },
+            modifier = Modifier.matchParentSize()
         )
 
         if (isLoading || isRecalculating) {

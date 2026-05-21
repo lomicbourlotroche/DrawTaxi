@@ -72,6 +72,19 @@ class RideListScreen(carContext: CarContext) : Screen(carContext) {
                             .setOnClickListener { refreshRides() }
                             .build()
                     )
+                    .addAction(
+                        Action.Builder()
+                            .setTitle("Menu")
+                            .setIcon(
+                                CarIcon.Builder(
+                                    IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_more)
+                                ).build()
+                            )
+                            .setOnClickListener { 
+                                screenManager.push(CarMenuScreen(carContext))
+                            }
+                            .build()
+                    )
                     .build()
             )
             .build()

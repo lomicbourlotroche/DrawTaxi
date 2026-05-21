@@ -62,12 +62,16 @@ fun RideDetailScreen(
         priceBreakdown.totalTTC
     }
 
-    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: ride.distanceKm * 0.3
+    val distanceDomicileKm = if (settings.coutParKmDeplacement > 0 && ride.fuelCost > 0) {
+        (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() } ?: (ride.distanceKm * 0.3)
+    } else {
+        ride.distanceKm * 0.3
+    }
     val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
-    val totalCost = coutDeplacement
+    val totalCost = coutDeplacement.takeIf { it.isFinite() } ?: 0.0
     val netProfit = actualPrice - totalCost
-    val profitability = if (actualPrice > 0) {
-        (netProfit / actualPrice) * 100
+    val profitability = if (actualPrice > 0.001) {
+        ((netProfit / actualPrice) * 100).takeIf { it.isFinite() } ?: 0.0
     } else 0.0
 
     Scaffold(

@@ -21,7 +21,8 @@ object LlamaModelManager {
 
     private const val TAG = "LlamaModelManager"
     private const val MODEL_FILENAME = "llama-3.2-3b-instruct-q4_k_m.gguf"
-    private const val MODEL_URL = "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf?download=true"
+    // URL directe vers le modèle stable Llama-3.2-3B-Instruct-Q4_K_M
+    private const val MODEL_URL = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true"
     private const val EXPECTED_SIZE_BYTES = 2_000_000_000L
     private const val MIN_VALID_SIZE = 1_800_000_000L
     private const val CHUNK_SIZE = 8192
@@ -50,10 +51,12 @@ object LlamaModelManager {
     private var _downloadedBytes = 0L
 
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.MINUTES)
-        .readTimeout(5, TimeUnit.MINUTES)
-        .writeTimeout(5, TimeUnit.MINUTES)
+        .connectTimeout(10, TimeUnit.MINUTES)
+        .readTimeout(10, TimeUnit.MINUTES)
+        .writeTimeout(10, TimeUnit.MINUTES)
         .retryOnConnectionFailure(true)
+        .followRedirects(true)
+        .followSslRedirects(true)
         .build()
 
     fun getModelFile(context: Context): File {
