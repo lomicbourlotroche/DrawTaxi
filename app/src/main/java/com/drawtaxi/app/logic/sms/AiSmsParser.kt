@@ -3,6 +3,7 @@ package com.drawtaxi.app.logic.sms
 import android.content.Context
 import android.util.Log
 import com.drawtaxi.app.data.RideRequest
+import com.drawtaxi.app.logic.ai.LlamaModelManager
 import com.drawtaxi.app.logic.ai.LlmRunner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -87,6 +88,8 @@ object AiSmsParser {
     private const val MAX_RETRIES = 3
     private const val TIMEOUT_SECONDS = 90
 
+    private val REQUIRED_JSON_FIELDS = setOf("departure", "arrival", "time")
+
     private val taxiClassificationPrompt = """
 Tu es un assistant qui classe les SMS. Réponds UNIQUEMENT par "TAXI" ou "NON_TAXI".
 
@@ -130,13 +133,7 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 """.trimIndent()
 
     suspend fun isTaxiRelated(context: Context, smsBody: String, aiEnabled: Boolean = true): Boolean {
-        if (!aiEnabled) {
-            return isTaxiRelatedRegex(smsBody)
-        }
-
-        // Check if model file exists
-        val modelFile = getModelFile(context)
-        if (!modelFile.exists()) {
+        if (!aiEnabled || !isAiAvailable(context)) {
             return isTaxiRelatedRegex(smsBody)
         }
 
@@ -147,7 +144,11 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
                 if (response.isNullOrBlank()) continue
 
                 val cleaned = response.trim().uppercase()
-                return cleaned.contains("TAXI") && !cleaned.contains("NON_TAXI")
+                if (cleaned.contains("TAXI") && !cleaned.contains("NON_TAXI")) {
+                    LlamaModelManager.markUsed()
+                    return true
+                }
+                return false
             } catch (e: Exception) {
                 Log.w(TAG, "AI attempt $attempt failed: ${e.message}")
                 if (attempt == MAX_RETRIES) {
@@ -165,10 +166,8 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
             return parseWithFallback(smsBody)
         }
 
-        // Check if model file exists
-        val modelFile = getModelFile(context)
-        if (!modelFile.exists()) {
-            Log.d(TAG, "AI model not available, falling back to regex parser")
+        if (!isAiAvailable(context)) {
+            Log.d(TAG, "AI not available (no model or native lib), falling back to regex parser")
             return parseWithFallback(smsBody)
         }
 
@@ -178,6 +177,7 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 
                 val result = runAiInference(context, smsBody)
                 if (result != null) {
+                    LlamaModelManager.markUsed()
                     Log.d(TAG, "AI parsing successful: ${result.aiReasoning}")
                     return result
                 }
@@ -200,9 +200,22 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
             if (response.isNullOrBlank()) return null
 
             val jsonStr = extractJsonFromResponse(response)
-            if (jsonStr.isNullOrBlank()) return null
+            if (jsonStr.isNullOrBlank()) {
+                Log.w(TAG, "No JSON found in LLM response. Raw: ${response.take(200)}")
+                return null
+            }
 
             val json = JSONObject(jsonStr)
+
+            // Validate required fields
+            val hasRequiredFields = REQUIRED_JSON_FIELDS.any { field ->
+                json.optString(field, "").isNotBlank()
+            }
+            if (!hasRequiredFields) {
+                Log.w(TAG, "LLM response missing required fields: $jsonStr")
+                return null
+            }
+
             AiParsedResult(
                 departure = json.optString("departure", ""),
                 arrival = json.optString("arrival", ""),
@@ -245,10 +258,9 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 
             Log.d(TAG, "Running inference with model: ${modelFile.name} (${modelFile.length() / 1024 / 1024} MB)")
 
-            val result = LlmRunner.run(modelFile.absolutePath, prompt)
-            result
+            LlmRunner.run(modelFile.absolutePath, prompt)
         } catch (e: UnsatisfiedLinkError) {
-            Log.e(TAG, "Failed to load native library: ${e.message}")
+            Log.e(TAG, "Native library not loaded: ${e.message}")
             return null
         } catch (e: Exception) {
             Log.e(TAG, "Inference error: ${e.message}")
@@ -256,8 +268,11 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
         }
     }
 
+    fun isAiAvailable(context: Context): Boolean {
+        return LlmRunner.isNativeLibraryAvailable() && getModelFile(context).exists()
+    }
+
     private fun getModelFile(context: Context): File {
-        // Model file is stored in assets, copy to app-specific directory if needed
         val modelName = "llama-3.2-3b-instruct-q4_k_m.gguf"
         return File(context.filesDir, modelName)
     }
@@ -309,37 +324,35 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
         } else ""
     }
 
-    // Parse un email comme un SMS (même logique)
     suspend fun parseEmail(context: Context, emailBody: String, aiEnabled: Boolean = true): AiParsedResult {
         Log.d(TAG, "Parsing email avec AI enabled: $aiEnabled")
-        
-        // Nettoyer le corps de l'email (enlever signatures, etc.)
         val cleanedBody = cleanEmailBody(emailBody)
-        
-        // Utiliser le même parsing que pour SMS
         return parseWithAI(context, cleanedBody, aiEnabled)
     }
 
     private fun cleanEmailBody(body: String): String {
         return body
-            .replace(Regex("(?i)--\\s*\\n.*", RegexOption.DOT_MATCHES_ALL), "") // Signature après "--"
-            .replace(Regex("(?i)Envoyé depuis.*"), "") // "Envoyé depuis mon iPhone"
-            .replace(Regex("(?i)Sent from.*"), "") // "Sent from my iPhone"
-            .replace(Regex("(?i)Le\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}.*"), "") // Date de citation
-            .replace(Regex("(?i)De :.*"), "") // "De :"
-            .replace(Regex("(?i)À :.*"), "") // "À :"
-            .replace(Regex("(?i)Objet :.*"), "") // "Objet :"
-            .replace(Regex("(?i)_______________"), "") // Séparateurs
+            .replace(Regex("(?i)--\\s*\\n.*", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("(?i)Envoyé depuis.*"), "")
+            .replace(Regex("(?i)Sent from.*"), "")
+            .replace(Regex("(?i)Le\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}.*"), "")
+            .replace(Regex("(?i)De :.*"), "")
+            .replace(Regex("(?i)À :.*"), "")
+            .replace(Regex("(?i)Objet :.*"), "")
+            .replace(Regex("(?i)_______________"), "")
             .trim()
     }
 
     private fun extractJsonFromResponse(response: String): String? {
+        // Try markdown code blocks first
         val jsonBlockRegex = Regex("```(?:json)?\\s*([\\s\\S]*?)\\s*```")
         val match = jsonBlockRegex.find(response)
         if (match != null) {
-            return match.groupValues[1].trim()
+            val extracted = match.groupValues[1].trim()
+            if (isValidJson(extracted)) return extracted
         }
 
+        // Try finding the first { ... } pair with balanced braces
         var depth = 0
         var start = -1
         for (i in response.indices) {
@@ -351,12 +364,23 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
                 '}' -> {
                     depth--
                     if (depth == 0 && start >= 0) {
-                        return response.substring(start, i + 1)
+                        val candidate = response.substring(start, i + 1)
+                        if (isValidJson(candidate)) return candidate
+                        start = -1
                     }
                 }
             }
         }
 
         return null
+    }
+
+    private fun isValidJson(str: String): Boolean {
+        return try {
+            JSONObject(str)
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 }

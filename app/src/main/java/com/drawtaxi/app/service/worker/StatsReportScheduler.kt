@@ -148,18 +148,18 @@ class StatsReportScheduler {
 
         fun formatReportMessage(report: StatsReport): String {
             val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-            return buildString {
-                appendLine("📊 Rapport ${if (report.type == "weekly") "hebdomadaire" else "mensuel"}")
-                appendLine("Du ${dateFormat.format(Date(report.startDate))} au ${dateFormat.format(Date(report.endDate))}")
-                appendLine()
-                appendLine("🚗 Courses: ${report.totalRides}")
-                appendLine("💰 Revenus: ${String.format("%.2f €", report.totalRevenue)}")
-                appendLine("📏 Distance: ${String.format("%.1f km", report.totalKm)}")
-                appendLine()
-                appendLine("📈 Moyennes:")
-                appendLine("  Panier moyen: ${String.format("%.2f €", report.averagePrice)}")
-                appendLine("  Distance moyenne: ${String.format("%.1f km", report.averageDistance)}")
-            }
+            return buildString {
+                appendLine("=== Rapport ${if (report.type == "weekly") "hebdomadaire" else "mensuel"} ===")
+                appendLine("Du ${dateFormat.format(Date(report.startDate))} au ${dateFormat.format(Date(report.endDate))}")
+                appendLine()
+                appendLine("Courses: ${report.totalRides}")
+                appendLine("Revenus: ${String.format("%.2f €", report.totalRevenue)}")
+                appendLine("Distance: ${String.format("%.1f km", report.totalKm)}")
+                appendLine()
+                appendLine("Moyennes:")
+                appendLine("  Panier moyen: ${String.format("%.2f €", report.averagePrice)}")
+                appendLine("  Distance moyenne: ${String.format("%.1f km", report.averageDistance)}")
+            }
         }
 
         fun formatReportAsCsv(report: StatsReport): String {

@@ -107,13 +107,6 @@ private val priceKeywords = listOf(
     "environ ", "env ", "approx", "approximativement"
 )
 
-private val timePattern = Pattern.compile(
-    "(\\d{1,2})h(\\d{2})?|(\\d{1,2}):(\\d{2})|" +
-    "(\\d{1,2})h(\\d{0,2})|" +
-    "(dans|within|in) (\\d+) (min|minutes|heure|heures|h)|" +
-    "(demain|aujourd'hui|aujourd hui|a midi|ce midi|ce soir|cet aprèm|cet après-midi|tomorrow|today)"
-)
-
 private val datePattern = Pattern.compile(
     "(demain|aujourd'hui|aujourd hui|tomorrow|today|" +
     "lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|" +
@@ -163,8 +156,8 @@ fun parseSms(sender: String, body: String, timestamp: Long = System.currentTimeM
 private fun estimateDistance(departure: String, arrival: String): Double {
     if (departure.isBlank() || arrival.isBlank()) return 0.0
     
-    val parisKeywords = listOf("paris", "cdg", "orly", "gare du nord", "gare de lyon", "chatelet", "opera", "defence", "la défense", "montparnasse", "saint-lazare", "est", "austerlitz")
-    val suburbKeywords = listOf("versailles", "saint-denis", "creteil", "nanterre", "bobigny", "evry", "cergy", "meaux", "pontoise", "melun", "fontainebleau")
+    val parisKeywords = listOf("paris", "cdg", "orly", "gare du nord", "gare de lyon", "chatelet", "opera", "defence", "la défense", "montparnasse", "saint-lazare", "gare de l'est", "gare d'austerlitz", "austerlitz")
+    val suburbKeywords = listOf("versailles", "saint-denis", "creteil", "creteil", "nanterre", "bobigny", "evry", "cergy", "meaux", "pontoise", "melun", "fontainebleau", "st-denis", "saint denis", "boulogne", "billancourt", "montreuil", "argenteuil", "colombes", "vitry", "aubervilliers", "asnieres", "la defense", "le bourget")
     
     val depLower = departure.lowercase()
     val arrLower = arrival.lowercase()
@@ -403,16 +396,6 @@ private fun String.cleanLocation(): String {
     } else if (lowerText.startsWith("adresse")) {
         text = text.substringAfter("adresse").trim()
         if (text.startsWith(":")) text = text.substringAfter(":").trim()
-    }
-
-    text = text.let { t ->
-        val timePattern = Regex("\\d{1,2}h\\d{0,2}|\\d{1,2}:\\d{2}")
-        val timeMatch = timePattern.find(t)
-        if (timeMatch != null && timeMatch.range.first > 0) {
-            t.substring(0, timeMatch.range.first).trim()
-        } else {
-            t
-        }
     }
 
     return text

@@ -48,6 +48,10 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildFeatures {
         compose = true
     }
@@ -98,8 +102,10 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     
-    // osmdroid for OpenStreetMap
-    implementation("org.osmdroid:osmdroid-android:6.1.20")
+    // Google Maps
+    implementation("com.google.maps.android:maps-compose:4.3.3")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+    implementation("com.google.maps.android:android-maps-utils:3.8.2")
 
     // Location Services
     implementation("com.google.android.gms:play-services-location:21.1.0")
@@ -113,10 +119,6 @@ dependencies {
 
     // OkHttp for HTTP requests (AI inference, geocoding fallback)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // MapLibre (alternative open source à Mapbox)
-    implementation("org.maplibre.gl:android-sdk:10.3.1")
-    implementation("org.maplibre.gl:android-plugin-annotation-v9:2.0.2")
 
     // JavaMail pour SMTP/IMAP (OVH)
     implementation("com.sun.mail:android-mail:1.6.7")

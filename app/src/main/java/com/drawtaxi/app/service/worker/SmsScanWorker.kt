@@ -8,8 +8,10 @@ import com.drawtaxi.app.data.local.AppDatabase
 import com.drawtaxi.app.data.local.SettingsManager
 import com.drawtaxi.app.data.TaxiRepository
 import com.drawtaxi.app.logic.messaging.NotificationHelper
-import com.drawtaxi.app.logic.sms.SmsScanner
-import kotlinx.coroutines.flow.first
+import com.drawtaxi.app.logic.sms.SmsScanner
+import com.drawtaxi.app.service.foreground.SmsForegroundService
+
+import kotlinx.coroutines.flow.first
 
 class SmsScanWorker(
     context: Context,
@@ -30,7 +32,13 @@ class SmsScanWorker(
 
     override suspend fun doWork(): Result {
         return try {
-            Log.d(TAG, "Periodic SMS scan started")
+            Log.d(TAG, "Periodic SMS scan started")
+
+            // Skip if foreground service is active (it handles scanning)
+            if (SmsForegroundService.isRunning) {
+                Log.d(TAG, "SmsForegroundService already running, skipping periodic scan")
+                return Result.success()
+            }
 
             val database = AppDatabase.getDatabase(applicationContext)
             val settingsManager = SettingsManager(applicationContext)

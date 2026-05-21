@@ -42,9 +42,9 @@ object SmsScanner {
             )
 
             cursor?.use {
-                val addressIndex = it.getColumnIndex(Telephony.Sms.ADDRESS)
-                val bodyIndex = it.getColumnIndex(Telephony.Sms.BODY)
-                val dateIndex = it.getColumnIndex(Telephony.Sms.DATE)
+                val addressIndex = it.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+                val bodyIndex = it.getColumnIndexOrThrow(Telephony.Sms.BODY)
+                val dateIndex = it.getColumnIndexOrThrow(Telephony.Sms.DATE)
 
                 var scanned = 0
                 var matched = 0

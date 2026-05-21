@@ -60,6 +60,7 @@ class SettingsManager(private val context: Context) {
         val HOME_ADDRESS = stringPreferencesKey("home_address")
         val SMS_SCAN_INTERVAL = intPreferencesKey("sms_scan_interval")
         val AI_ENABLED = booleanPreferencesKey("ai_enabled")
+        val GOOGLE_MAPS_API_KEY = stringPreferencesKey("google_maps_api_key")
         
         // OVH SMTP
         val OVH_SMTP_ENABLED = booleanPreferencesKey("ovh_smtp_enabled")
@@ -133,6 +134,7 @@ class SettingsManager(private val context: Context) {
             homeAddress = preferences[Keys.HOME_ADDRESS] ?: "",
             smsScanIntervalMinutes = preferences[Keys.SMS_SCAN_INTERVAL] ?: 60,
             aiEnabled = preferences[Keys.AI_ENABLED] ?: true,
+            googleMapsApiKey = preferences[Keys.GOOGLE_MAPS_API_KEY] ?: "",
             
             // OVH SMTP
             ovhSmtpEnabled = preferences[Keys.OVH_SMTP_ENABLED] ?: false,
@@ -201,6 +203,7 @@ class SettingsManager(private val context: Context) {
             preferences[Keys.HOME_ADDRESS] = settings.homeAddress
             preferences[Keys.SMS_SCAN_INTERVAL] = settings.smsScanIntervalMinutes
             preferences[Keys.AI_ENABLED] = settings.aiEnabled
+            preferences[Keys.GOOGLE_MAPS_API_KEY] = settings.googleMapsApiKey
             
             // OVH SMTP
             preferences[Keys.OVH_SMTP_ENABLED] = settings.ovhSmtpEnabled

@@ -30,7 +30,7 @@ class SmsWatcher(
     }
 
     private var debounceJob: Job? = null
-    private val watcherScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var watcherScope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val processedSmsCache = ConcurrentHashMap<String, Long>()
     private var lastCheckedId: Long = -1
 
@@ -167,5 +167,6 @@ class SmsWatcher(
             Log.e(TAG, "Erreur arrêt watcher: ${e.message}")
         }
         processedSmsCache.clear()
+        watcherScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     }
 }

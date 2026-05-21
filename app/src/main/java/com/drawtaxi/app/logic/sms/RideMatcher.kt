@@ -134,16 +134,13 @@ object RideMatcher {
 
     private fun containsKeyword(text: String, keywords: List<String>): Boolean {
         return keywords.any { keyword ->
-            if (keyword.endsWith(" ")) {
-                text.contains(keyword)
-            } else {
-                text.contains(keyword) && (
-                    text.indexOf(keyword) == 0 ||
-                    text.indexOf(keyword) + keyword.length == text.length ||
-                    text[text.indexOf(keyword) - 1].isWhitespace() ||
-                    text[text.indexOf(keyword) + keyword.length].isWhitespace()
-                )
-            }
+            val idx = text.indexOf(keyword)
+            if (idx < 0) return@any false
+            if (keyword.endsWith(" ")) return@any true
+            val startsAtBoundary = idx == 0 || text[idx - 1].isWhitespace()
+            val endsAtBoundary = idx + keyword.length >= text.length ||
+                text[idx + keyword.length].isWhitespace()
+            startsAtBoundary && endsAtBoundary
         }
     }
 

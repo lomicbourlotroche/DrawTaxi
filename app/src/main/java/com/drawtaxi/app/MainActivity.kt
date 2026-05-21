@@ -271,7 +271,6 @@ class MainActivity : ComponentActivity() {
                 } else if (showReturnHomeScreen) {
                     ReturnHomeScreen(
                         settings = settings,
-                        brandColor = settings.brandColor,
                         onBack = {
                             showReturnHomeScreen = false
                             activeTab = "home"

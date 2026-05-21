@@ -23,19 +23,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.*
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.*
 import java.util.*
 import kotlin.math.*
 
@@ -52,10 +46,12 @@ fun GpsNavigationScreen(
     var eta by remember { mutableStateOf("--") }
     var distanceToDest by remember { mutableStateOf("--") }
     var speed by remember { mutableStateOf("0 km/h") }
-    var mapView by remember { mutableStateOf<MapView?>(null) }
-    var destMarkerAdded by remember { mutableStateOf(false) }
 
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(48.39, -4.49), 12f)
+    }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -97,9 +93,11 @@ fun GpsNavigationScreen(
                 val avgSpeedKmh = if (loc.hasSpeed() && loc.speed > 0) loc.speed * 3.6 else 40.0
                 val etaMinutes = (dist / avgSpeedKmh) * 60
                 eta = if (etaMinutes < 1) "< 1 min" else "~${etaMinutes.toInt()} min"
-
-                updateMapPosition(mapView, loc, destLocation, ride)
             }
+
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(
+                LatLng(loc.latitude, loc.longitude), 15f
+            )
         }
     }
 
@@ -124,43 +122,31 @@ fun GpsNavigationScreen(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
         )
 
-        if (currentLocation != null) {
-            AndroidView(
-                factory = { ctx ->
-                    Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
-                    MapView(ctx).apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setMultiTouchControls(true)
-                        controller.setZoom(15.0)
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                properties = MapProperties(isMyLocationEnabled = true),
+                uiSettings = MapUiSettings(
+                    myLocationButtonEnabled = true,
+                    zoomControlsEnabled = true
+                )
+            ) {
+                destLocation?.let { dest ->
+                    Marker(
+                        state = MarkerState(position = LatLng(dest.latitude, dest.longitude)),
+                        title = ride.arrival
+                    )
+                }
+            }
 
-                        val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
-                        overlays.add(locationOverlay)
-                        locationOverlay.enableMyLocation()
-                        locationOverlay.isDrawAccuracyEnabled = true
-
-                        currentLocation?.let { loc ->
-                            controller.setCenter(GeoPoint(loc.latitude, loc.longitude))
-                        }
-
-                        addRouteOverlay(this, currentLocation, destLocation, ride)
-
-                        mapView = this
+            if (currentLocation == null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = Color.White)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Acquisition GPS...", color = Color.White)
                     }
-                },
-                update = { map ->
-                    if (!destMarkerAdded && destLocation != null) {
-                        addDestinationMarker(map, destLocation!!, ride.arrival)
-                        destMarkerAdded = true
-                    }
-                },
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            )
-        } else {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = Color.White)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Acquisition GPS...", color = Color.White)
                 }
             }
         }
@@ -242,58 +228,6 @@ private fun haversineDistance(from: Location, to: Location): Double {
             sin(dLon / 2).pow(2)
     val c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return r * c
-}
-
-private fun addRouteOverlay(
-    map: MapView,
-    current: Location?,
-    dest: Location?,
-    ride: RideRequest
-) {
-    if (current != null) {
-        val startMarker = Marker(map).apply {
-            position = GeoPoint(current.latitude, current.longitude)
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            title = "Position actuelle"
-            icon = map.context.getDrawable(android.R.drawable.ic_menu_mylocation)
-        }
-        map.overlays.add(startMarker)
-    }
-
-    if (dest != null) {
-        val destMarker = Marker(map).apply {
-            position = GeoPoint(dest.latitude, dest.longitude)
-            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            title = ride.arrival
-            icon = map.context.getDrawable(android.R.drawable.ic_menu_compass)
-        }
-        map.overlays.add(destMarker)
-    }
-}
-
-private fun addDestinationMarker(map: MapView, dest: Location, markerTitle: String) {
-    val marker = Marker(map).apply {
-        position = GeoPoint(dest.latitude, dest.longitude)
-        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-        title = markerTitle
-        icon = map.context.getDrawable(android.R.drawable.ic_menu_compass)
-    }
-    map.overlays.add(marker)
-    map.invalidate()
-}
-
-private fun updateMapPosition(map: MapView?, current: Location, dest: Location?, ride: RideRequest) {
-    map?.let { mv ->
-        mv.controller.setCenter(GeoPoint(current.latitude, current.longitude))
-
-        if (dest != null) {
-            val existingMarkers = mv.overlays.filterIsInstance<Marker>().filter { it.title == ride.arrival }
-            if (existingMarkers.isEmpty()) {
-                addDestinationMarker(mv, dest, ride.arrival)
-            }
-        }
-        mv.invalidate()
-    }
 }
 
 private fun startLocationUpdates(context: Context, client: FusedLocationProviderClient, onLocation: (Location) -> Unit) {

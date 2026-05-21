@@ -3,7 +3,6 @@ package com.drawtaxi.app.ui.screens.rides
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.location.Location
 import android.os.Looper
 import androidx.compose.animation.*
@@ -25,7 +24,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.geocoding.GeocodingService
@@ -33,32 +31,22 @@ import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.screens.navigation.NavigationPhase
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.*
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.*
 import kotlinx.coroutines.launch
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import java.util.*
 
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun ReturnHomeScreen(
     settings: AppSettings,
-    brandColor: ComposeColor,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     var currentLocation by remember { mutableStateOf<Location?>(null) }
-    var osmMapView by remember { mutableStateOf<MapView?>(null) }
     var routeToHome by remember { mutableStateOf<OsrmRoutingService.RouteResult?>(null) }
 
     var etaText by remember { mutableStateOf("-- min") }
@@ -69,7 +57,18 @@ fun ReturnHomeScreen(
     var nextInstruction by remember { mutableStateOf("") }
     var nextInstructionDistance by remember { mutableStateOf("") }
 
-    // GPS tracking
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(48.39, -4.49), 12f)
+    }
+
+    val routePoints = remember(routeToHome) {
+        routeToHome?.geometry?.map { LatLng(it.first, it.second) } ?: emptyList()
+    }
+
+    val homePoint = remember(routeToHome) {
+        routeToHome?.geometry?.lastOrNull()?.let { LatLng(it.first, it.second) }
+    }
+
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED) {
@@ -99,7 +98,6 @@ fun ReturnHomeScreen(
         }
     }
 
-    // Calculate route to home
     LaunchedEffect(currentLocation, settings.homeAddress) {
         if (currentLocation != null && settings.homeAddress.isNotBlank()) {
             val homeLoc = GeocodingService.geocode(settings.homeAddress)
@@ -109,7 +107,18 @@ fun ReturnHomeScreen(
         }
     }
 
-    // Turn-by-turn instructions + recalculation
+    LaunchedEffect(routePoints) {
+        if (routePoints.isNotEmpty()) {
+            val allPts = routePoints.toMutableList()
+            currentLocation?.let { loc ->
+                allPts.add(LatLng(loc.latitude, loc.longitude))
+            }
+            val midLat = allPts.map { it.latitude }.let { (it.min() + it.max()) / 2.0 }
+            val midLng = allPts.map { it.longitude }.let { (it.min() + it.max()) / 2.0 }
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(LatLng(midLat, midLng), 12f)
+        }
+    }
+
     LaunchedEffect(currentLocation, routeToHome) {
         if (currentLocation == null || routeToHome == null) return@LaunchedEffect
 
@@ -162,7 +171,6 @@ fun ReturnHomeScreen(
                 }
             }
 
-            // Recalculate if deviation
             if (minDistance > 100.0) {
                 isRecalculating = true
                 val homeLoc = GeocodingService.geocode(settings.homeAddress)
@@ -174,13 +182,20 @@ fun ReturnHomeScreen(
         }
     }
 
-    // ETA updates
     LaunchedEffect(routeToHome) {
         routeToHome?.let {
             if (it.success) {
                 etaText = OsrmRoutingService.formatDuration(it.duration)
                 distanceText = OsrmRoutingService.formatDistance(it.distance)
             }
+        }
+    }
+
+    LaunchedEffect(currentLocation) {
+        currentLocation?.let { loc ->
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(
+                LatLng(loc.latitude, loc.longitude), 16f
+            )
         }
     }
 
@@ -226,58 +241,30 @@ fun ReturnHomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid_nav", 0))
-                    MapView(ctx).apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setMultiTouchControls(true)
-                        controller.setZoom(16.0)
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                properties = MapProperties(isMyLocationEnabled = true),
+                uiSettings = MapUiSettings(
+                    myLocationButtonEnabled = true,
+                    zoomControlsEnabled = false
+                )
+            ) {
+                if (routePoints.isNotEmpty()) {
+                    Polyline(
+                        points = routePoints,
+                        color = ComposeColor(0xFF00FF00),
+                        width = 14f
+                    )
+                }
 
-                        val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
-                        overlays.add(locationOverlay)
-                        locationOverlay.enableMyLocation()
-                        locationOverlay.isDrawAccuracyEnabled = false
-
-                        osmMapView = this
-                    }
-                },
-                update = { map ->
-                    map.overlays.filterIsInstance<Polyline>().toList().forEach { map.overlays.remove(it) }
-                    map.overlays.filterIsInstance<Marker>().toList().forEach { map.overlays.remove(it) }
-
-                    routeToHome?.let { route ->
-                        if (route.success && route.geometry.isNotEmpty()) {
-                            val polyline = Polyline()
-                            polyline.setPoints(ArrayList(route.geometry.map { GeoPoint(it.first, it.second) }))
-                            polyline.color = Color.GREEN
-                            polyline.width = 14f
-                            map.overlays.add(0, polyline)
-
-                            val destPoint = route.geometry.last()
-                            val marker = Marker(map)
-                            marker.position = GeoPoint(destPoint.first, destPoint.second)
-                            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            marker.title = "Domicile"
-                            map.overlays.add(marker)
-
-                            currentLocation?.let { loc ->
-                                val geoPoints = ArrayList<GeoPoint>()
-                                geoPoints.addAll(route.geometry.map { GeoPoint(it.first, it.second) })
-                                geoPoints.add(GeoPoint(loc.latitude, loc.longitude))
-                                val bounds = BoundingBox.fromGeoPoints(geoPoints)
-                                map.zoomToBoundingBox(bounds, true, 100)
-                            }
-                        }
-                    }
-
-                    currentLocation?.let { loc ->
-                        val currentPoint = GeoPoint(loc.latitude, loc.longitude)
-                        map.controller.animateTo(currentPoint)
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                homePoint?.let {
+                    Marker(
+                        state = MarkerState(position = it),
+                        title = "Domicile"
+                    )
+                }
+            }
 
             AnimatedVisibility(
                 visible = currentInstruction.isNotBlank(),

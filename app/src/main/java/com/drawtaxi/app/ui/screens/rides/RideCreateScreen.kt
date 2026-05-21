@@ -38,6 +38,10 @@ import com.drawtaxi.app.ui.theme.Rose700
 import com.drawtaxi.app.ui.theme.Emerald500
 import androidx.compose.ui.platform.LocalContext
 import android.util.Log
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.*
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +73,9 @@ fun RideCreateScreen(
     var routeError by remember { mutableStateOf<String?>(null) }
     var distanceInput by remember { mutableStateOf(if (initialRide?.distanceKm ?: 0.0 > 0) String.format("%.1f", initialRide?.distanceKm ?: 0.0) else "") }
     var hasCalculatedRoute by remember { mutableStateOf(initialRide?.distanceKm ?: 0.0 > 0) }
+    var depLatLng by remember { mutableStateOf<LatLng?>(null) }
+    var arrLatLng by remember { mutableStateOf<LatLng?>(null) }
+    var routeLatLngs by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
     fun recalculatePriceFromDistance(dist: Double) {
@@ -124,16 +131,13 @@ fun RideCreateScreen(
 
                 Log.d("DrawTaxi", "Geocoded: dep=(${depLocation.latitude},${depLocation.longitude}) arr=(${arrLocation.latitude},${arrLocation.longitude})")
 
-                val depPoint = org.osmdroid.util.GeoPoint(depLocation.latitude, depLocation.longitude)
-                val arrPoint = org.osmdroid.util.GeoPoint(arrLocation.latitude, arrLocation.longitude)
-
-                val routeInfo = fetchRoute(depPoint, arrPoint)
+                val routeInfo = fetchRoute(depLocation, arrLocation)
                 Log.d("DrawTaxi", "Route result: distance=${routeInfo.distanceMeters}m, points=${routeInfo.points.size}")
 
                 var dist: Double
                 if (routeInfo.distanceMeters > 0) {
                     dist = routeInfo.distanceMeters / 1000.0
-                    Log.d("DrawTaxi", "Using OSRM distance: $dist km")
+                    Log.d("DrawTaxi", "Using Directions API distance: $dist km")
                 } else {
                     val lat1 = Math.toRadians(depLocation.latitude)
                     val lat2 = Math.toRadians(arrLocation.latitude)
@@ -147,7 +151,17 @@ fun RideCreateScreen(
                     Log.d("DrawTaxi", "Using haversine fallback: $dist km (x1.3 for road)")
                 }
 
+                val dLatLng = LatLng(depLocation.latitude, depLocation.longitude)
+                val aLatLng = LatLng(arrLocation.latitude, arrLocation.longitude)
+                val rPoints = routeInfo.points.let { pts ->
+                    if (pts.isNotEmpty()) pts.map { LatLng(it.latitude, it.longitude) }
+                    else listOf(dLatLng, aLatLng)
+                }
+
                 withContext(Dispatchers.Main) {
+                    depLatLng = dLatLng
+                    arrLatLng = aLatLng
+                    routeLatLngs = rPoints
                     distanceKm = dist
                     distanceInput = String.format("%.1f", dist)
                     recalculatePriceFromDistance(dist)
@@ -483,6 +497,62 @@ fun RideCreateScreen(
                             Column(horizontalAlignment = Alignment.End) {
                                 Text("Prix estimé", style = MaterialTheme.typography.bodySmall, color = Slate500)
                                 Text("$price €", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
+                            }
+                        }
+                    }
+                }
+
+                if (depLatLng != null && arrLatLng != null) {
+                    val mapCameraState = rememberCameraPositionState {
+                        position = CameraPosition.fromLatLngZoom(
+                            LatLng(
+                                (depLatLng!!.latitude + arrLatLng!!.latitude) / 2,
+                                (depLatLng!!.longitude + arrLatLng!!.longitude) / 2
+                            ),
+                            11f
+                        )
+                    }
+
+                    LaunchedEffect(depLatLng, arrLatLng) {
+                        if (routeLatLngs.isNotEmpty()) {
+                            val lats = routeLatLngs.map { it.latitude }
+                            val lngs = routeLatLngs.map { it.longitude }
+                            mapCameraState.position = CameraPosition.fromLatLngZoom(
+                                LatLng((lats.min() + lats.max()) / 2, (lngs.min() + lngs.max()) / 2),
+                                12f
+                            )
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth().height(220.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        GoogleMap(
+                            modifier = Modifier.fillMaxSize(),
+                            cameraPositionState = mapCameraState,
+                            uiSettings = MapUiSettings(
+                                zoomControlsEnabled = true,
+                                scrollGesturesEnabled = true,
+                                myLocationButtonEnabled = false
+                            )
+                        ) {
+                            depLatLng?.let {
+                                Marker(state = MarkerState(position = it), title = "Départ")
+                            }
+                            if (routeLatLngs.isNotEmpty()) {
+                                Polyline(
+                                    points = routeLatLngs,
+                                    color = Color(0xFF3B82F6),
+                                    width = 6f
+                                )
+                            }
+                            arrLatLng?.let {
+                                Marker(
+                                    state = MarkerState(position = it),
+                                    title = "Arrivée",
+                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED)
+                                )
                             }
                         }
                     }

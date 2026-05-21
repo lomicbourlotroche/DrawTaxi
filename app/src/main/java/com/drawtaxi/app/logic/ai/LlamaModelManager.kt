@@ -3,25 +3,28 @@ package com.drawtaxi.app.logic.ai
 import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
-import android.os.Environment
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 object LlamaModelManager {
 
     private const val TAG = "LlamaModelManager"
     private const val MODEL_FILENAME = "llama-3.2-3b-instruct-q4_k_m.gguf"
     private const val MODEL_URL = "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf?download=true"
-    private const val EXPECTED_SIZE_BYTES = 2_000_000_000L // ~2GB
-    private const val MIN_VALID_SIZE = 1_800_000_000L // 1.8GB minimum
-    private const val CHUNK_SIZE = 8192 // 8KB chunks
+    private const val EXPECTED_SIZE_BYTES = 2_000_000_000L
+    private const val MIN_VALID_SIZE = 1_800_000_000L
+    private const val CHUNK_SIZE = 8192
 
     enum class ModelStatus {
         NOT_DOWNLOADED,
@@ -32,13 +35,19 @@ object LlamaModelManager {
         PAUSED
     }
 
-    private var _status = ModelStatus.NOT_DOWNLOADED
-    private var _downloadProgress = 0f
+    private val _status = MutableStateFlow(ModelStatus.NOT_DOWNLOADED)
+    val status: StateFlow<ModelStatus> = _status.asStateFlow()
+
+    private val _downloadProgress = MutableStateFlow(0f)
+    val downloadProgress: StateFlow<Float> = _downloadProgress.asStateFlow()
+
     private var _lastUsedTime = 0L
     private var _downloadId: Long = -1
     private val AUTO_UNLOAD_DELAY_MS = 10 * 60 * 1000L
+    private val _isCancelled = AtomicBoolean(false)
+    private var _downloadStartTime = 0L
+    private var _downloadedBytes = 0L
 
-    // OkHttp client avec timeout augmenté
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.MINUTES)
         .readTimeout(5, TimeUnit.MINUTES)
@@ -46,22 +55,23 @@ object LlamaModelManager {
         .retryOnConnectionFailure(true)
         .build()
 
-    val status: ModelStatus get() = _status
-    val downloadProgress: Float get() = _downloadProgress
-
     fun getModelFile(context: Context): File {
         return File(context.filesDir, MODEL_FILENAME)
     }
 
     fun isModelAvailable(context: Context): Boolean {
         val file = getModelFile(context)
-        return file.exists() && file.length() > MIN_VALID_SIZE
+        return file.exists() && file.length() > MIN_VALID_SIZE && LlmRunner.isNativeLibraryAvailable()
     }
 
-    /**
-     * Télécharge le modèle avec gestion robuste des erreurs
-     * Utilise OkHttp pour un téléchargement fiable des gros fichiers
-     */
+    fun isAiAvailable(context: Context): Boolean {
+        return isModelAvailable(context) && LlmRunner.isNativeLibraryAvailable()
+    }
+
+    fun cancelDownload() {
+        _isCancelled.set(true)
+    }
+
     suspend fun downloadModel(
         context: Context,
         maxRetries: Int = 5,
@@ -70,91 +80,102 @@ object LlamaModelManager {
         onStatusChange: (ModelStatus) -> Unit = {}
     ): Boolean = withContext(Dispatchers.IO) {
         if (isModelAvailable(context)) {
-            _status = ModelStatus.READY
+            _status.value = ModelStatus.READY
             onStatusChange(ModelStatus.READY)
             return@withContext true
         }
 
-        // Vérifier la connexion
-        if (!isNetworkAvailable(context)) {
-            _status = ModelStatus.ERROR
+        if (!LlmRunner.isNativeLibraryAvailable()) {
+            _status.value = ModelStatus.ERROR
             onStatusChange(ModelStatus.ERROR)
-            Log.e(TAG, "Pas de connexion Internet")
+            Log.e(TAG, "Native library not available")
             return@withContext false
         }
 
-        // Vérifier l'espace disque (besoin de 3GB minimum)
+        if (!isNetworkAvailable(context)) {
+            _status.value = ModelStatus.ERROR
+            onStatusChange(ModelStatus.ERROR)
+            Log.e(TAG, "No internet connection")
+            return@withContext false
+        }
+
         val freeSpace = context.filesDir.freeSpace
         if (freeSpace < 3_000_000_000L) {
-            _status = ModelStatus.ERROR
+            _status.value = ModelStatus.ERROR
             onStatusChange(ModelStatus.ERROR)
-            Log.e(TAG, "Espace disque insuffisant: ${freeSpace / 1_000_000} MB")
+            Log.e(TAG, "Insufficient disk space: ${freeSpace / 1_000_000} MB")
             return@withContext false
         }
 
-        _status = ModelStatus.DOWNLOADING
+        _isCancelled.set(false)
+        _downloadStartTime = System.currentTimeMillis()
+        _downloadedBytes = 0L
+        _status.value = ModelStatus.DOWNLOADING
         onStatusChange(ModelStatus.DOWNLOADING)
         val outputFile = getModelFile(context)
 
-        // Essayer d'abord avec DownloadManager (plus fiable pour gros fichiers)
         if (tryDownloadManager(context, outputFile, onProgress, onStatusChange)) {
             return@withContext true
         }
 
-        // Fallback avec OkHttp
+        if (_isCancelled.get()) {
+            _status.value = ModelStatus.NOT_DOWNLOADED
+            onStatusChange(ModelStatus.NOT_DOWNLOADED)
+            return@withContext false
+        }
+
         var lastException: Exception? = null
 
         for (attempt in 1..maxRetries) {
+            if (_isCancelled.get()) {
+                _status.value = ModelStatus.NOT_DOWNLOADED
+                onStatusChange(ModelStatus.NOT_DOWNLOADED)
+                return@withContext false
+            }
+
             try {
-                Log.d(TAG, "Tentative $attempt/$maxRetries avec OkHttp")
-                
+                Log.d(TAG, "Attempt $attempt/$maxRetries with OkHttp")
                 val success = downloadWithOkHttp(outputFile, onProgress)
-                
+
                 if (success) {
-                    _status = ModelStatus.READY
+                    _status.value = ModelStatus.READY
                     onStatusChange(ModelStatus.READY)
-                    Log.i(TAG, "✅ Modèle téléchargé: ${outputFile.length() / 1_000_000} MB")
+                    Log.i(TAG, "Model downloaded: ${outputFile.length() / 1_000_000} MB")
                     return@withContext true
                 }
-
             } catch (e: Exception) {
                 lastException = e
                 val errorMsg = when {
                     e.message?.contains("timeout", ignoreCase = true) == true ->
-                        "Délai dépassé - connexion trop lente"
+                        "Timeout - connection too slow"
                     e.message?.contains("connect", ignoreCase = true) == true ->
-                        "Erreur de connexion"
+                        "Connection error"
                     e.message?.contains("SSL", ignoreCase = true) == true ->
-                        "Erreur SSL"
+                        "SSL error"
                     e.message?.contains("space", ignoreCase = true) == true ->
-                        "Espace disque insuffisant"
+                        "Insufficient disk space"
                     e.message?.contains("interrupted", ignoreCase = true) == true ->
-                        "Téléchargement interrompu"
-                    else -> e.message ?: "Erreur inconnue"
+                        "Download interrupted"
+                    else -> e.message ?: "Unknown error"
                 }
 
-                Log.w(TAG, "❌ Tentative $attempt échouée: $errorMsg")
+                Log.w(TAG, "Attempt $attempt failed: $errorMsg")
                 onRetry(attempt, errorMsg)
 
                 if (attempt < maxRetries) {
                     val delayMs = (attempt * 3000L).coerceAtMost(15000L)
-                    Log.d(TAG, "⏳ Attente ${delayMs}ms avant retry...")
                     delay(delayMs)
                 }
             }
         }
 
-        // Toutes les tentatives ont échoué
-        Log.e(TAG, "❌ Échec définitif après $maxRetries tentatives", lastException)
-        _status = ModelStatus.ERROR
+        Log.e(TAG, "All $maxRetries attempts failed", lastException)
+        _status.value = ModelStatus.ERROR
         onStatusChange(ModelStatus.ERROR)
         outputFile.delete()
         false
     }
 
-    /**
-     * Essaie de télécharger avec DownloadManager (plus stable pour gros fichiers)
-     */
     private suspend fun tryDownloadManager(
         context: Context,
         outputFile: File,
@@ -162,10 +183,10 @@ object LlamaModelManager {
         onStatusChange: (ModelStatus) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "🔄 Tentative avec DownloadManager...")
-            
+            Log.d(TAG, "Attempting DownloadManager...")
+
             val request = DownloadManager.Request(Uri.parse(MODEL_URL)).apply {
-                setTitle("Téléchargement IA DrawTaxi")
+                setTitle("DrawTaxi AI Download")
                 setDescription("Llama 3.2 3B (2GB)")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 setDestinationUri(Uri.fromFile(outputFile))
@@ -176,22 +197,27 @@ object LlamaModelManager {
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             _downloadId = downloadManager.enqueue(request)
 
-            // Attendre et surveiller la progression
             var downloading = true
             var lastProgress = 0f
-            
+
             while (downloading) {
-                delay(1000) // Vérifier chaque seconde
-                
+                if (_isCancelled.get()) {
+                    downloadManager.remove(_downloadId)
+                    outputFile.delete()
+                    return@withContext false
+                }
+
+                delay(1000)
+
                 val query = DownloadManager.Query().setFilterById(_downloadId)
                 downloadManager.query(query)?.use { cursor ->
                     if (cursor.moveToFirst()) {
                         val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                        
+
                         when (status) {
                             DownloadManager.STATUS_SUCCESSFUL -> {
                                 downloading = false
-                                _status = ModelStatus.READY
+                                _status.value = ModelStatus.READY
                                 onStatusChange(ModelStatus.READY)
                                 onProgress(1f)
                             }
@@ -204,16 +230,17 @@ object LlamaModelManager {
                                 val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
                                 val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
                                 if (total > 0) {
+                                    _downloadedBytes = downloaded
                                     val progress = downloaded.toFloat() / total
                                     if (progress - lastProgress > 0.01f) {
                                         lastProgress = progress
-                                        _downloadProgress = progress
+                                        _downloadProgress.value = progress
                                         onProgress(progress)
                                     }
                                 }
                                 Unit
                             }
-                            else -> { /* Ignorer les autres statuts */ }
+                            else -> { }
                         }
                     } else {
                         downloading = false
@@ -221,50 +248,44 @@ object LlamaModelManager {
                 }
             }
 
-            // Vérifier si le fichier est valide
             if (outputFile.exists() && outputFile.length() > MIN_VALID_SIZE) {
-                Log.i(TAG, "✅ Téléchargement DownloadManager réussi")
+                Log.i(TAG, "DownloadManager success")
                 true
             } else {
-                Log.w(TAG, "❌ DownloadManager: fichier invalide")
+                Log.w(TAG, "DownloadManager: invalid file")
                 false
             }
-
         } catch (e: Exception) {
-            Log.w(TAG, "DownloadManager a échoué: ${e.message}")
+            Log.w(TAG, "DownloadManager failed: ${e.message}")
             false
         }
     }
 
-    /**
-     * Téléchargement avec OkHttp et support resume
-     */
     private suspend fun downloadWithOkHttp(
         outputFile: File,
         onProgress: (Float) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
         val existingSize = if (outputFile.exists()) outputFile.length() else 0L
-        
+
         val requestBuilder = Request.Builder()
             .url(MODEL_URL)
             .header("User-Agent", "DrawTaxi/1.0 (Android)")
-        
-        // Reprendre depuis où on s'est arrêté
+
         if (existingSize > 0) {
             requestBuilder.header("Range", "bytes=$existingSize-")
-            Log.d(TAG, "📥 Reprise depuis ${existingSize / 1_000_000} MB")
+            Log.d(TAG, "Resuming from ${existingSize / 1_000_000} MB")
         }
 
         val request = requestBuilder.build()
-        
+        var lastProgressUpdate = System.currentTimeMillis()
+
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful && response.code != 206) {
                 throw Exception("HTTP ${response.code}")
             }
 
-            val body = response.body ?: throw Exception("Réponse vide")
-            
-            // Calculer la taille totale
+            val body = response.body ?: throw Exception("Empty response")
+
             val contentLength = body.contentLength()
             val totalSize = if (response.code == 206 && existingSize > 0) {
                 existingSize + contentLength
@@ -272,33 +293,36 @@ object LlamaModelManager {
                 if (contentLength > 0) contentLength else EXPECTED_SIZE_BYTES
             }
 
-            Log.d(TAG, "📦 Taille totale: ${totalSize / 1_000_000} MB")
+            Log.d(TAG, "Total size: ${totalSize / 1_000_000} MB")
 
-            // Mode append si on reprend
             val appendMode = response.code == 206
-            
+
             RandomAccessFile(outputFile, "rw").use { raf ->
                 if (appendMode) {
                     raf.seek(existingSize)
                 } else {
-                    raf.setLength(0) // Nouveau fichier
+                    raf.setLength(0)
                 }
 
                 body.byteStream().use { input ->
                     val buffer = ByteArray(CHUNK_SIZE)
                     var bytesRead: Int
                     var totalRead = existingSize
-                    var lastProgressUpdate = System.currentTimeMillis()
 
                     while (input.read(buffer).also { bytesRead = it } != -1) {
+                        if (_isCancelled.get()) {
+                            Log.d(TAG, "Download cancelled")
+                            return@withContext false
+                        }
+
                         raf.write(buffer, 0, bytesRead)
                         totalRead += bytesRead
+                        _downloadedBytes = totalRead
 
-                        // Mettre à jour la progression toutes les 500ms
                         val now = System.currentTimeMillis()
                         if (now - lastProgressUpdate > 500) {
-                            _downloadProgress = (totalRead.toFloat() / totalSize).coerceAtMost(1f)
-                            onProgress(_downloadProgress)
+                            _downloadProgress.value = (totalRead.toFloat() / totalSize).coerceAtMost(1f)
+                            onProgress(_downloadProgress.value)
                             lastProgressUpdate = now
                         }
                     }
@@ -306,78 +330,71 @@ object LlamaModelManager {
             }
         }
 
-        // Vérification finale
         val finalSize = outputFile.length()
-        Log.d(TAG, "✅ Téléchargé: ${finalSize / 1_000_000} MB")
-        
+        Log.d(TAG, "Downloaded: ${finalSize / 1_000_000} MB")
+
         finalSize > MIN_VALID_SIZE
     }
 
-    /**
-     * Vérifie si une connexion Internet est disponible
-     */
     private fun isNetworkAvailable(context: Context): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
                 as? android.net.ConnectivityManager ?: return false
 
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork ?: return false
-            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-            capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                    capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        } else {
-            @Suppress("DEPRECATION")
-            connectivityManager.activeNetworkInfo?.isConnected == true
-        }
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    /**
-     * Retourne le type de connexion
-     */
     fun getConnectionType(context: Context): String {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE)
                 as? android.net.ConnectivityManager ?: return "Inconnu"
 
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork ?: return "Aucune"
-            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "Inconnu"
+        val network = connectivityManager.activeNetwork ?: return "Aucune"
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return "Inconnu"
 
-            when {
-                capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
-                capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile"
-                capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
-                else -> "Autre"
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            when (connectivityManager.activeNetworkInfo?.type) {
-                android.net.ConnectivityManager.TYPE_WIFI -> "WiFi"
-                android.net.ConnectivityManager.TYPE_MOBILE -> "Mobile"
-                android.net.ConnectivityManager.TYPE_ETHERNET -> "Ethernet"
-                else -> "Inconnu"
-            }
+        return when {
+            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
+            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile"
+            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+            else -> "Autre"
         }
     }
 
-    /**
-     * Estime le temps restant
-     */
-    fun estimateTimeRemaining(context: Context, currentProgress: Float): String {
+    fun estimateTimeRemaining(@Suppress("UNUSED_PARAMETER") context: Context, currentProgress: Float): String {
         if (currentProgress <= 0.01f) return "Calcul..."
-        
-        val downloaded = getDownloadedSize(context)
-        val total = EXPECTED_SIZE_BYTES
-        val remaining = total - downloaded
-        
-        if (remaining <= 0) return "Bientôt terminé"
-        
-        // Estimation basée sur la vitesse moyenne
-        val estimatedSeconds = (remaining.toFloat() / (downloaded.toFloat() / 30)).toInt()
-        
+
+        val elapsedMs = System.currentTimeMillis() - _downloadStartTime
+        if (elapsedMs <= 0) return "Calcul..."
+
+        val downloadedBytes = _downloadedBytes
+        val totalBytes = EXPECTED_SIZE_BYTES
+        val remainingBytes = totalBytes - downloadedBytes
+
+        if (remainingBytes <= 0) return "Bientôt terminé"
+
+        val bytesPerMs = downloadedBytes.toFloat() / elapsedMs
+        if (bytesPerMs <= 0) return "Calcul..."
+
+        val estimatedMs = (remainingBytes / bytesPerMs).toLong()
+        val estimatedSeconds = (estimatedMs / 1000).toInt()
+
         return when {
             estimatedSeconds < 60 -> "~${estimatedSeconds}s"
             estimatedSeconds < 3600 -> "~${estimatedSeconds / 60}min"
             else -> "~${estimatedSeconds / 3600}h ${(estimatedSeconds % 3600) / 60}min"
+        }
+    }
+
+    fun getDownloadSpeed(@Suppress("UNUSED_PARAMETER") context: Context): String {
+        val elapsedMs = System.currentTimeMillis() - _downloadStartTime
+        if (elapsedMs <= 0) return ""
+
+        val bytesPerSec = (_downloadedBytes * 1000L) / (elapsedMs + 1)
+        return when {
+            bytesPerSec > 1_000_000 -> String.format("%.1f MB/s", bytesPerSec / 1_000_000.0)
+            bytesPerSec > 1_000 -> String.format("%.1f KB/s", bytesPerSec / 1_000.0)
+            else -> "${bytesPerSec} B/s"
         }
     }
 
@@ -386,21 +403,22 @@ object LlamaModelManager {
     }
 
     fun shouldAutoUnload(): Boolean {
-        if (_status != ModelStatus.READY) return false
+        if (_status.value != ModelStatus.READY) return false
         if (_lastUsedTime == 0L) return false
         return System.currentTimeMillis() - _lastUsedTime > AUTO_UNLOAD_DELAY_MS
     }
 
     fun unload() {
-        _status = ModelStatus.UNLOADED
-        Log.i(TAG, "Modèle déchargé (inactivité)")
+        _status.value = ModelStatus.UNLOADED
+        Log.i(TAG, "Model unloaded (inactivity)")
     }
 
     fun deleteModel(context: Context): Boolean {
         val file = getModelFile(context)
         return if (file.exists()) {
             file.delete()
-            _status = ModelStatus.NOT_DOWNLOADED
+            _status.value = ModelStatus.NOT_DOWNLOADED
+            _downloadProgress.value = 0f
             true
         } else false
     }

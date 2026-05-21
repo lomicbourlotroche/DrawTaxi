@@ -73,6 +73,7 @@ data class AppSettings(
     val homeAddress: String = "",
     val smsScanIntervalMinutes: Int = 60,
     val aiEnabled: Boolean = true,
+    val googleMapsApiKey: String = "",
     
     // Configuration OVH SMTP (envoi mails)
     val ovhSmtpEnabled: Boolean = false,

@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.drawtaxi.app.logic.ai.LlamaModelManager
 import com.drawtaxi.app.ui.theme.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @Composable
 fun AiModelDownloadScreen(
@@ -43,6 +44,8 @@ fun AiModelDownloadScreen(
     var isComplete by remember { mutableStateOf(LlamaModelManager.isModelAvailable(context)) }
     var hasError by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("") }
+    var downloadSpeed by remember { mutableStateOf("") }
+    var timeRemaining by remember { mutableStateOf("") }
 
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
@@ -51,6 +54,17 @@ fun AiModelDownloadScreen(
 
     val modelSize = LlamaModelManager.getDownloadedSize(context)
     val expectedSizeText = "~2,0 Go"
+
+    // Live updates for speed and ETA during download
+    LaunchedEffect(isDownloading) {
+        if (isDownloading) {
+            while (true) {
+                downloadSpeed = LlamaModelManager.getDownloadSpeed(context)
+                timeRemaining = LlamaModelManager.estimateTimeRemaining(context, progress)
+                delay(2000)
+            }
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -65,7 +79,6 @@ fun AiModelDownloadScreen(
         ) {
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Icon with gradient background
             Surface(
                 modifier = Modifier.size(80.dp),
                 shape = RoundedCornerShape(20.dp),
@@ -104,7 +117,6 @@ fun AiModelDownloadScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Features list
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -128,7 +140,6 @@ fun AiModelDownloadScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Progress section
             AnimatedVisibility(
                 visible = isDownloading || isComplete,
                 enter = fadeIn(),
@@ -138,7 +149,6 @@ fun AiModelDownloadScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Progress bar
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -178,10 +188,30 @@ fun AiModelDownloadScreen(
                         )
                     }
 
-                    if (modelSize > 0 && !isComplete) {
+                    if (isDownloading) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = downloadSpeed,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Slate400
+                            )
+                            Text(
+                                text = timeRemaining,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Slate400
+                            )
+                        }
+                    }
+
+                    val downloadedMb = LlamaModelManager.getDownloadedSize(context) / 1_000_000
+                    if (downloadedMb > 0 && !isComplete) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${modelSize / 1_000_000} Mo / ${expectedSizeText}",
+                            text = "${downloadedMb} Mo / 2 000 Mo",
                             style = MaterialTheme.typography.labelSmall,
                             color = Slate400
                         )
@@ -191,9 +221,7 @@ fun AiModelDownloadScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Action buttons
             if (!isComplete) {
-                // Afficher le type de connexion
                 val connectionType = remember { LlamaModelManager.getConnectionType(context) }
                 if (connectionType != "WiFi") {
                     Surface(
@@ -237,11 +265,11 @@ fun AiModelDownloadScreen(
                                 onProgress = { prog ->
                                     progress = prog
                                     statusText = when {
-                                        prog < 0.05f -> "Préparation du téléchargement..."
-                                        prog < 0.3f -> "Téléchargement en cours (${(prog * 100).toInt()}%)"
-                                        prog < 0.7f -> "Téléchargement... ${(prog * 100).toInt()}%"
+                                        prog < 0.05f -> "Préparation..."
+                                        prog < 0.3f -> "Téléchargement ${(prog * 100).toInt()}%"
+                                        prog < 0.7f -> "Téléchargement ${(prog * 100).toInt()}%"
                                         prog < 0.95f -> "Finalisation..."
-                                        else -> "Vérification du fichier..."
+                                        else -> "Vérification..."
                                     }
                                 },
                                 onRetry = { attempt, error ->

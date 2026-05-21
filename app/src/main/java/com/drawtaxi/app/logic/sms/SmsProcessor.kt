@@ -206,34 +206,7 @@ object SmsProcessor {
         }
     }
 
-    private suspend fun handleNewRide(
-        repository: TaxiRepository,
-        address: String,
-        body: String,
-        timestamp: Long
-    ): ProcessResult {
-        val parsedRide = parseSms(address, body, timestamp)
-        return if (parsedRide != null) {
-            val missingFields = parsedRide.missingFieldsList.split(",").filter { it.isNotBlank() }
-            val hasMissingInfo = missingFields.isNotEmpty()
-            val updatedRide = parsedRide.copy(
-                hasMissingInfo = hasMissingInfo,
-                missingFieldsList = missingFields.joinToString(",")
-            )
-            repository.saveRide(updatedRide)
-            Log.d(TAG, "Nouvelle course créée: ${updatedRide.id} (infos manquantes: $hasMissingInfo)")
-            ProcessResult(
-                action = Action.NEW_RIDE,
-                ride = updatedRide,
-                notificationTitle = "Nouvelle course",
-                notificationBody = "${updatedRide.departure} → ${updatedRide.arrival}"
-            )
-        } else {
-            ProcessResult(Action.NO_ACTION, null)
-        }
-    }
-
-    private suspend fun handleClarification(
+    private suspend fun handleClarification(
         repository: TaxiRepository,
         matchedRide: RideRequest?,
         address: String,

@@ -26,6 +26,8 @@ data class GeocodingResult(
 object GeocodingService {
 
     private const val TAG = "GeocodingService"
+    private const val GOOGLE_GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+    var apiKey: String = "YOUR_GOOGLE_MAPS_API_KEY"
     private const val PHOTON_BASE = "https://photon.komoot.io/api"
     private const val NOMINATIM_BASE = "https://nominatim.openstreetmap.org/search"
 
@@ -45,7 +47,13 @@ object GeocodingService {
             for ((index, variation) in variations.withIndex()) {
                 log("[$index] Trying: $variation")
 
-                var result: Location? = tryPhoton(variation)
+                var result: Location? = tryGoogleGeocoding(variation)
+                if (result != null) {
+                    log("Found via Google Geocoding: ${result.latitude}, ${result.longitude}")
+                    return@withContext result
+                }
+
+                result = tryPhoton(variation)
                 if (result != null) {
                     log("Found via Photon: ${result.latitude}, ${result.longitude}")
                     return@withContext result
@@ -89,6 +97,37 @@ object GeocodingService {
             }
 
             log("All strategies failed for: $address")
+            null
+        }
+    }
+
+    private fun tryGoogleGeocoding(address: String): Location? {
+        return try {
+            val query = java.net.URLEncoder.encode(address, "UTF-8")
+            val url = java.net.URL("$GOOGLE_GEOCODING_URL?address=$query&key=$apiKey&language=fr")
+            val json = fetchJson(url)
+            parseGoogleGeocodingResponse(json)
+        } catch (e: Exception) {
+            Log.w(TAG, "Google Geocoding failed: ${e.message}")
+            null
+        }
+    }
+
+    private fun parseGoogleGeocodingResponse(response: String): Location? {
+        return try {
+            val json = JSONObject(response)
+            if (json.optString("status") != "OK") return null
+            val results = json.getJSONArray("results")
+            if (results.length() > 0) {
+                val result = results.getJSONObject(0)
+                val geometry = result.getJSONObject("geometry")
+                val location = geometry.getJSONObject("location")
+                Location("google_geocoding").apply {
+                    latitude = location.getDouble("lat")
+                    longitude = location.getDouble("lng")
+                }
+            } else null
+        } catch (e: Exception) {
             null
         }
     }

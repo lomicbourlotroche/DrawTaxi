@@ -4,13 +4,11 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.location.Location
 import android.net.Uri
 import android.os.Looper
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,16 +21,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
@@ -41,18 +35,12 @@ import com.drawtaxi.app.logic.geocoding.GeocodingService
 import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.*
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import java.util.*
 
 enum class NavigationPhase {
     TO_PICKUP,
@@ -78,7 +66,6 @@ fun RideNavigationScreen(
 
     var currentPhase by remember { mutableStateOf(NavigationPhase.TO_PICKUP) }
     var currentLocation by remember { mutableStateOf<Location?>(null) }
-    var osmMapView by remember { mutableStateOf<MapView?>(null) }
 
     var routeToPickup by remember { mutableStateOf<OsrmRoutingService.RouteResult?>(null) }
     var routeToDestination by remember { mutableStateOf<OsrmRoutingService.RouteResult?>(null) }
@@ -96,12 +83,39 @@ fun RideNavigationScreen(
     var deviationCount by remember { mutableStateOf(0) }
     var lastRecalculationTime by remember { mutableStateOf(0L) }
 
-    // Instructions turn-by-turn
     var currentInstruction by remember { mutableStateOf("") }
     var nextInstruction by remember { mutableStateOf("") }
     var nextInstructionDistance by remember { mutableStateOf("") }
 
-    // Suivi GPS
+    val cameraPositionState = rememberCameraPositionState {
+        position = CameraPosition.fromLatLngZoom(LatLng(48.39, -4.49), 12f)
+    }
+
+    val activeRoute = remember(currentPhase, routeToPickup, routeToDestination) {
+        when (currentPhase) {
+            NavigationPhase.TO_PICKUP -> routeToPickup
+            NavigationPhase.TO_DESTINATION -> routeToDestination
+            else -> null
+        }
+    }
+
+    val routePoints = remember(activeRoute) {
+        activeRoute?.geometry?.map { LatLng(it.first, it.second) } ?: emptyList()
+    }
+
+    val destPoint = remember(activeRoute) {
+        activeRoute?.geometry?.lastOrNull()?.let { LatLng(it.first, it.second) }
+    }
+
+    val routeColor = remember(currentPhase) {
+        when (currentPhase) {
+            NavigationPhase.TO_PICKUP -> ComposeColor(0xFFFF0000)
+            NavigationPhase.TO_DESTINATION -> ComposeColor(0xFF0000FF)
+            NavigationPhase.TO_HOME -> ComposeColor(0xFF00FF00)
+            NavigationPhase.COMPLETED -> ComposeColor.Gray
+        }
+    }
+
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED) {
@@ -131,7 +145,6 @@ fun RideNavigationScreen(
         }
     }
 
-    // Calculer les routes
     LaunchedEffect(ride) {
         scope.launch {
             if (ride.departure.isNotBlank()) {
@@ -145,7 +158,6 @@ fun RideNavigationScreen(
         }
     }
 
-    // Route dynamique vers pickup
     LaunchedEffect(currentLocation, ride.departure) {
         if (currentLocation != null && ride.departure.isNotBlank()) {
             val pickupLoc = GeocodingService.geocode(ride.departure)
@@ -155,19 +167,29 @@ fun RideNavigationScreen(
         }
     }
 
-    // Recalcul + instructions turn-by-turn
+    LaunchedEffect(routePoints) {
+        if (routePoints.isNotEmpty()) {
+            val allPts = routePoints.toMutableList()
+            currentLocation?.let { loc ->
+                allPts.add(LatLng(loc.latitude, loc.longitude))
+            }
+            val midLat = allPts.map { it.latitude }.let { (it.min() + it.max()) / 2.0 }
+            val midLng = allPts.map { it.longitude }.let { (it.min() + it.max()) / 2.0 }
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(LatLng(midLat, midLng), 12f)
+        }
+    }
+
     LaunchedEffect(currentLocation, currentPhase) {
         if (currentLocation == null) return@LaunchedEffect
 
-        val activeRoute = when (currentPhase) {
+        val active = when (currentPhase) {
             NavigationPhase.TO_PICKUP -> routeToPickup
             NavigationPhase.TO_DESTINATION -> routeToDestination
             else -> null
         }
 
-        activeRoute?.let { route ->
+        active?.let { route ->
             if (route.success && route.geometry.isNotEmpty()) {
-                // Trouver le point le plus proche
                 var minDistance = Double.MAX_VALUE
                 var nearestIndex = 0
                 val currentLoc = Location("current").apply {
@@ -188,10 +210,8 @@ fun RideNavigationScreen(
                     }
                 }
 
-                // Instructions turn-by-turn
                 var allSteps = route.legs.flatMap { it.steps }
                 if (allSteps.isNotEmpty()) {
-                    // Trouver l'étape actuelle
                     var stepIndex = 0
                     var accumulatedDistance = 0.0
                     for (i in allSteps.indices) {
@@ -217,7 +237,6 @@ fun RideNavigationScreen(
                     }
                 }
 
-                // Recalcul si déviation
                 if (minDistance > 100.0 && System.currentTimeMillis() - lastRecalculationTime > 10000) {
                     deviationCount++
                     if (deviationCount >= 2 || minDistance > 200.0) {
@@ -251,7 +270,6 @@ fun RideNavigationScreen(
         }
     }
 
-    // ETA + auto-switch
     LaunchedEffect(currentLocation, currentPhase, routeToPickup, routeToDestination) {
         currentLocation?.let { location ->
             when (currentPhase) {
@@ -282,9 +300,16 @@ fun RideNavigationScreen(
         }
     }
 
+    LaunchedEffect(currentLocation) {
+        currentLocation?.let { loc ->
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(
+                LatLng(loc.latitude, loc.longitude), 16f
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
-            // Barre supérieure minimaliste
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -303,7 +328,6 @@ fun RideNavigationScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
                 }
 
-                // Vitesse actuelle
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = ComposeColor.White.copy(alpha = 0.95f),
@@ -321,7 +345,6 @@ fun RideNavigationScreen(
             }
         },
         floatingActionButton = {
-            // Boutons flottants
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -352,78 +375,35 @@ fun RideNavigationScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Carte osmdroid plein écran
-            AndroidView(
-                factory = { ctx ->
-                    Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid_nav", 0))
-                    MapView(ctx).apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setMultiTouchControls(true)
-                        controller.setZoom(16.0)
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                properties = MapProperties(isMyLocationEnabled = true),
+                uiSettings = MapUiSettings(
+                    myLocationButtonEnabled = true,
+                    zoomControlsEnabled = false
+                )
+            ) {
+                if (routePoints.isNotEmpty()) {
+                    Polyline(
+                        points = routePoints,
+                        color = routeColor,
+                        width = 14f
+                    )
+                }
 
-                        val locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this)
-                        overlays.add(locationOverlay)
-                        locationOverlay.enableMyLocation()
-                        locationOverlay.isDrawAccuracyEnabled = false
-
-                        osmMapView = this
-                    }
-                },
-                update = { map ->
-                    map.overlays.filterIsInstance<Polyline>().toList().forEach { map.overlays.remove(it) }
-                    map.overlays.filterIsInstance<Marker>().toList().forEach { map.overlays.remove(it) }
-
-                    val activeRoute = when (currentPhase) {
-                        NavigationPhase.TO_PICKUP -> routeToPickup
-                        NavigationPhase.TO_DESTINATION -> routeToDestination
-                        else -> null
-                    }
-
-                    activeRoute?.let { route ->
-                        if (route.success && route.geometry.isNotEmpty()) {
-                            val polyline = Polyline()
-                            polyline.setPoints(ArrayList(route.geometry.map { GeoPoint(it.first, it.second) }))
-                            polyline.color = when (currentPhase) {
-                                NavigationPhase.TO_PICKUP -> Color.RED
-                                NavigationPhase.TO_DESTINATION -> Color.BLUE
-                                else -> Color.GRAY
-                            }
-                            polyline.width = 14f
-                            map.overlays.add(0, polyline)
-
-                            // Marqueur destination
-                            val destPoint = route.geometry.last()
-                            val marker = Marker(map)
-                            marker.position = GeoPoint(destPoint.first, destPoint.second)
-                            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            marker.title = when (currentPhase) {
-                                NavigationPhase.TO_PICKUP -> "Client: ${ride.departure}"
-                                NavigationPhase.TO_DESTINATION -> "Destination: ${ride.arrival}"
-                                else -> "Terminé"
-                            }
-                            map.overlays.add(marker)
-
-                            // Zoom sur l'itinéraire + position actuelle
-                            currentLocation?.let { loc ->
-                                val geoPoints = ArrayList<GeoPoint>()
-                                geoPoints.addAll(route.geometry.map { GeoPoint(it.first, it.second) })
-                                geoPoints.add(GeoPoint(loc.latitude, loc.longitude))
-                                val bounds = BoundingBox.fromGeoPoints(geoPoints)
-                                map.zoomToBoundingBox(bounds, true, 100)
-                            }
+                destPoint?.let {
+                    Marker(
+                        state = MarkerState(position = it),
+                        title = when (currentPhase) {
+                            NavigationPhase.TO_PICKUP -> "Client: ${ride.departure}"
+                            NavigationPhase.TO_DESTINATION -> "Destination: ${ride.arrival}"
+                            else -> "Terminé"
                         }
-                    }
+                    )
+                }
+            }
 
-                    // Centrer sur la position actuelle
-                    currentLocation?.let { loc ->
-                        val currentPoint = GeoPoint(loc.latitude, loc.longitude)
-                        map.controller.animateTo(currentPoint)
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // Panneau d'instructions turn-by-turn
             AnimatedVisibility(
                 visible = currentInstruction.isNotBlank(),
                 enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -441,7 +421,6 @@ fun RideNavigationScreen(
                 )
             }
 
-            // Panneau d'information en bas
             BottomNavigationPanel(
                 currentPhase = currentPhase,
                 eta = etaText,
@@ -453,7 +432,6 @@ fun RideNavigationScreen(
         }
     }
 
-    // Dialog appel
     if (showCallDialog) {
         AlertDialog(
             onDismissRequest = { showCallDialog = false },
@@ -480,7 +458,6 @@ fun RideNavigationScreen(
         )
     }
 
-    // Dialog message
     if (showMessageDialog) {
         var message by remember { mutableStateOf("Bonjour, je suis votre chauffeur et j'arrive.") }
         AlertDialog(
@@ -517,7 +494,6 @@ fun RideNavigationScreen(
         )
     }
 
-    // Dialog modifier
     if (showEditDialog) {
         var departure by remember { mutableStateOf(ride.departure) }
         var arrival by remember { mutableStateOf(ride.arrival) }
@@ -543,7 +519,6 @@ fun RideNavigationScreen(
         )
     }
 
-    // Dialog terminer course
     if (showCompleteDialog) {
         AlertDialog(
             onDismissRequest = { showCompleteDialog = false },
@@ -619,7 +594,6 @@ private fun InstructionCard(
             shadowElevation = 8.dp
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                // Instruction principale
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -650,7 +624,6 @@ private fun InstructionCard(
                     }
                 }
 
-                // Prochaine instruction
                 if (nextInstruction.isNotBlank()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     HorizontalDivider(color = Slate100)
@@ -711,7 +684,6 @@ private fun BottomNavigationPanel(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Barre de progression des phases
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -722,7 +694,6 @@ private fun BottomNavigationPanel(
             PhaseProgressDot(isActive = currentPhase == NavigationPhase.TO_DESTINATION, isCompleted = currentPhase.ordinal > 1, color = Indigo500)
         }
 
-        // Panneau principal
         Surface(
             color = ComposeColor.White,
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
@@ -733,7 +704,6 @@ private fun BottomNavigationPanel(
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                // En-tête avec destination
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -764,7 +734,6 @@ private fun BottomNavigationPanel(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Bouton terminer
                 Button(
                     onClick = onComplete,
                     modifier = Modifier

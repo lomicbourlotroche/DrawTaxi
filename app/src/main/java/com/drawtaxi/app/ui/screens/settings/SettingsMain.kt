@@ -18,6 +18,8 @@ import com.drawtaxi.app.ui.components.TaxiCard
 import com.drawtaxi.app.ui.components.TaxiInputField
 import com.drawtaxi.app.ui.theme.Slate500
 import com.drawtaxi.app.ui.theme.Slate700
+import com.drawtaxi.app.ui.theme.Slate200
+import com.drawtaxi.app.ui.theme.TaxiRed
 import kotlinx.coroutines.delay
 
 import androidx.compose.ui.tooling.preview.Preview
@@ -139,7 +141,7 @@ fun SettingsMain(
                 Icon(Icons.Default.Info, contentDescription = null, tint = Slate500, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Modèle: Phi-3 Mini. Fallback automatique vers regex si indisponible.",
+                    text = "Modèle: Llama 3.2 3B. Fallback automatique vers regex si indisponible.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Slate500
                 )
@@ -156,6 +158,83 @@ fun SettingsMain(
                     Icon(Icons.Default.Download, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Télécharger le modèle IA")
+                }
+            }
+        }
+
+        TaxiCard(title = "", titleIcon = Icons.Default.Map) {
+            var mapsApiKey by remember { mutableStateOf(settings.googleMapsApiKey) }
+
+            LaunchedEffect(mapsApiKey) {
+                delay(500)
+                if (mapsApiKey != settings.googleMapsApiKey) {
+                    onUpdate(settings.copy(googleMapsApiKey = mapsApiKey))
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Clé API Google Maps",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                "Nécessaire pour les cartes et le calcul d'itinéraires. Obtenez-la sur console.cloud.google.com",
+                style = MaterialTheme.typography.bodySmall,
+                color = Slate500,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            OutlinedTextField(
+                value = mapsApiKey,
+                onValueChange = { mapsApiKey = it },
+                label = { Text("Clé API") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = TaxiRed,
+                    unfocusedBorderColor = Slate200
+                )
+            )
+            if (!settings.googleMapsApiKey.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = androidx.compose.ui.graphics.Color(0xFF10B981),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Clé configurée ✓",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = androidx.compose.ui.graphics.Color(0xFF10B981)
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = androidx.compose.ui.graphics.Color(0xFFF59E0B),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        "Clé non configurée — les cartes utiliseront le mode dégradé",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = androidx.compose.ui.graphics.Color(0xFFF59E0B)
+                    )
                 }
             }
         }

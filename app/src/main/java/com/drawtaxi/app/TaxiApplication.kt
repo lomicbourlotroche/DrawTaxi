@@ -23,8 +23,14 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.drawtaxi.app.logic.messaging.NotificationHelper
+import com.drawtaxi.app.logic.routing.OsrmRoutingService
+import com.drawtaxi.app.logic.routing.fetchRouteApiKey
+import com.drawtaxi.app.logic.geocoding.GeocodingService
 
 class TaxiApplication : Application() {
     private val database by lazy { AppDatabase.getDatabase(this) }
@@ -38,6 +44,8 @@ class TaxiApplication : Application() {
         )
     }
 
+    private val applicationScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     companion object {
         private const val TAG = "TaxiApp"
         var isSmsServiceRunning = false
@@ -46,9 +54,18 @@ class TaxiApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        org.osmdroid.config.Configuration.getInstance().userAgentValue = packageName
         createNotificationChannels()
         
+        // Synchroniser la clé Google Maps depuis les paramètres
+        applicationScope.launch {
+            repository.settings.collect { settings ->
+                val key = settings.googleMapsApiKey.ifBlank { "YOUR_GOOGLE_MAPS_API_KEY" }
+                OsrmRoutingService.apiKey = key
+                GeocodingService.apiKey = key
+                fetchRouteApiKey = key
+            }
+        }
+
         // Démarrer les services de surveillance
         startSmsServiceIfEnabled()
         startImapServiceIfEnabled()
@@ -60,7 +77,7 @@ class TaxiApplication : Application() {
             val workManager = WorkManager.getInstance(this)
             workManager.cancelUniqueWork(SmsScanWorker.WORK_NAME)
 
-            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            applicationScope.launch {
                 try {
                     val settings = repository.settings.first()
                     if (!settings.monitorSms) {
@@ -111,7 +128,7 @@ class TaxiApplication : Application() {
             
             // Canal pour le service SMS en arrière-plan
             val smsServiceChannel = NotificationChannel(
-                "sms_service_channel",
+                NotificationHelper.CHANNEL_ID_SMS,
                 "Surveillance SMS",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
@@ -138,7 +155,7 @@ class TaxiApplication : Application() {
     }
 
     fun startSmsServiceIfEnabled() {
-        CoroutineScope(Dispatchers.IO).launch {
+        applicationScope.launch {
             try {
                 val settings = repository.settings.first()
                 if (!settings.monitorSms) {
@@ -190,7 +207,7 @@ class TaxiApplication : Application() {
     }
 
     fun startImapServiceIfEnabled() {
-        CoroutineScope(Dispatchers.IO).launch {
+        applicationScope.launch {
             try {
                 val settings = repository.settings.first()
                 if (!settings.ovhImapEnabled) {
@@ -244,8 +261,7 @@ class TaxiApplication : Application() {
     fun onNewSmsReceived(address: String, body: String, timestamp: Long) {
         Log.d(TAG, "SMS reçu de $address: ${body.take(50)}...")
         
-        val appScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        appScope.launch {
+        applicationScope.launch {
             try {
                 val result = SmsProcessor.processSms(
                     context = this@TaxiApplication,

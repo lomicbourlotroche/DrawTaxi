@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Telephony
 import android.telephony.SmsManager
 import android.util.Log
@@ -20,8 +21,10 @@ import com.drawtaxi.app.logic.sms.isTaxiRelated
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
@@ -31,7 +34,11 @@ class SmsReceiver : BroadcastReceiver() {
         private const val TAG = "SmsReceiver"
         private const val RECENT_RIDE_WINDOW_MS = 3600000L
         private const val DEDUP_WINDOW_MS = 30000L
+        private const val MAX_DEDUP_CACHE = 200
         private val processedMessages = ConcurrentHashMap<String, Long>()
+        private val smsProcessingDispatcher = java.util.concurrent.Executors
+            .newSingleThreadExecutor()
+            .asCoroutineDispatcher()
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -56,19 +63,25 @@ class SmsReceiver : BroadcastReceiver() {
         }
         
         processedMessages[dedupKey] = now
-        if (processedMessages.size > 100) {
+        if (processedMessages.size > MAX_DEDUP_CACHE) {
             val oldestKeys = processedMessages.entries
                 .sortedBy { it.value }
-                .take(processedMessages.size - 50)
+                .take(processedMessages.size - MAX_DEDUP_CACHE / 2)
             oldestKeys.forEach { processedMessages.remove(it.key) }
         }
 
         Log.d(TAG, "SMS reçu - De: $sender - Corps: ${fullBody.take(50)}...")
 
-        val pendingResult = goAsync()
-        val receiverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS)
+            != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "Permission RECEIVE_SMS non accordée")
+            return
+        }
 
-        receiverScope.launch {
+        val pendingResult = goAsync()
+
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
                 withTimeoutOrNull(15000L) {
                     val repository = (context.applicationContext as TaxiApplication).repository
@@ -484,8 +497,12 @@ class SmsReceiver : BroadcastReceiver() {
                 return
             }
 
-            @Suppress("DEPRECATION")
-            val smsManager = SmsManager.getDefault()
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                context.getSystemService(android.telephony.SmsManager::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
             val parts = smsManager.divideMessage(message)
             smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
             Log.d(TAG, "SMS envoyé à $phoneNumber: ${message.take(30)}...")

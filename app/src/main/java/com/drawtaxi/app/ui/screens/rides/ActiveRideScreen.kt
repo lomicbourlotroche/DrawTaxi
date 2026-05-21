@@ -18,7 +18,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,7 +30,6 @@ import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.components.NavigationMapView
 import com.drawtaxi.app.ui.theme.*
 import com.google.android.gms.location.*
-import com.mapbox.mapboxsdk.Mapbox
 
 // Étapes de navigation simplifiées
 enum class NavigationStep(val label: String, val description: String) {
@@ -107,11 +105,6 @@ fun ActiveRideScreen(
                 String.format("%.0f km/h", loc.speed * 3.6)
             } else "0 km/h"
         }
-    }
-
-    // Initialiser Mapbox (MapLibre)
-    LaunchedEffect(Unit) {
-        Mapbox.getInstance(context)
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

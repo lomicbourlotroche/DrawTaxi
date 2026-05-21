@@ -1,5 +1,7 @@
 package com.drawtaxi.app.logic
 
+import com.drawtaxi.app.logic.sms.parseSms
+import com.drawtaxi.app.logic.sms.parseSmsAdvanced
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -10,9 +12,8 @@ class SmsParserTest {
         val body = "Taxi depuis l'adresse : 12 rue de la Paix pour l'Aéroport CDG heure : 8h00"
         val sender = "+33612345678"
         val parsed = parseSmsAdvanced(sender, body)
-        println("DEPARTURE: '${parsed.departure}'")
-        println("ARRIVAL: '${parsed.arrival}'")
-        println("TIME: '${parsed.time}'")
+        assertNotNull(parsed)
+        assertTrue(parsed.departure.isNotEmpty() || parsed.arrival.isNotEmpty() || parsed.time.isNotEmpty())
     }
 
     @Test
@@ -44,9 +45,7 @@ class SmsParserTest {
     fun testParseIncompleteSms() {
         val body = "Bonjour je veux un taxi"
         val ride = parseSms("123", body)
-        assertNotNull(ride)
-        assertEquals("", ride?.departure)
-        assertEquals("", ride?.arrival)
+        assertNull(ride)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.drawtaxi.app.receiver
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -45,6 +46,13 @@ class BootReceiver : BroadcastReceiver() {
                             != PackageManager.PERMISSION_GRANTED) {
                             Log.d(TAG, "Permission READ_SMS non accordée")
                             return@withTimeoutOrNull
+                        }
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            val notificationManager = context.getSystemService(NotificationManager::class.java)
+                            if (!notificationManager.areNotificationsEnabled()) {
+                                Log.d(TAG, "Notifications désactivées")
+                            }
                         }
 
                         if (SmsForegroundService.isRunning) {

@@ -9,40 +9,32 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-/**
- * Service de calcul d'itinéraire via OSRM (Open Source Routing Machine)
- * Utilise l'API publique OSRM ou peut être auto-hébergé
- */
 object OsrmRoutingService {
-    
+
     private const val TAG = "OsrmRoutingService"
-    
-    // API publique OSRM (limitée à 100 req/min)
-    private const val OSRM_BASE_URL = "https://router.project-osrm.org/route/v1/driving/"
-    
-    // Alternative : MapTiler (clé API requise mais gratuite)
-    // private const val MAPTILER_URL = "https://api.maptiler.com/routing/driving/"
-    
+    private const val GOOGLE_DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
+    var apiKey: String = "YOUR_GOOGLE_MAPS_API_KEY"
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
-    
+
     data class RouteResult(
         val success: Boolean,
-        val distance: Double, // en mètres
-        val duration: Double, // en secondes
-        val geometry: List<Pair<Double, Double>>, // Liste de points (lat, lon)
+        val distance: Double,
+        val duration: Double,
+        val geometry: List<Pair<Double, Double>>,
         val legs: List<RouteLeg>,
         val errorMessage: String? = null
     )
-    
+
     data class RouteLeg(
         val distance: Double,
         val duration: Double,
         val steps: List<RouteStep>
     )
-    
+
     data class RouteStep(
         val instruction: String,
         val distance: Double,
@@ -50,217 +42,220 @@ object OsrmRoutingService {
         val maneuver: String,
         val name: String
     )
-    
-    /**
-     * Calcule un itinéraire entre deux points
-     * @param from Point de départ (Location avec latitude/longitude)
-     * @param to Point d'arrivée (Location avec latitude/longitude)
-     * @return RouteResult avec l'itinéraire complet ou une erreur
-     */
+
     suspend fun calculateRoute(
         from: Location,
         to: Location
     ): RouteResult = withContext(Dispatchers.IO) {
         try {
-            // Construire l'URL OSRM
-            // Format : {lon1},{lat1};{lon2},{lat2}
-            val coordinates = "${from.longitude},${from.latitude};${to.longitude},${to.latitude}"
-            val url = "${OSRM_BASE_URL}${coordinates}?" +
-                    "overview=full&" +          // Géométrie complète
-                    "geometries=geojson&" +     // Format GeoJSON
-                    "steps=true&" +             // Instructions étape par étape
-                    "alternatives=false"        // Pas d'alternatives
-            
-            Log.d(TAG, "Requête OSRM : $url")
-            
+            val origin = "${from.latitude},${from.longitude}"
+            val destination = "${to.latitude},${to.longitude}"
+            val url = "$GOOGLE_DIRECTIONS_URL?origin=$origin&destination=$destination&key=$apiKey&language=fr&units=metric"
+
+            Log.d(TAG, "Requête Directions API : $url")
+
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "DrawTaxi/1.0")
                 .build()
-            
+
             val response = client.newCall(request).execute()
-            
+
             if (!response.isSuccessful) {
-                Log.e(TAG, "Erreur OSRM : ${response.code}")
+                Log.e(TAG, "Erreur Directions API : ${response.code}")
                 return@withContext RouteResult(
-                    success = false,
-                    distance = 0.0,
-                    duration = 0.0,
-                    geometry = emptyList(),
-                    legs = emptyList(),
+                    success = false, distance = 0.0, duration = 0.0,
+                    geometry = emptyList(), legs = emptyList(),
                     errorMessage = "Erreur serveur : ${response.code}"
                 )
             }
-            
+
             val jsonResponse = response.body?.string() ?: ""
             val json = JSONObject(jsonResponse)
-            
-            if (json.getString("code") != "Ok") {
-                val message = json.optString("message", "Erreur inconnue")
-                Log.e(TAG, "Erreur OSRM : $message")
+
+            val status = json.optString("status", "")
+            if (status != "OK") {
+                val errorMsg = json.optString("error_message", "Erreur inconnue")
+                Log.e(TAG, "Erreur Directions API : $status - $errorMsg")
                 return@withContext RouteResult(
-                    success = false,
-                    distance = 0.0,
-                    duration = 0.0,
-                    geometry = emptyList(),
-                    legs = emptyList(),
-                    errorMessage = message
+                    success = false, distance = 0.0, duration = 0.0,
+                    geometry = emptyList(), legs = emptyList(),
+                    errorMessage = errorMsg
                 )
             }
-            
-            // Parser la réponse
+
             val routes = json.getJSONArray("routes")
             if (routes.length() == 0) {
                 return@withContext RouteResult(
-                    success = false,
-                    distance = 0.0,
-                    duration = 0.0,
-                    geometry = emptyList(),
-                    legs = emptyList(),
+                    success = false, distance = 0.0, duration = 0.0,
+                    geometry = emptyList(), legs = emptyList(),
                     errorMessage = "Aucun itinéraire trouvé"
                 )
             }
-            
+
             val route = routes.getJSONObject(0)
-            val distance = route.getDouble("distance") // en mètres
-            val duration = route.getDouble("duration") // en secondes
-            
-            // Parser la géométrie (points du trajet)
-            val geometry = mutableListOf<Pair<Double, Double>>()
-            val geometryObj = route.getJSONObject("geometry")
-            val geometryCoordinates = geometryObj.getJSONArray("coordinates")
-            
-            for (i in 0 until geometryCoordinates.length()) {
-                val point = geometryCoordinates.getJSONArray(i)
-                val lon = point.getDouble(0)
-                val lat = point.getDouble(1)
-                geometry.add(Pair(lat, lon)) // Note : OSRM retourne [lon, lat], on convertit en [lat, lon]
-            }
-            
-            // Parser les legs (segments)
+
+            val overviewPolyline = route.getJSONObject("overview_polyline")
+            val encodedPoints = overviewPolyline.getString("points")
+            val geometry = decodePolyline(encodedPoints)
+
             val legs = mutableListOf<RouteLeg>()
             val legsArray = route.getJSONArray("legs")
-            
+            var totalDistance = 0.0
+            var totalDuration = 0.0
+
             for (i in 0 until legsArray.length()) {
                 val legObj = legsArray.getJSONObject(i)
-                val legDistance = legObj.getDouble("distance")
-                val legDuration = legObj.getDouble("duration")
-                
-                // Parser les steps (instructions)
+                val legDist = legObj.getJSONObject("distance").getDouble("value")
+                val legDur = legObj.getJSONObject("duration").getDouble("value")
+                totalDistance += legDist
+                totalDuration += legDur
+
                 val steps = mutableListOf<RouteStep>()
                 val stepsArray = legObj.getJSONArray("steps")
-                
+
                 for (j in 0 until stepsArray.length()) {
                     val stepObj = stepsArray.getJSONObject(j)
-                    steps.add(
-                        RouteStep(
-                            instruction = stepObj.optString("name", "Continuer"),
-                            distance = stepObj.getDouble("distance"),
-                            duration = stepObj.getDouble("duration"),
-                            maneuver = stepObj.getJSONObject("maneuver").optString("type", "straight"),
-                            name = stepObj.optString("name", "")
-                        )
-                    )
+                    val stepDist = stepObj.getJSONObject("distance").getDouble("value")
+                    val stepDur = stepObj.getJSONObject("duration").getDouble("value")
+                    val htmlInstructions = stepObj.optString("html_instructions", "")
+                    val plainInstruction = android.text.Html.fromHtml(htmlInstructions, android.text.Html.FROM_HTML_MODE_LEGACY).toString()
+                    val maneuver = stepObj.getJSONObject("maneuver").optString("maneuver", "straight")
+
+                    val name = stepObj.optString("street_name", "")
+                        .ifBlank { stepObj.optString("name", "") }
+
+                    steps.add(RouteStep(
+                        instruction = plainInstruction,
+                        distance = stepDist,
+                        duration = stepDur,
+                        maneuver = normalizeManeuver(maneuver),
+                        name = name
+                    ))
                 }
-                
-                legs.add(
-                    RouteLeg(
-                        distance = legDistance,
-                        duration = legDuration,
-                        steps = steps
-                    )
-                )
+
+                legs.add(RouteLeg(distance = legDist, duration = legDur, steps = steps))
             }
-            
-            Log.d(TAG, "Itinéraire calculé : ${distance/1000} km, ${duration/60} min, ${geometry.size} points")
-            
+
+            Log.d(TAG, "Itinéraire calculé : ${totalDistance / 1000} km, ${totalDuration / 60} min, ${geometry.size} points")
+
             RouteResult(
-                success = true,
-                distance = distance,
-                duration = duration,
-                geometry = geometry,
-                legs = legs
+                success = true, distance = totalDistance, duration = totalDuration,
+                geometry = geometry, legs = legs
             )
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Erreur calcul itinéraire", e)
             RouteResult(
-                success = false,
-                distance = 0.0,
-                duration = 0.0,
-                geometry = emptyList(),
-                legs = emptyList(),
+                success = false, distance = 0.0, duration = 0.0,
+                geometry = emptyList(), legs = emptyList(),
                 errorMessage = "Erreur réseau : ${e.message}"
             )
         }
     }
-    
-    /**
-     * Calcule l'itinéraire depuis la position actuelle vers une destination
-     */
+
     suspend fun calculateRouteFromCurrentPosition(
         currentLocation: Location,
         destinationAddress: String
     ): RouteResult {
         val destLocation = com.drawtaxi.app.logic.geocoding.GeocodingService.geocode(destinationAddress)
             ?: return RouteResult(
-                success = false,
-                distance = 0.0,
-                duration = 0.0,
-                geometry = emptyList(),
-                legs = emptyList(),
+                success = false, distance = 0.0, duration = 0.0,
+                geometry = emptyList(), legs = emptyList(),
                 errorMessage = "Adresse de destination introuvable"
             )
-
         return calculateRoute(currentLocation, destLocation)
     }
-    
-    /**
-     * Convertit une durée en secondes en format lisible
-     */
+
     fun formatDuration(seconds: Double): String {
         val hours = (seconds / 3600).toInt()
         val minutes = ((seconds % 3600) / 60).toInt()
-        
         return when {
             hours > 0 -> "${hours}h ${minutes}min"
             minutes > 0 -> "${minutes} min"
             else -> "< 1 min"
         }
     }
-    
-    /**
-     * Convertit une distance en mètres en format lisible
-     */
+
     fun formatDistance(meters: Double): String {
         return when {
             meters >= 1000 -> String.format("%.1f km", meters / 1000)
             else -> String.format("%.0f m", meters)
         }
     }
-    
-    /**
-     * Retourne l'instruction textuelle pour un type de manœuvre
-     */
+
     fun getManeuverInstruction(maneuver: String, name: String = ""): String {
         return when (maneuver.lowercase()) {
-            "turn" -> "Tourner"
-            "new name" -> "Continuer sur"
+            "turn-left" -> "Tournez à gauche"
+            "turn-right" -> "Tournez à droite"
+            "turn-slight-left" -> "Tournez légèrement à gauche"
+            "turn-slight-right" -> "Tournez légèrement à droite"
+            "turn-sharp-left" -> "Tournez fortement à gauche"
+            "turn-sharp-right" -> "Tournez fortement à droite"
+            "straight" -> "Continuez tout droit"
+            "uturn" -> "Faites demi-tour"
+            "ramp-left" -> "Prenez la rampe à gauche"
+            "ramp-right" -> "Prenez la rampe à droite"
+            "merge" -> "Insérez-vous"
+            "fork-left" -> "Bifurquez à gauche"
+            "fork-right" -> "Bifurquez à droite"
+            "roundabout-left" -> "Prenez le rond-point"
+            "roundabout-right" -> "Prenez le rond-point"
+            "roundabout" -> "Prenez le rond-point"
             "depart" -> "Départ"
             "arrive" -> "Arrivée"
-            "merge" -> "S'insérer"
-            "on ramp" -> "Prendre la rampe"
-            "off ramp" -> "Sortir"
-            "fork" -> "Prendre la bifurcation"
-            "end of road" -> "Fin de route"
-            "continue" -> "Continuer"
-            "roundabout" -> "Prendre le rond-point"
-            "rotary" -> "Prendre le giratoire"
-            "roundabout turn" -> "Au rond-point"
-            "notification" -> "Note"
-            "exit roundabout" -> "Sortir du rond-point"
-            "exit rotary" -> "Sortir du giratoire"
-            else -> "Continuer"
-        } + if (name.isNotBlank()) " $name" else ""
+            "end" -> "Arrivée"
+            "continue" -> "Continuez"
+            "turn" -> "Tournez"
+            else -> "Continuez"
+        } + if (name.isNotBlank()) " sur $name" else ""
+    }
+
+    private fun normalizeManeuver(googleManeuver: String): String {
+        return when (googleManeuver) {
+            "turn-slight-left" -> "turn"
+            "turn-slight-right" -> "turn"
+            "turn-sharp-left" -> "turn"
+            "turn-sharp-right" -> "turn"
+            "uturn-left", "uturn-right" -> "uturn"
+            "ramp-left", "ramp-right" -> "on ramp"
+            "fork-left", "fork-right" -> "fork"
+            "roundabout-left", "roundabout-right" -> "roundabout"
+            else -> googleManeuver
+        }
+    }
+
+    private fun decodePolyline(encoded: String): List<Pair<Double, Double>> {
+        val points = mutableListOf<Pair<Double, Double>>()
+        var index = 0
+        val len = encoded.length
+        var lat = 0
+        var lng = 0
+
+        while (index < len) {
+            var b: Int
+            var shift = 0
+            var result = 0
+            do {
+                b = encoded[index++].code - 63
+                result = result or ((b and 0x1f) shl shift)
+                shift += 5
+            } while (b >= 0x20)
+            val dlat = if (result and 1 != 0) (result shr 1).inv() else result shr 1
+            lat += dlat
+
+            shift = 0
+            result = 0
+            do {
+                b = encoded[index++].code - 63
+                result = result or ((b and 0x1f) shl shift)
+                shift += 5
+            } while (b >= 0x20)
+            val dlng = if (result and 1 != 0) (result shr 1).inv() else result shr 1
+            lng += dlng
+
+            points.add(Pair(lat / 1e5, lng / 1e5))
+        }
+
+        return points
     }
 }

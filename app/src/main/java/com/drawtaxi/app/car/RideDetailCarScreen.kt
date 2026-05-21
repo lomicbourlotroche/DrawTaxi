@@ -3,6 +3,7 @@ package com.drawtaxi.app.car
 import android.content.Intent
 import android.net.Uri
 import android.text.SpannableString
+import android.util.Log
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.*
@@ -15,8 +16,13 @@ import kotlinx.coroutines.*
 
 class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : Screen(carContext) {
 
+    companion object {
+        private const val TAG = "RideDetailCarScreen"
+    }
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var ride: RideRequest? = null
+    private var loadJob: Job? = null
 
     init {
         loadRide()
@@ -35,16 +41,23 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
                     )
                     .build()
             )
-                .setTitle("Course")
+                .setTitle("Détails course")
+                .setHeaderAction(Action.BACK)
                 .build()
         }
 
         val paneBuilder = Pane.Builder()
 
+        val clientName = rideData.clientName.ifBlank {
+            rideData.clientFirstName.ifBlank {
+                rideData.sender.ifBlank { "Inconnu" }
+            }
+        }
+
         paneBuilder.addRow(
             Row.Builder()
-                .setTitle("Client")
-                .addText(SpannableString(rideData.sender.ifBlank { "Inconnu" }))
+                .setTitle(clientName)
+                .addText(SpannableString("Client"))
                 .setImage(
                     CarIcon.Builder(
                         IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_call)
@@ -56,8 +69,8 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
         if (rideData.departure.isNotBlank()) {
             paneBuilder.addRow(
                 Row.Builder()
-                    .setTitle("Départ")
-                    .addText(SpannableString(rideData.departure))
+                    .setTitle(rideData.departure)
+                    .addText(SpannableString("Départ"))
                     .setImage(
                         CarIcon.Builder(
                             IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_mylocation)
@@ -70,8 +83,8 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
         if (rideData.arrival.isNotBlank()) {
             paneBuilder.addRow(
                 Row.Builder()
-                    .setTitle("Arrivée")
-                    .addText(SpannableString(rideData.arrival))
+                    .setTitle(rideData.arrival)
+                    .addText(SpannableString("Arrivée"))
                     .setImage(
                         CarIcon.Builder(
                             IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_directions)
@@ -84,8 +97,8 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
         if (rideData.time.isNotBlank()) {
             paneBuilder.addRow(
                 Row.Builder()
-                    .setTitle("Heure")
-                    .addText(SpannableString(rideData.time))
+                    .setTitle(rideData.time)
+                    .addText(SpannableString("Heure"))
                     .setImage(
                         CarIcon.Builder(
                             IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_recent_history)
@@ -98,8 +111,8 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
         if (rideData.distanceKm > 0) {
             paneBuilder.addRow(
                 Row.Builder()
-                    .setTitle("Distance")
-                    .addText(SpannableString(String.format("%.1f km", rideData.distanceKm)))
+                    .setTitle(String.format("%.1f km", rideData.distanceKm))
+                    .addText(SpannableString("Distance"))
                     .setImage(
                         CarIcon.Builder(
                             IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_mapmode)
@@ -112,8 +125,8 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
         if (rideData.price > 0) {
             paneBuilder.addRow(
                 Row.Builder()
-                    .setTitle("Prix")
-                    .addText(SpannableString(String.format("%.2f €", rideData.price)))
+                    .setTitle(String.format("%.2f €", rideData.price))
+                    .addText(SpannableString("Prix"))
                     .setImage(
                         CarIcon.Builder(
                             IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_manage)
@@ -123,21 +136,45 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
             )
         }
 
-        paneBuilder.addAction(
-            Action.Builder()
-                .setTitle("Appeler")
-                .setBackgroundColor(CarColor.BLUE)
-                .setOnClickListener {
-                    val phoneNumber = rideData.sender
-                    if (phoneNumber.isNotBlank()) {
+        val phoneNumber = rideData.clientPhone.ifBlank { rideData.sender }
+
+        if (phoneNumber.isNotBlank()) {
+            paneBuilder.addAction(
+                Action.Builder()
+                    .setTitle("Appeler")
+                    .setBackgroundColor(CarColor.BLUE)
+                    .setOnClickListener {
                         val intent = Intent(Intent.ACTION_DIAL).apply {
                             data = Uri.parse("tel:$phoneNumber")
                         }
-                        carContext.startCarApp(intent)
+                        try {
+                            carContext.startCarApp(intent)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to start dial intent", e)
+                        }
                     }
-                }
-                .build()
-        )
+                    .build()
+            )
+        }
+
+        if (phoneNumber.isNotBlank()) {
+            paneBuilder.addAction(
+                Action.Builder()
+                    .setTitle("WhatsApp")
+                    .setBackgroundColor(CarColor.GREEN)
+                    .setOnClickListener {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                data = Uri.parse("https://wa.me/${phoneNumber.replace("+", "").replace(" ", "")}")
+                            }
+                            carContext.startCarApp(intent)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to start WhatsApp intent", e)
+                        }
+                    }
+                    .build()
+            )
+        }
 
         if (rideData.isPending) {
             paneBuilder.addAction(
@@ -151,52 +188,57 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
             )
         }
 
-        paneBuilder.addAction(
-            Action.Builder()
-                .setTitle("Naviguer")
-                .setBackgroundColor(CarColor.BLUE)
-                .setOnClickListener {
-                    val destination = rideData.arrival
-                    if (destination.isNotBlank()) {
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            data = Uri.parse("google.navigation:q=${Uri.encode(destination)}")
-                            setPackage("com.google.android.apps.maps")
-                        }
-                        try {
-                            carContext.startCarApp(intent)
-                        } catch (e: Exception) {
-                            val webIntent = Intent(Intent.ACTION_VIEW).apply {
-                                data = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${Uri.encode(destination)}")
+        if (rideData.arrival.isNotBlank()) {
+            paneBuilder.addAction(
+                Action.Builder()
+                    .setTitle("Naviguer")
+                    .setBackgroundColor(CarColor.BLUE)
+                    .setOnClickListener {
+                        val destination = rideData.arrival
+                        if (destination.isNotBlank()) {
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                data = Uri.parse("google.navigation:q=${Uri.encode(destination)}")
+                                setPackage("com.google.android.apps.maps")
                             }
-                            carContext.startCarApp(webIntent)
+                            try {
+                                carContext.startCarApp(intent)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Google Maps not available, using web fallback", e)
+                                val webIntent = Intent(Intent.ACTION_VIEW).apply {
+                                    data = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${Uri.encode(destination)}")
+                                }
+                                carContext.startCarApp(webIntent)
+                            }
                         }
                     }
-                }
-                .build()
-        )
+                    .build()
+            )
+        }
 
         return PaneTemplate.Builder(paneBuilder.build())
-            .setTitle("Course")
+            .setTitle("Détails course")
+            .setHeaderAction(Action.BACK)
             .build()
     }
 
     private fun loadRide() {
-        scope.launch {
+        loadJob = scope.launch {
             try {
                 val context = carContext
                 val database = AppDatabase.getDatabase(context)
                 val settingsManager = SettingsManager(context)
-                val repository = TaxiRepository(database.rideDao(), database.quoteDao(), database.absenceDao(), settingsManager)
+                val repo = TaxiRepository(database.rideDao(), database.quoteDao(), database.absenceDao(), settingsManager)
 
-                val allRides = repository.getAllRides()
-                ride = allRides.find { it.id == rideId }
+                ride = repo.getRideById(rideId)
 
                 withContext(Dispatchers.Main) {
                     invalidate()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to load ride $rideId", e)
             }
         }
     }
+
+
 }
