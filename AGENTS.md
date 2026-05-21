@@ -5,7 +5,7 @@
 - **UI Framework**: Jetpack Compose
 - **Architecture**: MVVM with Repository pattern
 - **Database**: Room (v6)
-- **Min SDK**: 24, Target SDK: 34, Compile SDK: 34
+- **Min SDK**: 24, Target SDK: 35, Compile SDK: 35
 
 ---
 
@@ -64,15 +64,16 @@ Always use `./gradlew` (Unix/Mac) or `gradlew.bat` (Windows) from the project ro
 ## Code Style Guidelines
 
 ### Kotlin Version & Configuration
-- **Kotlin Version**: 1.9.23
+- **Kotlin Version**: 2.1.0
 - **JVM Target**: 1.8
-- **Compose Compiler Version**: 1.5.11
+- **Compose Compiler**: Kotlin compiler plugin (`org.jetbrains.kotlin.plugin.compose`)
+- **KSP Version**: 2.1.0-1.0.29 (remplace kapt pour Room)
 
 ### Package Structure
 ```
 com.drawtaxi.app/
 ├── data/           # Data layer (Repository, Models, local storage)
-│   └── local/      # Room database, DAOs, SettingsManager
+│   └── local/      # Room database, DAOs, SettingsManager, SecureCredentialsManager
 ├── logic/          # Business logic (SmsParser, KolectoManager, etc.)
 ├── ui/             # Presentation layer
 │   ├── components/ # Reusable Compose components
@@ -220,6 +221,7 @@ class TaxiViewModelFactory(private val repository: TaxiRepository) : ViewModelPr
 - Use `@Volatile` for INSTANCE field
 - Use `fallbackToDestructiveMigration()` for schema changes
 - Current database version: **6**
+- Room compiler uses **KSP** (not kapt) — use `ksp(...)` in dependencies
 
 ### Coroutines & Flow
 
@@ -291,7 +293,11 @@ class SmsParserTest {
 
 ## Key Features
 
-### SMS Parsing (ParseSms.kt)
+### SMS Parsing (ParseSms.kt) - Optimisé
+- **Détection Noms/Prénoms** : "Bonjour Jean", "Je m'appelle..."
+- **Heures Intelligentes** : `14h`, `14h30`, `14:30`, `dans 30min`, `dans 1h`
+- **Dates Avancées** : Jours de la semaine ("lundi" → date exacte), "demain", "après-demain", formats textuels ("15 jan")
+- **Vocabulaire Étendu** : "rdv à", "direction", "prendre rue", "jusqu'à"
 - Context-aware analysis (greeting, politeness, urgency detection)
 - Confidence scoring per field and overall
 - Deduplication cache (30s window)
@@ -301,7 +307,7 @@ class SmsParserTest {
 ### SMS Reception
 - **SmsReceiver**: BroadcastReceiver with deduplication
 - **SmsWatcher**: ContentObserver with 2s debounce
-- **SmsForegroundService**: Foreground service with polling (10s) + ContentObserver
+- **SmsForegroundService**: Foreground service with polling 10s + ContentObserver
 - All three work together for reliable SMS capture
 
 ### Kolecto Integration
@@ -317,10 +323,12 @@ class SmsParserTest {
   - `operatingCost = (durationMinutes / 60) × operatingCostPerHour`
   - `profitabilityPercent = ((price - totalCost) / price) × 100`
 - Displayed in Stats, Accounting, RideDetail, and RideCompletion screens
+- **Affiché uniquement dans QuoteScreen avant envoi du devis**
 
 ### GPS Navigation (GpsNavigationScreen.kt)
-- osmdroid map with OpenStreetMap tiles
-- FusedLocationProviderClient for real-time position
+- MapLibre Native map with OpenFreeMap tiles
+- LocationManager for real-time position
+- MapLibre Navigation SDK for turn-by-turn guidance (core + ui-android)
 - ETA, distance, speed display
 - Start/stop navigation controls
 
@@ -364,3 +372,10 @@ class SmsParserTest {
 - **Foreground service**: SmsForegroundService auto-restarts on task removal
 - **Profitability defaults**: fuelCostPerKm = 0.12, operatingCostPerHour = 15.0
 - **Kolecto**: No API integration - use InvoiceScreen to prepare data for manual entry on Kolecto web
+- **MapLibre**: `org.maplibre.gl:android-sdk:11.12.1` pour l'affichage, `org.maplibre.navigation:navigation-core:5.0.0-pre11` + `navigation-ui-android` pour le guidage
+- **Tuiles**: OpenFreeMap (`https://tiles.openfreemap.org/styles/liberty`) — gratuit, sans clé API
+- **KSP** remplace kapt : le plugin `com.google.devtools.ksp` version `2.1.0-1.0.29` est utilisé pour Room
+- **TVA Unique**: 10% sur le total HT (transport + attente)
+- **Sécurité**: Credentials OVH chiffrés via `EncryptedSharedPreferences`
+- **Timeout IA**: 60s sur l'inférence Llama
+- **Exemption Batterie**: Demandée automatiquement au démarrage
