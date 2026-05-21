@@ -35,8 +35,7 @@ fun SettingsMain(
 ) {
     var pricePerKm by remember { mutableStateOf(settings.pricePerKm) }
     var basePrice by remember { mutableStateOf(settings.basePrice) }
-    var fuelCostPerKm by remember { mutableStateOf(settings.fuelCostPerKm.toString()) }
-    var operatingCostPerHour by remember { mutableStateOf(settings.operatingCostPerHour.toString()) }
+    var coutParKmDeplacement by remember { mutableStateOf(settings.coutParKmDeplacement.toString()) }
     var smsScanInterval by remember { mutableStateOf(settings.smsScanIntervalMinutes.toString()) }
 
     LaunchedEffect(pricePerKm, basePrice) {
@@ -46,12 +45,11 @@ fun SettingsMain(
         }
     }
 
-    LaunchedEffect(fuelCostPerKm, operatingCostPerHour) {
+    LaunchedEffect(coutParKmDeplacement) {
         delay(500)
-        val fuel = fuelCostPerKm.toDoubleOrNull() ?: settings.fuelCostPerKm
-        val op = operatingCostPerHour.toDoubleOrNull() ?: settings.operatingCostPerHour
-        if (fuel != settings.fuelCostPerKm || op != settings.operatingCostPerHour) {
-            onUpdate(settings.copy(fuelCostPerKm = fuel, operatingCostPerHour = op))
+        val c = coutParKmDeplacement.toDoubleOrNull() ?: settings.coutParKmDeplacement
+        if (c != settings.coutParKmDeplacement) {
+            onUpdate(settings.copy(coutParKmDeplacement = c))
         }
     }
 
@@ -72,6 +70,26 @@ fun SettingsMain(
 
         TaxiCard(title = "Tarifs & Coûts") {
             SettingsMenuItem(title = "Configuration tarifaire", icon = Icons.Default.Payments, onClick = { onNavigate("pricing") })
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Route, contentDescription = null, tint = settings.brandColor, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Coût déplacement domicile → client", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = Slate700)
+                    Text("€/km pour le trajet jusqu'au point de départ", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                }
+                OutlinedTextField(
+                    value = coutParKmDeplacement,
+                    onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) coutParKmDeplacement = it },
+                    modifier = Modifier.width(80.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
+                )
+            }
         }
 
         TaxiCard(title = "Communication") {

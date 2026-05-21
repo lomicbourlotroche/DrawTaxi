@@ -41,9 +41,6 @@ fun RideCompletionScreen(
             distanceKm != ride.distanceKm.toString() ||
             price != ride.price.toString()
 
-    val calculatedFuelCost = distanceKm.toDoubleOrNull()?.let { it * settings.fuelCostPerKm } ?: 0.0
-    val calculatedOpCost = durationMinutes.toIntOrNull()?.let { (it / 60.0) * settings.operatingCostPerHour } ?: 0.0
-    
     val now = java.util.Calendar.getInstance()
     val priceBreakdown = com.drawtaxi.app.logic.pricing.PriceEngine.calculate(
         distanceKm = distanceKm.toDoubleOrNull() ?: 0.0,
@@ -62,8 +59,10 @@ fun RideCompletionScreen(
     )
     
     val calculatedPrice = price.toDoubleOrNull() ?: priceBreakdown.totalTTC
+    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: 5.0
+    val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
     val profitability = if (calculatedPrice > 0) {
-        RideRequest.calculateProfitability(calculatedPrice, calculatedFuelCost, calculatedOpCost)
+        RideRequest.calculateProfitability(calculatedPrice, coutDeplacement)
     } else 0.0
 
     Column(modifier = Modifier.fillMaxSize().background(Slate50)) {
@@ -167,16 +166,16 @@ fun RideCompletionScreen(
                         }
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Carburant estimé", color = Slate500)
-                            Text(String.format("%.2f €", calculatedFuelCost), fontWeight = FontWeight.Medium)
+                            Text("Distance domicile → départ", color = Slate500)
+                            Text(String.format("%.1f km", distanceDomicileKm), fontWeight = FontWeight.Medium)
                         }
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Coûts opérationnels", color = Slate500)
-                            Text(String.format("%.2f €", calculatedOpCost), fontWeight = FontWeight.Medium)
+                            Text("Coût déplacement", color = Slate500)
+                            Text(String.format("%.2f €", coutDeplacement), fontWeight = FontWeight.Medium)
                         }
                         
-                        val netProfit = calculatedPrice - calculatedFuelCost - calculatedOpCost
+                        val netProfit = calculatedPrice - coutDeplacement
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Bénéfice net", fontWeight = FontWeight.Bold)
                             Text(
@@ -324,9 +323,9 @@ fun RideCompletionScreen(
                         val dist = distanceKm.toDoubleOrNull() ?: ride.distanceKm
                         val prc = price.toDoubleOrNull() ?: priceBreakdown.totalTTC
                         val dur = durationMinutes.toIntOrNull() ?: 0
-                        val fuel = dist * settings.fuelCostPerKm
-                        val opCost = (dur / 60.0) * settings.operatingCostPerHour
-                        val profit = RideRequest.calculateProfitability(prc, fuel, opCost)
+                        val depDistKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: 5.0
+                        val depCost = RideRequest.calculateCoutDeplacement(depDistKm, settings.coutParKmDeplacement)
+                        val profit = RideRequest.calculateProfitability(prc, depCost)
                         
                         val updatedRide = ride.copy(
                             departure = departure,
@@ -335,8 +334,8 @@ fun RideCompletionScreen(
                             price = prc,
                             clientEmail = clientEmail,
                             durationMinutes = dur,
-                            fuelCost = fuel,
-                            operatingCost = opCost,
+                            fuelCost = depCost,
+                            operatingCost = 0.0,
                             profitabilityPercent = profit,
                             priceBreakdown = priceBreakdown.summary
                         )

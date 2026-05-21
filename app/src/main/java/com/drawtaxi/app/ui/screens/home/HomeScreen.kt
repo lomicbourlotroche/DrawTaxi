@@ -60,8 +60,8 @@ fun HomeScreen(
 
     val todayRevenue = todayCompletedRides.sumOf { it.price }
     val totalKmToday = todayCompletedRides.sumOf { it.distanceKm }
-    val todayFuel = todayCompletedRides.sumOf { it.fuelCost }
-    val todayNet = todayRevenue - todayFuel - todayCompletedRides.sumOf { it.operatingCost }
+    val todayCoutDeplacement = todayCompletedRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+    val todayNet = todayRevenue - todayCoutDeplacement
 
     LazyColumn(modifier = Modifier.fillMaxSize().background(Slate50)) {
         item {

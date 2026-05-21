@@ -129,10 +129,10 @@ fun parseSms(sender: String, body: String, timestamp: Long = System.currentTimeM
     
     val estimatedDistance = estimateDistance(parsed.departure, parsed.arrival)
     val estimatedPrice = settings?.let { calculateEstimatedPrice(estimatedDistance, it) } ?: 0.0
-    val estimatedFuel = settings?.let { estimatedDistance * it.fuelCostPerKm } ?: 0.0
     val estimatedDuration = estimateDuration(estimatedDistance)
-    val estimatedOpCost = settings?.let { (estimatedDuration / 60.0) * it.operatingCostPerHour } ?: 0.0
-    val estimatedProfitability = RideRequest.calculateProfitability(estimatedPrice, estimatedFuel, estimatedOpCost)
+    val distanceDomicileEst = estimatedDistance * 0.3
+    val coutDeplacement = settings?.let { distanceDomicileEst * it.coutParKmDeplacement } ?: 0.0
+    val estimatedProfitability = RideRequest.calculateProfitability(estimatedPrice, coutDeplacement)
     
     return RideRequest(
         id = RideRequest.createStableId(sender, body, timestamp),
@@ -145,8 +145,8 @@ fun parseSms(sender: String, body: String, timestamp: Long = System.currentTimeM
         distanceKm = estimatedDistance,
         price = estimatedPrice,
         durationMinutes = estimatedDuration,
-        fuelCost = estimatedFuel,
-        operatingCost = estimatedOpCost,
+        fuelCost = coutDeplacement,
+        operatingCost = 0.0,
         profitabilityPercent = estimatedProfitability,
         timestamp = timestamp,
         status = RideStatus.DRAFT

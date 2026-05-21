@@ -249,7 +249,7 @@ fun InvoiceDetailScreen(
     var notes by remember { mutableStateOf(ride.notes) }
 
     val profitability = if (ride.price > 0) {
-        RideRequest.calculateProfitability(ride.price, ride.fuelCost, ride.operatingCost)
+        RideRequest.calculateProfitability(ride.price, ride.fuelCost.takeIf { it > 0 } ?: ride.distanceKm * 0.3 * 0.15)
     } else 0.0
 
     Column(modifier = Modifier.fillMaxSize().background(Slate50)) {
@@ -283,10 +283,11 @@ fun InvoiceDetailScreen(
                         
                         HorizontalDivider(color = Slate100)
                         
-                        InfoRow(label = "Prix", value = String.format("%.2f €", ride.price), bold = true)
-                        InfoRow(label = "Carburant", value = String.format("%.2f €", ride.fuelCost))
-                        InfoRow(label = "Coûts ops", value = String.format("%.2f €", ride.operatingCost))
-                        InfoRow(label = "Rentabilité", value = String.format("%.0f%%", profitability), bold = true)
+                        InfoRow(label = "Prix", value = String.format("%.2f €", ride.price), bold = true)
+
+                        InfoRow(label = "Déplacement", value = String.format("%.2f €", ride.fuelCost.takeIf { it > 0 } ?: ride.distanceKm * 0.3 * 0.15))
+
+                        InfoRow(label = "Rentabilité", value = String.format("%.0f%%", profitability), bold = true)
                     }
                 }
             }

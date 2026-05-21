@@ -263,16 +263,18 @@ private fun QuickStatsRow(stats: PeriodStats, brandColor: Color) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         QuickStatCard(
-            value = String.format("%.2f €", stats.totalFuelCost),
-            label = "Carburant",
+            value = String.format("%.2f €", stats.totalCoutDeplacement),
+            label = "Déplacement",
             icon = Icons.Default.LocalGasStation,
             color = Amber500,
             modifier = Modifier.weight(1f)
         )
         QuickStatCard(
-            value = String.format("%.2f €", stats.totalOpCost),
-            label = "Coûts ops",
-            icon = Icons.Default.Build,
+            value = String.format("%.2f €", stats.totalCoutDeplacement),
+
+            label = "Déplacement",
+
+            icon = Icons.Default.Route,
             color = Slate500,
             modifier = Modifier.weight(1f)
         )

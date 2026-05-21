@@ -62,6 +62,7 @@ data class AppSettings(
     val statsReportTime: String = "23:59",
     val fuelCostPerKm: Double = 0.12,
     val operatingCostPerHour: Double = 15.0,
+    val coutParKmDeplacement: Double = 0.15,
     val nightSurchargePercent: Double = 0.15,
     val sundaySurchargePercent: Double = 0.10,
     val holidaySurchargePercent: Double = 0.15,
@@ -152,10 +153,13 @@ data class RideRequest(
             return java.util.UUID.nameUUIDFromBytes(raw.toByteArray()).toString()
         }
 
-        fun calculateProfitability(price: Double, fuelCost: Double, operatingCost: Double): Double {
-            val totalCost = fuelCost + operatingCost
-            if (totalCost == 0.0 || price == 0.0) return 0.0
-            return ((price - totalCost) / price) * 100.0
+        fun calculateProfitability(price: Double, coutDeplacement: Double): Double {
+            if (coutDeplacement == 0.0 || price == 0.0) return 0.0
+            return ((price - coutDeplacement) / price) * 100.0
+        }
+
+        fun calculateCoutDeplacement(distanceDomicileKm: Double, coutParKm: Double): Double {
+            return distanceDomicileKm * coutParKm
         }
     }
 }

@@ -39,18 +39,16 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
 
     val todayRevenue = todayRides.sumOf { it.price }
     val todayKm = todayRides.sumOf { it.distanceKm }
-    val todayFuel = todayRides.sumOf { it.fuelCost }
-    val todayNet = todayRevenue - todayFuel - todayRides.sumOf { it.operatingCost }
-    
     val weekRevenue = weekRides.sumOf { it.price }
     val weekKm = weekRides.sumOf { it.distanceKm }
-    val weekFuel = weekRides.sumOf { it.fuelCost }
-    val weekNet = weekRevenue - weekFuel - weekRides.sumOf { it.operatingCost }
-    
     val monthRevenue = monthRides.sumOf { it.price }
     val monthKm = monthRides.sumOf { it.distanceKm }
-    val monthFuel = monthRides.sumOf { it.fuelCost }
-    val monthNet = monthRevenue - monthFuel - monthRides.sumOf { it.operatingCost }
+    val todayCoutDeplacement = todayRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+    val todayNet = todayRevenue - todayCoutDeplacement
+    val weekCoutDeplacement = weekRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+    val weekNet = weekRevenue - weekCoutDeplacement
+    val monthCoutDeplacement = monthRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+    val monthNet = monthRevenue - monthCoutDeplacement
 
     val monthProfitability = if (monthRevenue > 0) (monthNet / monthRevenue) * 100.0 else 0.0
 

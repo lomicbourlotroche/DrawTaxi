@@ -47,13 +47,9 @@ fun ProfitabilityAnalysisCard(
         priceBreakdown.totalTTC
     }
     
-    val fuelCost = ride.distanceKm * settings.fuelCostPerKm
-    val durationMinutes = ride.durationMinutes.takeIf { it > 0 } ?: run {
-        val estimatedDurationHours = ride.distanceKm / if (ride.distanceKm < 10) 30.0 else 50.0
-        (estimatedDurationHours * 60).toInt()
-    }
-    val operatingCost = (durationMinutes / 60.0) * settings.operatingCostPerHour
-    val totalCost = fuelCost + operatingCost
+    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: ride.distanceKm * 0.3
+    val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
+    val totalCost = coutDeplacement
     val netProfit = actualPrice - totalCost
     val profitabilityPercent = if (actualPrice > 0) {
         (netProfit / actualPrice) * 100
@@ -171,17 +167,8 @@ fun ProfitabilityAnalysisCard(
             Spacer(modifier = Modifier.height(8.dp))
             
             CostRow(
-                label = "Carburant (${String.format("%.1f", ride.distanceKm)} km × ${String.format("%.2f", settings.fuelCostPerKm)} €)",
-                value = fuelCost,
-                color = Slate600,
-                isPositive = false
-            )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            CostRow(
-                label = "Opérationnel (${durationMinutes} min × ${String.format("%.2f", settings.operatingCostPerHour / 60)} €/min)",
-                value = operatingCost,
+                label = "Déplacement (${String.format("%.1f", distanceDomicileKm)} km × ${String.format("%.2f", settings.coutParKmDeplacement)} €)",
+                value = coutDeplacement,
                 color = Slate600,
                 isPositive = false
             )
@@ -209,7 +196,7 @@ fun ProfitabilityAnalysisCard(
                 InfoChip(
                     icon = Icons.Default.Schedule,
                     label = "Durée",
-                    value = "$durationMinutes min"
+                    value = "${ride.durationMinutes} min"
                 )
                 InfoChip(
                     icon = Icons.Default.LocalGasStation,

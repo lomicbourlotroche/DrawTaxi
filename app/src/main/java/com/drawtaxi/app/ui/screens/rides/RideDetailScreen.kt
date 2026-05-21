@@ -61,13 +61,9 @@ fun RideDetailScreen(
         priceBreakdown.totalTTC
     }
 
-    val fuelCost = ride.distanceKm * settings.fuelCostPerKm
-    val durationMinutes = ride.durationMinutes.takeIf { it > 0 } ?: run {
-        val estimatedDurationHours = ride.distanceKm / if (ride.distanceKm < 10) 30.0 else 50.0
-        (estimatedDurationHours * 60).toInt()
-    }
-    val operatingCost = (durationMinutes / 60.0) * settings.operatingCostPerHour
-    val totalCost = fuelCost + operatingCost
+    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: ride.distanceKm * 0.3
+    val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
+    val totalCost = coutDeplacement
     val netProfit = actualPrice - totalCost
     val profitability = if (actualPrice > 0) {
         (netProfit / actualPrice) * 100
@@ -196,8 +192,8 @@ fun RideDetailScreen(
                 ride = ride,
                 profitability = profitability,
                 netProfit = netProfit,
-                fuelCost = fuelCost,
-                operatingCost = operatingCost,
+                coutDeplacement = coutDeplacement,
+                distanceDomicileKm = distanceDomicileKm,
                 totalPrice = actualPrice,
                 brandColor = brandColor
             )
@@ -212,8 +208,8 @@ fun RideDetailProfitabilityCard(
     ride: RideRequest,
     profitability: Double,
     netProfit: Double,
-    fuelCost: Double,
-    operatingCost: Double,
+    coutDeplacement: Double,
+    distanceDomicileKm: Double,
     totalPrice: Double,
     brandColor: Color
 ) {
@@ -252,8 +248,8 @@ fun RideDetailProfitabilityCard(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ProfitabilityStatItem(label = "Prix TTC", value = String.format("%.2f €", totalPrice), modifier = Modifier.weight(1f))
-                ProfitabilityStatItem(label = "Carburant", value = String.format("%.2f €", fuelCost), modifier = Modifier.weight(1f))
-                ProfitabilityStatItem(label = "Coûts ops", value = String.format("%.2f €", operatingCost), modifier = Modifier.weight(1f))
+                ProfitabilityStatItem(label = "Déplacement", value = String.format("%.2f €", coutDeplacement), modifier = Modifier.weight(1f))
+                ProfitabilityStatItem(label = "Distance domicile", value = String.format("%.1f km", distanceDomicileKm), modifier = Modifier.weight(1f))
             }
 
             Spacer(modifier = Modifier.height(12.dp))

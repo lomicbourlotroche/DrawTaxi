@@ -39,8 +39,7 @@ fun PricingSettingsScreen(
     var euroPerMinute by remember { mutableStateOf(settings.euroPerMinute.toString()) }
     
     // Coûts
-    var fuelCostPerKm by remember { mutableStateOf(settings.fuelCostPerKm.toString()) }
-    var operatingCostPerHour by remember { mutableStateOf(settings.operatingCostPerHour.toString()) }
+    var coutParKmDeplacement by remember { mutableStateOf(settings.coutParKmDeplacement.toString()) }
     
     // TVA
     var tvaTransport by remember { mutableStateOf(settings.tvaTransportRate.toString()) }
@@ -50,7 +49,7 @@ fun PricingSettingsScreen(
     LaunchedEffect(
         pricePerKm, basePrice, nightSurcharge, sundaySurcharge, holidaySurcharge,
         nightStartHour, nightEndHour, euroPerMinute,
-        fuelCostPerKm, operatingCostPerHour,
+        coutParKmDeplacement,
         tvaTransport, tvaWait
     ) {
         delay(500)
@@ -64,8 +63,7 @@ fun PricingSettingsScreen(
                 nightStartHour = nightStartHour.toIntOrNull() ?: settings.nightStartHour,
                 nightEndHour = nightEndHour.toIntOrNull() ?: settings.nightEndHour,
                 euroPerMinute = euroPerMinute.toDoubleOrNull() ?: settings.euroPerMinute,
-                fuelCostPerKm = fuelCostPerKm.toDoubleOrNull() ?: settings.fuelCostPerKm,
-                operatingCostPerHour = operatingCostPerHour.toDoubleOrNull() ?: settings.operatingCostPerHour,
+                coutParKmDeplacement = coutParKmDeplacement.toDoubleOrNull() ?: settings.coutParKmDeplacement,
                 tvaTransportRate = tvaTransport.toDoubleOrNull() ?: settings.tvaTransportRate,
                 tvaWaitTimeRate = tvaWait.toDoubleOrNull() ?: settings.tvaWaitTimeRate
             )
@@ -181,22 +179,21 @@ fun PricingSettingsScreen(
 
             // Section Coûts
             PricingCard(
-                title = "Coûts opérationnels",
-                icon = Icons.Default.LocalGasStation,
+                title = "Coût déplacement domicile → client",
+                icon = Icons.Default.Route,
                 brandColor = brandColor
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     PricingInput(
-                        label = "Coût carburant / km (€)",
-                        value = fuelCostPerKm,
-                        onValueChange = { fuelCostPerKm = it },
+                        label = "Coût par km de déplacement (€)",
+                        value = coutParKmDeplacement,
+                        onValueChange = { coutParKmDeplacement = it },
                         brandColor = brandColor
                     )
-                    PricingInput(
-                        label = "Coût opérationnel / heure (€)",
-                        value = operatingCostPerHour,
-                        onValueChange = { operatingCostPerHour = it },
-                        brandColor = brandColor
+                    Text(
+                        "Utilisé pour calculer la rentabilité : distance(domicile → départ) × coût/km",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = com.drawtaxi.app.ui.theme.Slate500
                     )
                 }
             }

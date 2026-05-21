@@ -106,13 +106,10 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
                     .build()
             )
 
-            val fuelCostPerKm = settings?.fuelCostPerKm ?: 0.12
-            val operatingCostPerHour = settings?.operatingCostPerHour ?: 15.0
-            val durationMinutes = rideData.durationMinutes
-            val fuelCost = distanceKm * fuelCostPerKm
-            val operatingCost = if (durationMinutes > 0) (durationMinutes / 60.0) * operatingCostPerHour else 0.0
-            val totalCost = fuelCost + operatingCost
-            val profitabilityPercent = RideRequest.calculateProfitability(price, fuelCost, operatingCost)
+            val coutParKm = settings?.coutParKmDeplacement ?: 0.15
+            val distanceDomicileEst = distanceKm * 0.3
+            val coutDeplacement = distanceDomicileEst * coutParKm
+            val profitabilityPercent = RideRequest.calculateProfitability(price, coutDeplacement)
 
             if (distanceKm > 0 && price > 0) {
                 paneBuilder.addRow(
@@ -124,8 +121,8 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
 
                 paneBuilder.addRow(
                     Row.Builder()
-                        .setTitle("Coût total")
-                        .addText(SpannableString(String.format("%.2f € (carb: %.2f + op: %.2f)", totalCost, fuelCost, operatingCost)))
+                        .setTitle("Coût déplacement")
+                        .addText(SpannableString(String.format("%.2f € (%.1f km × %.2f €)", coutDeplacement, distanceDomicileEst, coutParKm)))
                         .build()
                 )
             }

@@ -55,10 +55,10 @@ data class AiParsedResult(
             basePrice + (estimatedDistance * perKm)
         } ?: 0.0
 
-        val estimatedFuel = settings?.let { estimatedDistance * it.fuelCostPerKm } ?: 0.0
         val estimatedDuration = if (estimatedDistance > 0) ((estimatedDistance / if (estimatedDistance < 10) 30.0 else 50.0) * 60).toInt() else 0
-        val estimatedOpCost = settings?.let { (estimatedDuration / 60.0) * it.operatingCostPerHour } ?: 0.0
-        val estimatedProfitability = RideRequest.calculateProfitability(estimatedPrice, estimatedFuel, estimatedOpCost)
+        val distanceDomicileEst = estimatedDistance * 0.3
+        val coutDeplacement = settings?.let { distanceDomicileEst * it.coutParKmDeplacement } ?: 0.0
+        val estimatedProfitability = RideRequest.calculateProfitability(estimatedPrice, coutDeplacement)
 
         return RideRequest(
             id = RideRequest.createStableId(sender, "$departure $arrival $time", timestamp),
@@ -71,8 +71,8 @@ data class AiParsedResult(
             distanceKm = estimatedDistance,
             price = if (price > 0) price else estimatedPrice,
             durationMinutes = estimatedDuration,
-            fuelCost = estimatedFuel,
-            operatingCost = estimatedOpCost,
+            fuelCost = coutDeplacement,
+            operatingCost = 0.0,
             profitabilityPercent = estimatedProfitability,
             clientName = if (clientName.isNotBlank()) "$clientFirstName $clientName".trim() else "",
             clientEmail = email,
