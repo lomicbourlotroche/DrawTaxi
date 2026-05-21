@@ -25,7 +25,7 @@ Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi
 
 ### Tarification & Rentabilité
 - **PriceEngine** — Calcul complet : prise en charge + km + surcharges nuit/dimanche/jour férié + attente + **TVA Unique 10%**
-- **Rentabilité** — `((prix - coûts) / prix) × 100` avec carburant (0,12 €/km) et coûts opérationnels (15 €/h)
+- **Rentabilité** — `((prix - coût_déplacement) / prix) × 100` où `coût_déplacement = distance_retour_vide × coutParKmDeplacement` (configurable, défaut 0,15 €/km)
 - **Statistiques** — Revenus, bénéfices, rentabilité par jour/semaine/mois
 
 ### Navigation & Pilotage
@@ -249,13 +249,22 @@ overlays → selectedRide, activeRide, isCreatingRide, editingRide,
 
 ## Calcul de Rentabilité
 
+La rentabilité est estimée avant l'envoi du devis et affichée dans l'écran `QuoteScreen`. Elle se base sur le coût du retour à vide estimé.
+
 ```kotlin
-fun calculateProfitability(price: Double, fuelCost: Double, operatingCost: Double): Double {
-    val totalCost = fuelCost + operatingCost
-    if (totalCost == 0.0 || price == 0.0) return 0.0
-    return ((price - totalCost) / price) * 100.0
+// Dans RideRequest.kt
+fun calculateProfitability(price: Double, coutDeplacement: Double): Double {
+    if (coutDeplacement == 0.0 || price == 0.0) return 0.0
+    return ((price - coutDeplacement) / price) * 100.0
+}
+
+fun calculateCoutDeplacement(distanceDomicileKm: Double, coutParKm: Double): Double {
+    return distanceDomicileKm * coutParKm
 }
 ```
+
+- **distanceDomicileKm** : Estimée à 30% de la distance totale de la course par défaut.
+- **coutParKm** : Configurable dans les paramètres (défaut 0,15 €/km).
 
 - **≥ 70%** : Vert (excellente)
 - **50-69%** : Orange (correcte)
