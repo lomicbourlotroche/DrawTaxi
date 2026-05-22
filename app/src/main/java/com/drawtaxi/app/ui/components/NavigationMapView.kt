@@ -53,13 +53,10 @@ fun NavigationMapView(
     var isRecalculating by remember { mutableStateOf(false) }
     var isMapReady by remember { mutableStateOf(false) }
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
     val scope = rememberCoroutineScope()
     val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
-
-    val mapView = remember {
-        MapView(context)
-    }
 
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -153,16 +150,18 @@ fun NavigationMapView(
 
     DisposableEffect(Unit) {
         onDispose {
-            mapView.onPause()
-            mapView.onStop()
-            mapView.onDestroy()
+            mapViewRef?.let {
+                it.onPause()
+                it.onStop()
+                it.onDestroy()
+            }
         }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
             factory = {
-                mapView.apply {
+                MapView(it).apply {
                     onCreate(null)
                     onStart()
                     onResume()
@@ -172,8 +171,8 @@ fun NavigationMapView(
                             isMapReady = true
                         }
                     }
+                    mapViewRef = this
                 }
-                mapView
             },
             update = { },
             modifier = Modifier.matchParentSize()

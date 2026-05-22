@@ -54,10 +54,7 @@ fun RouteToClientMap(
     var durationMin by remember { mutableStateOf<Int?>(null) }
     var isMapReady by remember { mutableStateOf(false) }
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
-
-    val mapView = remember {
-        MapView(context)
-    }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
     LaunchedEffect(pickupAddress) {
         scope.launch {
@@ -148,9 +145,11 @@ fun RouteToClientMap(
 
     DisposableEffect(Unit) {
         onDispose {
-            mapView.onPause()
-            mapView.onStop()
-            mapView.onDestroy()
+            mapViewRef?.let {
+                it.onPause()
+                it.onStop()
+                it.onDestroy()
+            }
         }
     }
 
@@ -208,7 +207,7 @@ fun RouteToClientMap(
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = {
-                            mapView.apply {
+                            MapView(it).apply {
                                 onCreate(null)
                                 onStart()
                                 onResume()
@@ -218,8 +217,8 @@ fun RouteToClientMap(
                                         isMapReady = true
                                     }
                                 }
+                                mapViewRef = this
                             }
-                            mapView
                         }
                     )
                 } else {

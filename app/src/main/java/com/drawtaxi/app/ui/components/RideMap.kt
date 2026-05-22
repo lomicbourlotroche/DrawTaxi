@@ -35,10 +35,7 @@ fun RideMap(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isMapReady by remember { mutableStateOf(false) }
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
-
-    val mapView = remember {
-        MapView(context)
-    }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
     LaunchedEffect(departure, arrival) {
         withContext(Dispatchers.IO) {
@@ -97,9 +94,11 @@ fun RideMap(
 
     DisposableEffect(Unit) {
         onDispose {
-            mapView.onPause()
-            mapView.onStop()
-            mapView.onDestroy()
+            mapViewRef?.let {
+                it.onPause()
+                it.onStop()
+                it.onDestroy()
+            }
         }
     }
 
@@ -107,7 +106,7 @@ fun RideMap(
         AndroidView(
             modifier = Modifier.matchParentSize(),
             factory = {
-                mapView.apply {
+                MapView(it).apply {
                     onCreate(null)
                     onStart()
                     onResume()
@@ -117,8 +116,8 @@ fun RideMap(
                             isMapReady = true
                         }
                     }
+                    mapViewRef = this
                 }
-                mapView
             }
         )
 

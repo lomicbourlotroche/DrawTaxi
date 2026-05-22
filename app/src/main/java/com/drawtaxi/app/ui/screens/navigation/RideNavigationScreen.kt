@@ -93,10 +93,9 @@ fun RideNavigationScreen(
     var nextInstructionDistance by remember { mutableStateOf("") }
     var isMapReady by remember { mutableStateOf(false) }
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapError by remember { mutableStateOf<String?>(null) }
 
-    val mapView = remember {
-        MapView(context)
-    }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
     val activeRoute = remember(currentPhase, routeToPickup, routeToDestination) {
         when (currentPhase) {
@@ -323,9 +322,18 @@ fun RideNavigationScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            mapView.onPause()
-            mapView.onStop()
-            mapView.onDestroy()
+            mapViewRef?.let {
+                it.onPause()
+                it.onStop()
+                it.onDestroy()
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        delay(15000)
+        if (!isMapReady) {
+            mapError = "La carte n'a pas pu charger"
         }
     }
 
@@ -363,8 +371,8 @@ fun RideNavigationScreen(
         ) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
-                factory = {
-                    mapView.apply {
+                factory = { ctx ->
+                    MapView(ctx).apply {
                         onCreate(null)
                         onStart()
                         onResume()
@@ -372,11 +380,38 @@ fun RideNavigationScreen(
                             mapInstance = map
                             map.setStyle("https://tiles.openfreemap.org/styles/liberty") {
                                 isMapReady = true
+                                mapError = null
                             }
                         }
+                        mapViewRef = this
                     }
-                    mapView
                 }
+            )
+
+            if (mapError != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .background(ComposeColor.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                        .padding(16.dp)
+                ) {
+                    Text(mapError!!, color = ComposeColor.White)
+                }
+            }
+
+            // Debug: route info
+            val routeDebug = remember(routeToPickup, routeToDestination, currentPhase) {
+                val r = if (currentPhase == NavigationPhase.TO_PICKUP) routeToPickup else routeToDestination
+                if (r != null) "Route: ${r.geometry.size} pts, succès=${r.success}" else "Route: pas de données"
+            }
+            Text(
+                text = routeDebug,
+                color = ComposeColor.White,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .background(ComposeColor.Black.copy(alpha = 0.5f))
+                    .padding(4.dp)
             )
 
             AnimatedVisibility(

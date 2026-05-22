@@ -63,10 +63,7 @@ fun ReturnHomeScreen(
     var nextInstructionDistance by remember { mutableStateOf("") }
     var isMapReady by remember { mutableStateOf(false) }
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
-
-    val mapView = remember {
-        MapView(context)
-    }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
     val routePoints = remember(routeToHome) {
         routeToHome?.geometry?.map { LatLng(it.first, it.second) } ?: emptyList()
@@ -210,9 +207,11 @@ fun ReturnHomeScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            mapView.onPause()
-            mapView.onStop()
-            mapView.onDestroy()
+            mapViewRef?.let {
+                it.onPause()
+                it.onStop()
+                it.onDestroy()
+            }
         }
     }
 
@@ -261,7 +260,7 @@ fun ReturnHomeScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = {
-                    mapView.apply {
+                    MapView(it).apply {
                         onCreate(null)
                         onStart()
                         onResume()
@@ -271,8 +270,8 @@ fun ReturnHomeScreen(
                                 isMapReady = true
                             }
                         }
+                        mapViewRef = this
                     }
-                    mapView
                 }
             )
 

@@ -506,13 +506,9 @@ fun RideCreateScreen(
                 }
 
                 if (depLatLng != null && arrLatLng != null) {
-                    val context = LocalContext.current
-                    val mapView = remember {
-                        MapView(context)
-                    }
-
                     var isMapReady by remember { mutableStateOf(false) }
                     var mapInstance by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
+                    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
                     LaunchedEffect(isMapReady, routeLatLngs, depLatLng, arrLatLng) {
                         if (!isMapReady || mapInstance == null) return@LaunchedEffect
@@ -551,9 +547,11 @@ fun RideCreateScreen(
 
                     DisposableEffect(Unit) {
                         onDispose {
-                            mapView.onPause()
-                            mapView.onStop()
-                            mapView.onDestroy()
+                            mapViewRef?.let {
+                                it.onPause()
+                                it.onStop()
+                                it.onDestroy()
+                            }
                         }
                     }
 
@@ -564,7 +562,7 @@ fun RideCreateScreen(
                         androidx.compose.ui.viewinterop.AndroidView(
                             modifier = Modifier.fillMaxSize(),
                             factory = {
-                                mapView.apply {
+                                MapView(it).apply {
                                     onCreate(null)
                                     onStart()
                                     onResume()
@@ -574,8 +572,8 @@ fun RideCreateScreen(
                                             isMapReady = true
                                         }
                                     }
+                                    mapViewRef = this
                                 }
-                                mapView
                             }
                         )
                     }

@@ -57,7 +57,7 @@ class TaxiApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        MapLibre.getInstance(this, "", WellKnownTileServer.MapTiler)
+        MapLibre.getInstance(this, "", WellKnownTileServer.MapLibre)
         createNotificationChannels()
         requestBatteryOptimizationExemption()
         

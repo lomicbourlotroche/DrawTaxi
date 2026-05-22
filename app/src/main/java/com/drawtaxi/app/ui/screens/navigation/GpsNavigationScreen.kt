@@ -51,12 +51,9 @@ fun GpsNavigationScreen(
     var speed by remember { mutableStateOf("0 km/h") }
     var isMapReady by remember { mutableStateOf(false) }
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
 
     val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
-
-    val mapView = remember {
-        MapView(context)
-    }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -120,9 +117,11 @@ fun GpsNavigationScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            mapView.onPause()
-            mapView.onStop()
-            mapView.onDestroy()
+            mapViewRef?.let {
+                it.onPause()
+                it.onStop()
+                it.onDestroy()
+            }
         }
     }
 
@@ -151,7 +150,7 @@ fun GpsNavigationScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = {
-                    mapView.apply {
+                    MapView(it).apply {
                         onCreate(null)
                         onStart()
                         onResume()
@@ -161,8 +160,8 @@ fun GpsNavigationScreen(
                                 isMapReady = true
                             }
                         }
+                        mapViewRef = this
                     }
-                    mapView
                 }
             )
 
