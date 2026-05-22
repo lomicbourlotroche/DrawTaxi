@@ -147,9 +147,6 @@ fun RouteToClientMap(
     }
 
     DisposableEffect(Unit) {
-        mapView.onCreate(null)
-        mapView.onStart()
-        mapView.onResume()
         onDispose {
             mapView.onPause()
             mapView.onStop()
@@ -211,10 +208,15 @@ fun RouteToClientMap(
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = {
-                            mapView.getMapAsync { map ->
-                                mapInstance = map
-                                map.setStyle(Style.Builder().fromUrl("https://tiles.openfreemap.org/styles/liberty")) {
-                                    isMapReady = true
+                            mapView.apply {
+                                onCreate(null)
+                                onStart()
+                                onResume()
+                                getMapAsync { map ->
+                                    mapInstance = map
+                                    map.setStyle("https://tiles.openfreemap.org/styles/liberty") {
+                                        isMapReady = true
+                                    }
                                 }
                             }
                             mapView

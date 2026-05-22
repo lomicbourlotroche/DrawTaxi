@@ -35,16 +35,17 @@ import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.data.RideStatus
 import com.drawtaxi.app.logic.geocoding.GeocodingService
 import com.drawtaxi.app.logic.routing.OsrmRoutingService
+import com.drawtaxi.app.ui.screens.rides.InstructionCard
 import com.drawtaxi.app.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.maplibre.android.annotations.MarkerOptions
+import org.maplibre.android.annotations.PolylineOptions
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.annotations.MarkerOptions
-import org.maplibre.android.annotations.PolylineOptions
 
 enum class NavigationPhase {
     TO_PICKUP,
@@ -105,20 +106,12 @@ fun RideNavigationScreen(
         }
     }
 
-    val routePoints = remember(activeRoute) {
-        activeRoute?.geometry?.map { LatLng(it.first, it.second) } ?: emptyList()
-    }
-
-    val destPoint = remember(activeRoute) {
-        activeRoute?.geometry?.lastOrNull()?.let { LatLng(it.first, it.second) }
-    }
-
     val routeColor = remember(currentPhase) {
         when (currentPhase) {
-            NavigationPhase.TO_PICKUP -> ComposeColor(0xFFFF0000)
-            NavigationPhase.TO_DESTINATION -> ComposeColor(0xFF0000FF)
-            NavigationPhase.TO_HOME -> ComposeColor(0xFF00FF00)
-            NavigationPhase.COMPLETED -> ComposeColor.Gray
+            NavigationPhase.TO_PICKUP -> "#FF0000"
+            NavigationPhase.TO_DESTINATION -> "#0000FF"
+            NavigationPhase.TO_HOME -> "#00AA00"
+            NavigationPhase.COMPLETED -> "#888888"
         }
     }
 
@@ -160,37 +153,43 @@ fun RideNavigationScreen(
         }
     }
 
-    LaunchedEffect(isMapReady, routePoints, currentLocation, currentPhase) {
+    LaunchedEffect(isMapReady, activeRoute, currentLocation, currentPhase) {
         if (!isMapReady || mapInstance == null) return@LaunchedEffect
         val map = mapInstance!!
-
         map.clear()
 
-        if (routePoints.isNotEmpty()) {
-            map.addPolyline(
-                PolylineOptions()
-                    .addAll(routePoints)
-                    .color(routeColor.hashCode())
-                    .width(14f)
-            )
-
-            val allPts = routePoints.toMutableList()
-            currentLocation?.let { loc ->
-                allPts.add(LatLng(loc.latitude, loc.longitude))
-            }
-            val midLat = allPts.map { it.latitude }.let { (it.min() + it.max()) / 2.0 }
-            val midLng = allPts.map { it.longitude }.let { (it.min() + it.max()) / 2.0 }
-            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 12.0))
+        val currentRoute = when (currentPhase) {
+            NavigationPhase.TO_PICKUP -> routeToPickup
+            NavigationPhase.TO_DESTINATION -> routeToDestination
+            else -> null
         }
 
-        destPoint?.let {
-            map.addMarker(MarkerOptions().setPosition(it).setTitle(
-                when (currentPhase) {
-                    NavigationPhase.TO_PICKUP -> "Client: ${ride.departure}"
-                    NavigationPhase.TO_DESTINATION -> "Destination: ${ride.arrival}"
-                    else -> "Terminé"
-                }
-            ))
+        val points = currentRoute?.geometry?.map { LatLng(it.first, it.second) } ?: emptyList()
+
+        if (points.isNotEmpty()) {
+            map.addPolyline(
+                PolylineOptions()
+                    .addAll(points)
+                    .color(android.graphics.Color.parseColor("#2196F3"))
+                    .width(16f)
+            )
+
+            val allPts = points.toMutableList()
+            currentLocation?.let { allPts.add(LatLng(it.latitude, it.longitude)) }
+
+            if (allPts.isNotEmpty()) {
+                val minLat = allPts.minOf { it.latitude }
+                val maxLat = allPts.maxOf { it.latitude }
+                val minLng = allPts.minOf { it.longitude }
+                val maxLng = allPts.maxOf { it.longitude }
+
+                val center = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2)
+                map.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 13.0))
+            }
+        }
+
+        currentLocation?.let {
+            map.addMarker(MarkerOptions().setPosition(LatLng(it.latitude, it.longitude)).setTitle("Vous"))
         }
     }
 
@@ -323,9 +322,6 @@ fun RideNavigationScreen(
     }
 
     DisposableEffect(Unit) {
-        mapView.onCreate(null)
-        mapView.onStart()
-        mapView.onResume()
         onDispose {
             mapView.onPause()
             mapView.onStop()
@@ -334,66 +330,6 @@ fun RideNavigationScreen(
     }
 
     Scaffold(
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 48.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(ComposeColor.White.copy(alpha = 0.95f))
-                        .shadow(4.dp, CircleShape)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = ComposeColor.White.copy(alpha = 0.95f),
-                    shadowElevation = 4.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Speed, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(currentSpeed, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
-                    }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = ComposeColor.White.copy(alpha = 0.95f),
-                    shadowElevation = 4.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            when (currentPhase) {
-                                NavigationPhase.TO_PICKUP -> "Vers client"
-                                NavigationPhase.TO_DESTINATION -> "Vers destination"
-                                NavigationPhase.TO_HOME -> "Retour maison"
-                                NavigationPhase.COMPLETED -> "Terminé"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Slate700
-                        )
-                    }
-                }
-            }
-        },
         floatingActionButton = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -428,10 +364,15 @@ fun RideNavigationScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = {
-                    mapView.getMapAsync { map ->
-                        mapInstance = map
-                        map.setStyle(Style.Builder().fromUrl("https://tiles.openfreemap.org/styles/liberty")) {
-                            isMapReady = true
+                    mapView.apply {
+                        onCreate(null)
+                        onStart()
+                        onResume()
+                        getMapAsync { map ->
+                            mapInstance = map
+                            map.setStyle("https://tiles.openfreemap.org/styles/liberty") {
+                                isMapReady = true
+                            }
                         }
                     }
                     mapView
@@ -446,7 +387,7 @@ fun RideNavigationScreen(
                     .align(Alignment.TopCenter)
                     .padding(top = 110.dp, start = 16.dp, end = 16.dp)
             ) {
-                com.drawtaxi.app.ui.screens.rides.InstructionCard(
+                InstructionCard(
                     instruction = currentInstruction,
                     nextInstruction = nextInstruction,
                     nextDistance = nextInstructionDistance,
@@ -471,7 +412,6 @@ fun RideNavigationScreen(
                 }
             }
 
-            // Bottom info
             AnimatedVisibility(
                 visible = true,
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -483,41 +423,62 @@ fun RideNavigationScreen(
                     color = ComposeColor.White.copy(alpha = 0.95f),
                     shadowElevation = 8.dp
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        PhaseButton(
-                            phase = NavigationPhase.TO_PICKUP,
-                            label = "Client",
-                            icon = Icons.Default.PersonPin,
-                            currentPhase = currentPhase,
-                            onClick = { currentPhase = NavigationPhase.TO_PICKUP }
-                        )
-                        PhaseButton(
-                            phase = NavigationPhase.TO_DESTINATION,
-                            label = "Destination",
-                            icon = Icons.Default.Place,
-                            currentPhase = currentPhase,
-                            onClick = { currentPhase = NavigationPhase.TO_DESTINATION }
-                        )
-                        PhaseButton(
-                            phase = NavigationPhase.TO_HOME,
-                            label = "Retour",
-                            icon = Icons.Default.Home,
-                            currentPhase = currentPhase,
-                            onClick = { currentPhase = NavigationPhase.TO_HOME }
-                        )
-                        PhaseButton(
-                            phase = NavigationPhase.COMPLETED,
-                            label = "Terminer",
-                            icon = Icons.Default.CheckCircle,
-                            currentPhase = currentPhase,
-                            onClick = { showCompleteDialog = true }
-                        )
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Vitesse: $currentSpeed", style = MaterialTheme.typography.bodySmall)
+                            Text("Distance: $distanceText", style = MaterialTheme.typography.bodySmall)
+                            if (currentPhase == NavigationPhase.TO_PICKUP) {
+                                Button(
+                                    onClick = { currentPhase = NavigationPhase.TO_DESTINATION },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Démarrer course", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            PhaseButton(
+                                phase = NavigationPhase.TO_PICKUP,
+                                label = "Client",
+                                icon = Icons.Default.PersonPin,
+                                currentPhase = currentPhase,
+                                onClick = { currentPhase = NavigationPhase.TO_PICKUP }
+                            )
+                            PhaseButton(
+                                phase = NavigationPhase.TO_DESTINATION,
+                                label = "Destination",
+                                icon = Icons.Default.Place,
+                                currentPhase = currentPhase,
+                                onClick = { currentPhase = NavigationPhase.TO_DESTINATION }
+                            )
+                            PhaseButton(
+                                phase = NavigationPhase.TO_HOME,
+                                label = "Retour",
+                                icon = Icons.Default.Home,
+                                currentPhase = currentPhase,
+                                onClick = { currentPhase = NavigationPhase.TO_HOME }
+                            )
+                            PhaseButton(
+                                phase = NavigationPhase.COMPLETED,
+                                label = "Terminer",
+                                icon = Icons.Default.CheckCircle,
+                                currentPhase = currentPhase,
+                                onClick = { showCompleteDialog = true }
+                            )
+                        }
                     }
                 }
             }

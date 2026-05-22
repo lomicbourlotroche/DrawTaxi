@@ -27,11 +27,13 @@ import com.drawtaxi.app.logic.routing.OsrmRoutingService
 import com.drawtaxi.app.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.maplibre.android.annotations.MarkerOptions
+import org.maplibre.android.annotations.PolylineOptions
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
-import org.maplibre.android.camera.CameraUpdateFactory
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -49,21 +51,23 @@ fun NavigationMapView(
     var deviationCount by remember { mutableStateOf(0) }
     var lastRecalculationTime by remember { mutableStateOf(0L) }
     var isRecalculating by remember { mutableStateOf(false) }
-    
+    var isMapReady by remember { mutableStateOf(false) }
+    var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+
     val scope = rememberCoroutineScope()
     val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
+
+    val mapView = remember {
+        MapView(context)
+    }
 
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             val locationListener = android.location.LocationListener { location ->
                 currentLocation = location
             }
-            locationManager.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER, 3000L, 0f, locationListener
-            )
-            locationManager.requestLocationUpdates(
-                LocationManager.NETWORK_PROVIDER, 3000L, 0f, locationListener
-            )
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 3000L, 0f, locationListener)
+            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 3000L, 0f, locationListener)
         }
     }
 
@@ -80,6 +84,38 @@ fun NavigationMapView(
                 isLoading = false
             }
         )
+    }
+
+    LaunchedEffect(isMapReady, routeResult, currentLocation) {
+        if (!isMapReady || mapInstance == null) return@LaunchedEffect
+        val map = mapInstance!!
+
+        map.clear()
+
+        routeResult?.let { route ->
+            if (route.success && route.geometry.isNotEmpty()) {
+                val points = route.geometry.map { LatLng(it.first, it.second) }
+                map.addPolyline(
+                    PolylineOptions()
+                        .addAll(points)
+                        .color(android.graphics.Color.parseColor("#2196F3"))
+                        .width(12f)
+                )
+
+                val allPts = points.toMutableList()
+                currentLocation?.let { allPts.add(LatLng(it.latitude, it.longitude)) }
+                val minLat = allPts.minOf { it.latitude }
+                val maxLat = allPts.maxOf { it.latitude }
+                val minLng = allPts.minOf { it.longitude }
+                val maxLng = allPts.maxOf { it.longitude }
+                val center = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2)
+                map.animateCamera(CameraUpdateFactory.newLatLngZoom(center, 13.0))
+            }
+        }
+
+        currentLocation?.let {
+            map.addMarker(MarkerOptions().setPosition(LatLng(it.latitude, it.longitude)).setTitle("Vous"))
+        }
     }
 
     LaunchedEffect(currentLocation, routeResult) {
@@ -115,20 +151,31 @@ fun NavigationMapView(
         }
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            mapView.onPause()
+            mapView.onStop()
+            mapView.onDestroy()
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(
-            factory = { ctx ->
-                MapView(ctx).apply {
+            factory = {
+                mapView.apply {
+                    onCreate(null)
+                    onStart()
+                    onResume()
                     getMapAsync { map ->
-                        map.setStyle(Style.Builder().fromUrl("https://tiles.openfreemap.org/styles/liberty")) {
-                            // Map ready
+                        mapInstance = map
+                        map.setStyle("https://tiles.openfreemap.org/styles/liberty") {
+                            isMapReady = true
                         }
                     }
                 }
+                mapView
             },
-            update = { mapView ->
-                // No-op update logic if needed
-            },
+            update = { },
             modifier = Modifier.matchParentSize()
         )
 
@@ -161,7 +208,7 @@ private suspend fun calculateRoute(
         onStart()
         val from = GeocodingService.geocode(departure)
         val to = GeocodingService.geocode(arrival)
-        
+
         if (from != null && to != null) {
             val result = OsrmRoutingService.calculateRoute(from, to)
             if (result.success) {
@@ -186,7 +233,7 @@ private suspend fun calculateRouteFromCurrentPosition(
     scope.launch {
         onStart()
         val to = GeocodingService.geocode(arrival)
-        
+
         if (to != null) {
             val result = OsrmRoutingService.calculateRoute(currentLocation, to)
             if (result.success) {
