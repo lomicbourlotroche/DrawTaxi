@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.sms.parseSms
-import com.drawtaxi.app.logic.routing.fetchRoute
+import com.drawtaxi.app.logic.routing.NavigationEngine
 import com.drawtaxi.app.ui.theme.Slate400
 import com.drawtaxi.app.ui.theme.Slate500
 import com.drawtaxi.app.ui.theme.Slate700
@@ -37,13 +37,23 @@ import com.drawtaxi.app.ui.theme.Rose500
 import com.drawtaxi.app.ui.theme.Rose700
 import com.drawtaxi.app.ui.theme.Emerald500
 import androidx.compose.ui.platform.LocalContext
+import android.location.Location
 import android.util.Log
-import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.Style
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.annotations.MarkerOptions
-import org.maplibre.android.annotations.PolylineOptions
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.rememberCameraState
+import org.maplibre.compose.expressions.dsl.const
+import org.maplibre.compose.expressions.value.LineCap
+import org.maplibre.compose.expressions.value.LineJoin
+import org.maplibre.compose.layers.CircleLayer
+import org.maplibre.compose.layers.LineLayer
+import org.maplibre.compose.map.MapOptions
+import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.map.OrnamentOptions
+import org.maplibre.compose.sources.GeoJsonData
+import org.maplibre.compose.sources.GeoJsonOptions
+import org.maplibre.compose.sources.rememberGeoJsonSource
+import org.maplibre.compose.style.BaseStyle
+import org.maplibre.spatialk.geojson.Position
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,9 +85,9 @@ fun RideCreateScreen(
     var routeError by remember { mutableStateOf<String?>(null) }
     var distanceInput by remember { mutableStateOf(if (initialRide?.distanceKm ?: 0.0 > 0) String.format("%.1f", initialRide?.distanceKm ?: 0.0) else "") }
     var hasCalculatedRoute by remember { mutableStateOf(initialRide?.distanceKm ?: 0.0 > 0) }
-    var depLatLng by remember { mutableStateOf<LatLng?>(null) }
-    var arrLatLng by remember { mutableStateOf<LatLng?>(null) }
-    var routeLatLngs by remember { mutableStateOf<List<LatLng>>(emptyList()) }
+    var departureLocation by remember { mutableStateOf<android.location.Location?>(null) }
+    var arrivalLocation by remember { mutableStateOf<android.location.Location?>(null) }
+    var routePositions by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
     fun recalculatePriceFromDistance(dist: Double) {
@@ -134,12 +144,15 @@ fun RideCreateScreen(
 
                 Log.d("DrawTaxi", "Geocoded: dep=(${depLocation.latitude},${depLocation.longitude}) arr=(${arrLocation.latitude},${arrLocation.longitude})")
 
-                val routeInfo = fetchRoute(depLocation, arrLocation)
-                Log.d("DrawTaxi", "Route result: distance=${routeInfo.distanceMeters}m, points=${routeInfo.points.size}")
+                val route = NavigationEngine.fetchRoute(
+                    fromLat = depLocation.latitude, fromLng = depLocation.longitude,
+                    toLat = arrLocation.latitude, toLng = arrLocation.longitude
+                )
+                Log.d("DrawTaxi", "Route result: route=${route != null}, distance=${route?.distance ?: 0}m")
 
                 var dist: Double
-                if (routeInfo.distanceMeters > 0) {
-                    dist = routeInfo.distanceMeters / 1000.0
+                if (route != null && route.distance > 0) {
+                    dist = route.distance / 1000.0
                     Log.d("DrawTaxi", "Using Directions API distance: $dist km")
                 } else {
                     val lat1 = Math.toRadians(depLocation.latitude)
@@ -154,17 +167,22 @@ fun RideCreateScreen(
                     Log.d("DrawTaxi", "Using haversine fallback: $dist km (x1.3 for road)")
                 }
 
-                val dLatLng = LatLng(depLocation.latitude, depLocation.longitude)
-                val aLatLng = LatLng(arrLocation.latitude, arrLocation.longitude)
-                val rPoints = routeInfo.points.let { pts ->
-                    if (pts.isNotEmpty()) pts.map { LatLng(it.latitude, it.longitude) }
-                    else listOf(dLatLng, aLatLng)
+                val geometry = NavigationEngine.fetchRouteGeometry(
+                    fromLat = depLocation.latitude, fromLng = depLocation.longitude,
+                    toLat = arrLocation.latitude, toLng = arrLocation.longitude
+                )
+                val rPoints = if (geometry.isNotEmpty()) {
+                    geometry
+                } else {
+                    val d = Location("").apply { latitude = depLocation.latitude; longitude = depLocation.longitude }
+                    val a = Location("").apply { latitude = arrLocation.latitude; longitude = arrLocation.longitude }
+                    listOf(d.latitude to d.longitude, a.latitude to a.longitude)
                 }
 
                 withContext(Dispatchers.Main) {
-                    depLatLng = dLatLng
-                    arrLatLng = aLatLng
-                    routeLatLngs = rPoints
+                    departureLocation = depLocation
+                    arrivalLocation = arrLocation
+                    routePositions = rPoints
                     distanceKm = dist
                     distanceInput = String.format("%.1f", dist)
                     recalculatePriceFromDistance(dist)
@@ -505,53 +523,28 @@ fun RideCreateScreen(
                     }
                 }
 
-                if (depLatLng != null && arrLatLng != null) {
-                    var isMapReady by remember { mutableStateOf(false) }
-                    var mapInstance by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
-                    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+                if (departureLocation != null && arrivalLocation != null) {
+                    val cameraState = rememberCameraState()
 
-                    LaunchedEffect(isMapReady, routeLatLngs, depLatLng, arrLatLng) {
-                        if (!isMapReady || mapInstance == null) return@LaunchedEffect
-                        val map = mapInstance!!
-
-                        map.clear()
-
-                        if (routeLatLngs.isNotEmpty()) {
-                            val lats = routeLatLngs.map { it.latitude }
-                            val lngs = routeLatLngs.map { it.longitude }
-                            map.animateCamera(CameraUpdateFactory.newLatLngZoom(
-                                LatLng((lats.min() + lats.max()) / 2, (lngs.min() + lngs.max()) / 2), 12.0
-                            ))
-                            map.addPolyline(
-                                PolylineOptions()
-                                    .addAll(routeLatLngs)
-                                    .color(android.graphics.Color.rgb(59, 130, 246))
-                                    .width(6f)
+                    LaunchedEffect(routePositions, departureLocation, arrivalLocation) {
+                        val allPositions = mutableListOf<Pair<Double, Double>>()
+                        if (routePositions.isNotEmpty()) {
+                            allPositions.addAll(routePositions)
+                        }
+                        departureLocation?.let { allPositions.add(it.latitude to it.longitude) }
+                        arrivalLocation?.let { allPositions.add(it.latitude to it.longitude) }
+                        if (allPositions.isNotEmpty()) {
+                            val lats = allPositions.map { it.first }
+                            val lngs = allPositions.map { it.second }
+                            cameraState.animateTo(
+                                CameraPosition(
+                                    target = Position(
+                                        longitude = (lngs.min() + lngs.max()) / 2.0,
+                                        latitude = (lats.min() + lats.max()) / 2.0
+                                    ),
+                                    zoom = if (routePositions.isNotEmpty()) 12.0 else 11.0
+                                )
                             )
-                        } else {
-                            map.animateCamera(CameraUpdateFactory.newLatLngZoom(
-                                LatLng(
-                                    (depLatLng!!.latitude + arrLatLng!!.latitude) / 2,
-                                    (depLatLng!!.longitude + arrLatLng!!.longitude) / 2
-                                ), 11.0
-                            ))
-                        }
-
-                        depLatLng?.let {
-                            map.addMarker(MarkerOptions().setPosition(it).setTitle("Départ"))
-                        }
-                        arrLatLng?.let {
-                            map.addMarker(MarkerOptions().setPosition(it).setTitle("Arrivée"))
-                        }
-                    }
-
-                    DisposableEffect(Unit) {
-                        onDispose {
-                            mapViewRef?.let {
-                                it.onPause()
-                                it.onStop()
-                                it.onDestroy()
-                            }
                         }
                     }
 
@@ -559,23 +552,81 @@ fun RideCreateScreen(
                         modifier = Modifier.fillMaxWidth().height(220.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        androidx.compose.ui.viewinterop.AndroidView(
+                        MaplibreMap(
                             modifier = Modifier.fillMaxSize(),
-                            factory = {
-                                MapView(it).apply {
-                                    onCreate(null)
-                                    onStart()
-                                    onResume()
-                                    getMapAsync { map ->
-                                        mapInstance = map
-                                        map.setStyle("https://tiles.openfreemap.org/styles/liberty") {
-                                            isMapReady = true
-                                        }
-                                    }
-                                    mapViewRef = this
+                            cameraState = cameraState,
+                            baseStyle = BaseStyle.Uri("https://tiles.openfreemap.org/styles/liberty"),
+                            options = MapOptions(
+                                ornamentOptions = OrnamentOptions(
+                                    isLogoEnabled = false,
+                                    isAttributionEnabled = false,
+                                    isCompassEnabled = false
+                                ),
+                                gestureOptions = org.maplibre.compose.map.GestureOptions.AllDisabled
+                            )
+                        ) {
+                            val routeSource = rememberGeoJsonSource(
+                                data = GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[]}"""),
+                                options = GeoJsonOptions(synchronousUpdate = true)
+                            )
+                            val depSource = rememberGeoJsonSource(
+                                data = GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[]}"""),
+                                options = GeoJsonOptions(synchronousUpdate = true)
+                            )
+                            val arrSource = rememberGeoJsonSource(
+                                data = GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[]}"""),
+                                options = GeoJsonOptions(synchronousUpdate = true)
+                            )
+
+                            LaunchedEffect(routePositions) {
+                                val coords = routePositions.joinToString(",") { "[${it.second},${it.first}]" }
+                                val json = if (coords.isNotEmpty()) {
+                                    """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
+                                } else """{"type":"FeatureCollection","features":[]}"""
+                                routeSource.setData(GeoJsonData.JsonString(json))
+                            }
+
+                            LaunchedEffect(departureLocation) {
+                                val loc = departureLocation
+                                if (loc != null) {
+                                    depSource.setData(GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${loc.longitude},${loc.latitude}]}}]}"""))
                                 }
                             }
-                        )
+
+                            LaunchedEffect(arrivalLocation) {
+                                val loc = arrivalLocation
+                                if (loc != null) {
+                                    arrSource.setData(GeoJsonData.JsonString("""{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${loc.longitude},${loc.latitude}]}}]}"""))
+                                }
+                            }
+
+                            LineLayer(
+                                id = "route",
+                                source = routeSource,
+                                color = const(Color(0xFF2196F3)),
+                                width = const(6.dp),
+                                cap = const(LineCap.Round),
+                                join = const(LineJoin.Round)
+                            )
+
+                            CircleLayer(
+                                id = "departure",
+                                source = depSource,
+                                color = const(Color(0xFF10B981)),
+                                radius = const(8.dp),
+                                strokeColor = const(Color.White),
+                                strokeWidth = const(2.dp)
+                            )
+
+                            CircleLayer(
+                                id = "arrival",
+                                source = arrSource,
+                                color = const(Color(0xFFF43F5E)),
+                                radius = const(8.dp),
+                                strokeColor = const(Color.White),
+                                strokeWidth = const(2.dp)
+                            )
+                        }
                     }
                 }
             }

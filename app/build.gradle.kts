@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "com.drawtaxi.app"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "com.drawtaxi.app"
-        minSdk = 24
+        minSdk = 27
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -46,9 +46,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
@@ -68,10 +65,12 @@ android {
             useLegacyPackaging = true
         }
     }
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-        }
+
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
     }
 }
 
@@ -86,13 +85,11 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
-    implementation("androidx.compose.runtime:runtime")
 
     // Room
-    val roomVersion = "2.6.1"
+    val roomVersion = "2.8.4"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
@@ -100,15 +97,14 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     
-    // MapLibre Native
-    implementation("org.maplibre.gl:android-sdk:11.12.1") {
+    // MapLibre Compose (modern Compose-native map rendering)
+    implementation("org.maplibre.compose:maplibre-compose:0.13.0") {
         exclude(group = "org.maplibre.gl", module = "android-sdk-geojson")
         exclude(group = "org.maplibre.gl", module = "android-sdk-turf")
     }
 
-    // MapLibre Navigation SDK (turn-by-turn, reroutage automatique)
-    implementation("org.maplibre.navigation:navigation-core:5.0.0-pre11")
-    implementation("org.maplibre.navigation:navigation-ui-android:5.0.0-pre11")
+    // MapLibre Navigation Core (turn-by-turn navigation engine)
+    implementation("org.maplibre.navigation:navigation-core:5.0.0-pre12")
 
     // Android Auto
     implementation("androidx.car.app:app:1.4.0")
@@ -116,7 +112,10 @@ dependencies {
     // WorkManager for background tasks
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
-    // OkHttp for HTTP requests (AI inference, geocoding fallback)
+    // Nexa SDK for on-device AI inference (GGUF models on CPU/GPU/NPU)
+    implementation("ai.nexa:core:0.0.24")
+
+    // OkHttp for HTTP requests (AI model download, geocoding)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // JavaMail pour SMTP/IMAP (OVH)

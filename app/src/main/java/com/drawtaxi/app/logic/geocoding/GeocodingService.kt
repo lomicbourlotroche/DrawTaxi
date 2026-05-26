@@ -1,13 +1,10 @@
 package com.drawtaxi.app.logic.geocoding
 
-import android.location.Address
-import android.location.Geocoder
 import android.location.Location
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -15,18 +12,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-data class GeocodingResult(
-    val latitude: Double,
-    val longitude: Double,
-    val formattedAddress: String,
-    val confidence: Float
-)
-
 object GeocodingService {
 
     private const val TAG = "GeocodingService"
     private const val PHOTON_BASE = "https://photon.komoot.io/api"
-    private const val NOMINATIM_BASE = "https://nominatim.openstreetmap.org/search"
 
     private val brestCities = listOf(
         "Brest", "Gouesnou", "Guipavas", "Le Relecq-Kerhuon",
@@ -37,159 +26,37 @@ object GeocodingService {
     suspend fun geocode(address: String, context: android.content.Context? = null): Location? {
         return withContext(Dispatchers.IO) {
             withTimeoutOrNull(15_000L) {
-                log("Geocoding: $address")
-                val variations = AddressNormalizer.normalize(address)
-                
-                for ((index, variation) in variations.withIndex()) {
-                    var result: Location? = tryPhoton(variation)
-                    if (result != null) return@withTimeoutOrNull result
+                Log.d(TAG, "Geocoding: $address")
 
-                    if (index < 5) {
-                        result = tryPhotonWithCity(variation)
-                        if (result != null) return@withTimeoutOrNull result
-                    }
+                tryPhoton(address)?.let { return@withTimeoutOrNull it }
 
-                    if (index < 3) {
-                        result = tryNominatim(variation)
-                        if (result != null) return@withTimeoutOrNull result
-                        result = tryNominatimSimple(variation)
-                        if (result != null) return@withTimeoutOrNull result
-                    }
+                for (city in brestCities) {
+                    tryPhotonWithCity(address, city)?.let { return@withTimeoutOrNull it }
                 }
 
-                val incompleteResult = tryIncompleteAddress(address)
-                if (incompleteResult != null) return@withTimeoutOrNull incompleteResult
-
-                val postalResult = tryPostalCodeMapping(address)
-                if (postalResult != null) return@withTimeoutOrNull postalResult
-
-                if (context != null) {
-                    val rawResult = tryRawAddress(address, context)
-                    if (rawResult != null) return@withTimeoutOrNull rawResult
-                }
-
-                log("All strategies failed for: $address")
+                Log.d(TAG, "Photon geocoding failed for: $address")
                 null
             }
         }
     }
 
-    private suspend fun tryIncompleteAddress(address: String): Location? {
-        return withContext(Dispatchers.IO) {
-            val lower = address.lowercase()
-            val poiLocations = mapOf(
-                "gare" to Pair(48.3897, -4.4706),
-                "aéroport" to Pair(48.4475, -4.4185),
-                "centre ville" to Pair(48.3904, -4.4860),
-                "hôpital" to Pair(48.3775, -4.4577)
-            )
-
-            for ((poi, coords) in poiLocations) {
-                if (lower.contains(poi)) {
-                    return@withContext Location("poi_fallback").apply {
-                        latitude = coords.first
-                        longitude = coords.second
-                    }
-                }
-            }
-            null
-        }
-    }
-
     private fun tryPhoton(address: String): Location? {
         return try {
-            val biasedQuery = URLEncoder.encode(address, "UTF-8")
-            val url = URL("$PHOTON_BASE?q=$biasedQuery&limit=5&lang=fr&lat=48.39&lon=-4.49&zoom=10&location_bias_scale=0.8")
-            val json = fetchJson(url)
-            val features = JSONObject(json).optJSONArray("features")
-            
-            if (features != null && features.length() > 0) {
-                val firstFeature = features.getJSONObject(0)
-                val geometry = firstFeature.getJSONObject("geometry")
-                val coordinates = geometry.getJSONArray("coordinates")
-                
-                val lon = coordinates.getDouble(0)
-                val lat = coordinates.getDouble(1)
-                
-                return Location("photon").apply {
-                    latitude = lat
-                    longitude = lon
-                }
-            }
-            null
-        } catch (e: Exception) {
-            Log.w(TAG, "Photon bias search failed: ${e.message}")
-            null
-        }
-    }
-
-    private fun tryPhotonWithCity(address: String): Location? {
-        return try {
-            for (city in brestCities.take(5)) {
-                val query = URLEncoder.encode("$address, $city", "UTF-8")
-                val url = URL("$PHOTON_BASE?q=$query&limit=1&lang=fr&lat=48.39&lon=-4.49&zoom=12")
-                val json = fetchJson(url)
-                val result = parsePhotonResponse(json)
-                if (result != null) return result
-            }
-            null
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun tryNominatim(address: String): Location? {
-        return try {
             val query = URLEncoder.encode(address, "UTF-8")
-            val url = URL("$NOMINATIM_BASE?q=$query&format=json&limit=1&countrycodes=fr")
-            val json = fetchJson(url)
-            parseNominatimResponse(json)
+            val url = URL("$PHOTON_BASE?q=$query&limit=5&lang=fr&lat=48.39&lon=-4.49&zoom=10&location_bias_scale=0.8")
+            parsePhotonResponse(fetchJson(url))
         } catch (e: Exception) {
-            Log.w(TAG, "Nominatim failed: ${e.message}")
+            Log.w(TAG, "Photon failed: ${e.message}")
             null
         }
     }
 
-    private fun tryNominatimSimple(address: String): Location? {
+    private fun tryPhotonWithCity(address: String, city: String): Location? {
         return try {
-            val simplified = address.lowercase().replace(Regex("[^a-z0-9\\s,\\-]"), "").trim()
-            val query = URLEncoder.encode(simplified, "UTF-8")
-            val url = URL("$NOMINATIM_BASE?q=$query&format=json&limit=1")
-            val json = fetchJson(url)
-            parseNominatimResponse(json)
+            val query = URLEncoder.encode("$address, $city", "UTF-8")
+            val url = URL("$PHOTON_BASE?q=$query&limit=1&lang=fr&lat=48.39&lon=-4.49&zoom=12")
+            parsePhotonResponse(fetchJson(url))
         } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun tryPostalCodeMapping(address: String): Location? {
-        return try {
-            val match = Regex("(\\d{5})").find(address)
-            if (match != null) {
-                val postalCode = match.groupValues[1]
-                val query = URLEncoder.encode(postalCode, "UTF-8")
-                val url = URL("$NOMINATIM_BASE?q=$query&format=json&limit=1&countrycodes=fr")
-                val json = fetchJson(url)
-                parseNominatimResponse(json)
-            } else null
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun tryRawAddress(address: String, context: android.content.Context): Location? {
-        return try {
-            val geocoder = Geocoder(context)
-            val results: List<Address>? = geocoder.getFromLocationName(address, 1)
-            if (!results.isNullOrEmpty()) {
-                val addr = results[0]
-                Location("geocoder").apply {
-                    latitude = addr.latitude
-                    longitude = addr.longitude
-                }
-            } else null
-        } catch (e: Exception) {
-            Log.w(TAG, "Raw address geocoding failed: ${e.message}")
             null
         }
     }
@@ -202,9 +69,7 @@ object GeocodingService {
         connection.setRequestProperty("User-Agent", "DrawTaxi/1.0")
         try {
             val reader = BufferedReader(InputStreamReader(connection.inputStream))
-            val response = reader.readText()
-            reader.close()
-            return response
+            return reader.readText()
         } finally {
             connection.disconnect()
         }
@@ -226,24 +91,5 @@ object GeocodingService {
         } catch (e: Exception) {
             null
         }
-    }
-
-    private fun parseNominatimResponse(response: String): Location? {
-        return try {
-            val json = JSONArray(response)
-            if (json.length() > 0) {
-                val result = json.getJSONObject(0)
-                Location("nominatim").apply {
-                    latitude = result.getDouble("lat")
-                    longitude = result.getDouble("lon")
-                }
-            } else null
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun log(msg: String) {
-        Log.d(TAG, msg)
     }
 }

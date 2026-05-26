@@ -35,12 +35,9 @@ import com.drawtaxi.app.ui.screens.home.HomeScreen
 import com.drawtaxi.app.ui.screens.invoices.AccountingScreen
 import com.drawtaxi.app.ui.screens.invoices.InvoiceScreen
 import com.drawtaxi.app.ui.screens.messages.ControlCenterScreen
-import com.drawtaxi.app.ui.screens.messages.QuoteScreen
-import com.drawtaxi.app.ui.screens.navigation.GpsNavigationScreen
 import com.drawtaxi.app.ui.screens.navigation.RideNavigationScreen
 import com.drawtaxi.app.ui.screens.onboarding.AiModelDownloadScreen
 import com.drawtaxi.app.ui.screens.onboarding.OnboardingScreen
-import com.drawtaxi.app.ui.screens.rides.ActiveRideScreen
 import com.drawtaxi.app.ui.screens.rides.PendingRideItem
 import com.drawtaxi.app.ui.screens.rides.RideCompletionScreen
 import com.drawtaxi.app.ui.screens.rides.RideCreateScreen

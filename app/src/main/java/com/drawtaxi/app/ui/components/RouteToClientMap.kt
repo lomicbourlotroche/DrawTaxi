@@ -3,7 +3,6 @@ package com.drawtaxi.app.ui.components
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import androidx.compose.foundation.background
@@ -19,23 +18,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.drawtaxi.app.logic.routing.fetchRoute
-import com.drawtaxi.app.logic.routing.RouteInfo
+import com.drawtaxi.app.logic.geocoding.GeocodingService
+import com.drawtaxi.app.logic.routing.NavigationEngine
 import com.drawtaxi.app.ui.theme.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.Style
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.annotations.MarkerOptions
-import org.maplibre.android.annotations.PolylineOptions
-import java.util.Locale
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.rememberCameraState
+import org.maplibre.compose.expressions.dsl.const
+import org.maplibre.compose.layers.CircleLayer
+import org.maplibre.compose.layers.LineLayer
+import org.maplibre.compose.map.GestureOptions
+import org.maplibre.compose.map.MapOptions
+import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.map.OrnamentOptions
+import org.maplibre.compose.sources.GeoJsonData
+import org.maplibre.compose.sources.GeoJsonOptions
+import org.maplibre.compose.sources.rememberGeoJsonSource
+import org.maplibre.compose.style.BaseStyle
+import org.maplibre.spatialk.geojson.Position
+
+private const val EMPTY_FC = """{"type":"FeatureCollection","features":[]}"""
 
 @Composable
 fun RouteToClientMap(
@@ -44,111 +48,52 @@ fun RouteToClientMap(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
-    var currentLocation by remember { mutableStateOf<LatLng?>(null) }
-    var pickupLocation by remember { mutableStateOf<LatLng?>(null) }
-    var routePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
+    var currentLocation by remember { mutableStateOf<Location?>(null) }
+    var pickupLocation by remember { mutableStateOf<Location?>(null) }
+    var routePositions by remember { mutableStateOf<List<Position>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var distanceKm by remember { mutableStateOf<Double?>(null) }
     var durationMin by remember { mutableStateOf<Int?>(null) }
-    var isMapReady by remember { mutableStateOf(false) }
-    var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
-    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+    val cameraState = rememberCameraState()
 
     LaunchedEffect(pickupAddress) {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                        val lastKnown = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                            ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                        lastKnown?.let {
-                            currentLocation = LatLng(it.latitude, it.longitude)
-                        }
-                    }
-
-                    if (pickupAddress.isNotBlank()) {
-                        val geocoder = Geocoder(context, Locale.getDefault())
-                        val addresses = geocoder.getFromLocationName(pickupAddress, 1)
-                        if (!addresses.isNullOrEmpty()) {
-                            pickupLocation = LatLng(addresses[0].latitude, addresses[0].longitude)
-                        }
-                    }
-
-                    if (currentLocation != null && pickupLocation != null) {
-                        val startLoc = Location("start").apply {
-                            latitude = currentLocation!!.latitude
-                            longitude = currentLocation!!.longitude
-                        }
-                        val endLoc = Location("end").apply {
-                            latitude = pickupLocation!!.latitude
-                            longitude = pickupLocation!!.longitude
-                        }
-                        val routeInfo = fetchRoute(startLoc, endLoc)
-                        routePoints = routeInfo.points.map {
-                            LatLng(it.latitude, it.longitude)
-                        }
-                        distanceKm = routeInfo.distanceMeters / 1000.0
-                        durationMin = (routeInfo.durationSeconds / 60).toInt()
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                } finally {
-                    isLoading = false
+        withContext(Dispatchers.IO) {
+            try {
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                    val lastKnown = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                        ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                    lastKnown?.let { currentLocation = it }
                 }
-            }
-        }
-    }
 
-    LaunchedEffect(isMapReady, routePoints, currentLocation, pickupLocation) {
-        if (!isMapReady || mapInstance == null) return@LaunchedEffect
-        val map = mapInstance!!
+                if (pickupAddress.isNotBlank()) {
+                    GeocodingService.geocode(pickupAddress)?.let { pickupLocation = it }
+                }
 
-        map.clear()
-
-        currentLocation?.let {
-            map.addMarker(MarkerOptions().setPosition(it).setTitle("Ma position"))
-        }
-
-        pickupLocation?.let {
-            map.addMarker(MarkerOptions().setPosition(it).setTitle("Point de rendez-vous"))
-        }
-
-        if (routePoints.isNotEmpty()) {
-            map.addPolyline(
-                PolylineOptions()
-                    .addAll(routePoints)
-                    .color(android.graphics.Color.rgb(76, 175, 80))
-                    .width(10f)
-            )
-
-            val allPoints = routePoints.toMutableList()
-            currentLocation?.let { allPoints.add(it) }
-            pickupLocation?.let { allPoints.add(it) }
-            if (allPoints.isNotEmpty()) {
-                val midLat = allPoints.map { it.latitude }.let { (it.min() + it.max()) / 2.0 }
-                val midLng = allPoints.map { it.longitude }.let { (it.min() + it.max()) / 2.0 }
-                map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 12.0))
-            }
-        } else if (currentLocation != null && pickupLocation != null) {
-            map.addPolyline(
-                PolylineOptions()
-                    .add(currentLocation!!)
-                    .add(pickupLocation!!)
-                    .color(android.graphics.Color.rgb(255, 152, 0))
-                    .width(6f)
-            )
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            mapViewRef?.let {
-                it.onPause()
-                it.onStop()
-                it.onDestroy()
+                val cur = currentLocation
+                val pick = pickupLocation
+                if (cur != null && pick != null) {
+                    val route = NavigationEngine.fetchRoute(
+                        fromLat = cur.latitude, fromLng = cur.longitude,
+                        toLat = pick.latitude, toLng = pick.longitude
+                    )
+                    if (route != null) {
+                        val points = mutableListOf<Position>()
+                        val decoded = NavigationEngine.fetchRouteGeometry(
+                            fromLat = cur.latitude, fromLng = cur.longitude,
+                            toLat = pick.latitude, toLng = pick.longitude
+                        )
+                        routePositions = decoded.map { Position(latitude = it.first, longitude = it.second) }
+                        distanceKm = route.distance / 1000.0
+                        durationMin = (route.duration / 60).toInt()
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                isLoading = false
             }
         }
     }
@@ -161,7 +106,9 @@ fun RouteToClientMap(
     ) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -181,7 +128,7 @@ fun RouteToClientMap(
                         )
                         if (distanceKm != null && durationMin != null) {
                             Text(
-                                "${String.format("%.1f", distanceKm)} km • ~${durationMin} min",
+                                "${String.format("%.1f", distanceKm)} km • ~$durationMin min",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Slate500
                             )
@@ -191,11 +138,15 @@ fun RouteToClientMap(
             }
 
             Box(
-                modifier = Modifier.fillMaxWidth().height(180.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
             ) {
                 if (isLoading) {
                     Box(
-                        modifier = Modifier.fillMaxSize().background(Slate200),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Slate200),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(
@@ -204,26 +155,114 @@ fun RouteToClientMap(
                         )
                     }
                 } else if (currentLocation != null || pickupLocation != null) {
-                    AndroidView(
+                    MaplibreMap(
                         modifier = Modifier.fillMaxSize(),
-                        factory = {
-                            MapView(it).apply {
-                                onCreate(null)
-                                onStart()
-                                onResume()
-                                getMapAsync { map ->
-                                    mapInstance = map
-                                    map.setStyle("https://tiles.openfreemap.org/styles/liberty") {
-                                        isMapReady = true
-                                    }
-                                }
-                                mapViewRef = this
+                        cameraState = cameraState,
+                        baseStyle = BaseStyle.Uri("https://tiles.openfreemap.org/styles/liberty"),
+                        options = MapOptions(
+                            ornamentOptions = OrnamentOptions(
+                                isLogoEnabled = false,
+                                isAttributionEnabled = false,
+                                isCompassEnabled = false
+                            ),
+                            gestureOptions = GestureOptions.AllDisabled
+                        )
+                    ) {
+                        val routeSource = rememberGeoJsonSource(
+                            data = GeoJsonData.JsonString(EMPTY_FC),
+                            options = GeoJsonOptions(synchronousUpdate = true)
+                        )
+                        val vousSource = rememberGeoJsonSource(
+                            data = GeoJsonData.JsonString(EMPTY_FC),
+                            options = GeoJsonOptions(synchronousUpdate = true)
+                        )
+                        val pickupSource = rememberGeoJsonSource(
+                            data = GeoJsonData.JsonString(EMPTY_FC),
+                            options = GeoJsonOptions(synchronousUpdate = true)
+                        )
+
+                        LaunchedEffect(routePositions) {
+                            val coords = routePositions.joinToString(",") { "[${it.longitude},${it.latitude}]" }
+                            val json = if (coords.isNotEmpty()) {
+                                """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
+                            } else EMPTY_FC
+                            routeSource.setData(GeoJsonData.JsonString(json))
+                        }
+
+                        LaunchedEffect(currentLocation) {
+                            val loc = currentLocation
+                            val json = if (loc != null) {
+                                """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${loc.longitude},${loc.latitude}]}}]}"""
+                            } else EMPTY_FC
+                            vousSource.setData(GeoJsonData.JsonString(json))
+                        }
+
+                        LaunchedEffect(pickupLocation) {
+                            val loc = pickupLocation
+                            val json = if (loc != null) {
+                                """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${loc.longitude},${loc.latitude}]}}]}"""
+                            } else EMPTY_FC
+                            pickupSource.setData(GeoJsonData.JsonString(json))
+                        }
+
+                        if (routePositions.isNotEmpty()) {
+                            LineLayer(
+                                id = "route",
+                                source = routeSource,
+                                color = const(Color(0xFF4CAF50)),
+                                width = const(6.dp),
+                                cap = const(org.maplibre.compose.expressions.value.LineCap.Round),
+                                join = const(org.maplibre.compose.expressions.value.LineJoin.Round)
+                            )
+                        }
+
+                        CircleLayer(
+                            id = "vous",
+                            source = vousSource,
+                            color = const(Color(0xFF2196F3)),
+                            radius = const(6.dp),
+                            strokeColor = const(Color.White),
+                            strokeWidth = const(2.dp)
+                        )
+
+                        CircleLayer(
+                            id = "pickup",
+                            source = pickupSource,
+                            color = const(Color(0xFF4CAF50)),
+                            radius = const(8.dp),
+                            strokeColor = const(Color.White),
+                            strokeWidth = const(2.dp)
+                        )
+
+                        LaunchedEffect(routePositions, currentLocation, pickupLocation) {
+                            val allPositions = mutableListOf<Position>()
+                            allPositions.addAll(routePositions)
+                            currentLocation?.let {
+                                allPositions.add(Position(latitude = it.latitude, longitude = it.longitude))
+                            }
+                            pickupLocation?.let {
+                                allPositions.add(Position(latitude = it.latitude, longitude = it.longitude))
+                            }
+                            if (allPositions.isNotEmpty()) {
+                                val lats = allPositions.map { it.latitude }
+                                val lngs = allPositions.map { it.longitude }
+                                cameraState.animateTo(
+                                    CameraPosition(
+                                        target = Position(
+                                            longitude = (lngs.min() + lngs.max()) / 2.0,
+                                            latitude = (lats.min() + lats.max()) / 2.0
+                                        ),
+                                        zoom = 12.0
+                                    )
+                                )
                             }
                         }
-                    )
+                    }
                 } else {
                     Box(
-                        modifier = Modifier.fillMaxSize().background(Slate200),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Slate200),
                         contentAlignment = Alignment.Center
                     ) {
                         Text("Position non disponible", color = Slate500)

@@ -1,5 +1,6 @@
 package com.drawtaxi.app
 
+import com.nexa.sdk.NexaSdk
 import android.Manifest
 import android.app.Application
 import android.content.Intent
@@ -58,6 +59,7 @@ class TaxiApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         MapLibre.getInstance(this, "", WellKnownTileServer.MapLibre)
+        NexaSdk.getInstance().init(this)
         createNotificationChannels()
         requestBatteryOptimizationExemption()
         

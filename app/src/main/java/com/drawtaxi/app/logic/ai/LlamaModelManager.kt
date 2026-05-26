@@ -21,12 +21,10 @@ object LlamaModelManager {
 
     private const val TAG = "LlamaModelManager"
     private const val MODEL_FILENAME = "llama-3.2-3b-instruct-q4_k_m.gguf"
-    // URL directe vers le modèle stable Llama-3.2-3B-Instruct-Q4_K_M
     private const val MODEL_URL = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true"
     private const val EXPECTED_SIZE_BYTES = 2_000_000_000L
     private const val MIN_VALID_SIZE = 1_800_000_000L
     private const val CHUNK_SIZE = 8192
-    private const val EXPECTED_SHA256 = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
 
     enum class ModelStatus {
         NOT_DOWNLOADED,
@@ -43,12 +41,9 @@ object LlamaModelManager {
     private val _downloadProgress = MutableStateFlow(0f)
     val downloadProgress: StateFlow<Float> = _downloadProgress.asStateFlow()
 
-    private var _lastUsedTime = 0L
-    private var _downloadId: Long = -1
-    private val AUTO_UNLOAD_DELAY_MS = 10 * 60 * 1000L
-    private val _isCancelled = AtomicBoolean(false)
     private var _downloadStartTime = 0L
     private var _downloadedBytes = 0L
+    private val _isCancelled = AtomicBoolean(false)
 
     private val okHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.MINUTES)
@@ -65,33 +60,11 @@ object LlamaModelManager {
 
     fun isModelAvailable(context: Context): Boolean {
         val file = getModelFile(context)
-        if (!file.exists() || file.length() < MIN_VALID_SIZE || !LlmRunner.isNativeLibraryAvailable()) {
-            return false
-        }
-        // Optional: validate checksum if needed for extra security
-        // return calculateSha256(file) == EXPECTED_SHA256
-        return true
-    }
-
-    private fun calculateSha256(file: File): String {
-        return try {
-            val md = java.security.MessageDigest.getInstance("SHA-256")
-            file.inputStream().use { input ->
-                val buffer = ByteArray(8192)
-                var read: Int
-                while (input.read(buffer).also { read = it } != -1) {
-                    md.update(buffer, 0, read)
-                }
-            }
-            md.digest().joinToString("") { "%02x".format(it) }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to calculate SHA256: ${e.message}")
-            ""
-        }
+        return file.exists() && file.length() >= MIN_VALID_SIZE
     }
 
     fun isAiAvailable(context: Context): Boolean {
-        return isModelAvailable(context) && LlmRunner.isNativeLibraryAvailable()
+        return isModelAvailable(context)
     }
 
     fun cancelDownload() {
@@ -109,13 +82,6 @@ object LlamaModelManager {
             _status.value = ModelStatus.READY
             onStatusChange(ModelStatus.READY)
             return@withContext true
-        }
-
-        if (!LlmRunner.isNativeLibraryAvailable()) {
-            _status.value = ModelStatus.ERROR
-            onStatusChange(ModelStatus.ERROR)
-            Log.e(TAG, "Native library not available")
-            return@withContext false
         }
 
         if (!isNetworkAvailable(context)) {
@@ -221,21 +187,21 @@ object LlamaModelManager {
             }
 
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            _downloadId = downloadManager.enqueue(request)
+            val downloadId = downloadManager.enqueue(request)
 
             var downloading = true
             var lastProgress = 0f
 
             while (downloading) {
                 if (_isCancelled.get()) {
-                    downloadManager.remove(_downloadId)
+                    downloadManager.remove(downloadId)
                     outputFile.delete()
                     return@withContext false
                 }
 
                 delay(1000)
 
-                val query = DownloadManager.Query().setFilterById(_downloadId)
+                val query = DownloadManager.Query().setFilterById(downloadId)
                 downloadManager.query(query)?.use { cursor ->
                     if (cursor.moveToFirst()) {
                         val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
@@ -249,8 +215,6 @@ object LlamaModelManager {
                             }
                             DownloadManager.STATUS_FAILED -> {
                                 downloading = false
-                                val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-                                Log.e(TAG, "DownloadManager failed: $reason")
                             }
                             DownloadManager.STATUS_RUNNING -> {
                                 val downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
@@ -264,9 +228,7 @@ object LlamaModelManager {
                                         onProgress(progress)
                                     }
                                 }
-                                Unit
                             }
-                            else -> { }
                         }
                     } else {
                         downloading = false
@@ -274,13 +236,7 @@ object LlamaModelManager {
                 }
             }
 
-            if (outputFile.exists() && outputFile.length() > MIN_VALID_SIZE) {
-                Log.i(TAG, "DownloadManager success")
-                true
-            } else {
-                Log.w(TAG, "DownloadManager: invalid file")
-                false
-            }
+            outputFile.exists() && outputFile.length() > MIN_VALID_SIZE
         } catch (e: Exception) {
             Log.w(TAG, "DownloadManager failed: ${e.message}")
             false
@@ -424,21 +380,6 @@ object LlamaModelManager {
         }
     }
 
-    fun markUsed() {
-        _lastUsedTime = System.currentTimeMillis()
-    }
-
-    fun shouldAutoUnload(): Boolean {
-        if (_status.value != ModelStatus.READY) return false
-        if (_lastUsedTime == 0L) return false
-        return System.currentTimeMillis() - _lastUsedTime > AUTO_UNLOAD_DELAY_MS
-    }
-
-    fun unload() {
-        _status.value = ModelStatus.UNLOADED
-        Log.i(TAG, "Model unloaded (inactivity)")
-    }
-
     fun deleteModel(context: Context): Boolean {
         val file = getModelFile(context)
         return if (file.exists()) {
@@ -463,6 +404,4 @@ object LlamaModelManager {
             else -> String.format("%.2f Go", size / 1_000_000_000.0)
         }
     }
-
-    fun getDownloadId(): Long = _downloadId
 }

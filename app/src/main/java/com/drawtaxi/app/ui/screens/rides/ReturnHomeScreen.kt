@@ -1,11 +1,7 @@
 package com.drawtaxi.app.ui.screens.rides
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Context
-import android.content.pm.PackageManager
 import android.location.Location
-import android.location.LocationManager
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -20,296 +16,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.geocoding.GeocodingService
-import com.drawtaxi.app.logic.routing.OsrmRoutingService
-import com.drawtaxi.app.ui.screens.navigation.NavigationPhase
-import com.drawtaxi.app.ui.theme.*
-import kotlinx.coroutines.launch
-import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.Style
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.annotations.MarkerOptions
-import org.maplibre.android.annotations.PolylineOptions
+import com.drawtaxi.app.logic.routing.NavigationEngine
+import com.drawtaxi.app.ui.theme.Amber500
+import com.drawtaxi.app.ui.theme.Slate400
+import com.drawtaxi.app.ui.theme.Slate500
+import com.drawtaxi.app.ui.theme.Slate700
+import org.maplibre.compose.camera.CameraPosition
+import org.maplibre.compose.camera.rememberCameraState
+import org.maplibre.compose.expressions.dsl.const
+import org.maplibre.compose.expressions.value.LineCap
+import org.maplibre.compose.expressions.value.LineJoin
+import org.maplibre.compose.layers.CircleLayer
+import org.maplibre.compose.layers.LineLayer
+import org.maplibre.compose.map.MapOptions
+import org.maplibre.compose.map.MaplibreMap
+import org.maplibre.compose.map.OrnamentOptions
+import org.maplibre.compose.sources.GeoJsonData
+import org.maplibre.compose.sources.GeoJsonOptions
+import org.maplibre.compose.sources.rememberGeoJsonSource
+import org.maplibre.compose.style.BaseStyle
+import org.maplibre.spatialk.geojson.Position
 
-@SuppressLint("MissingPermission")
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
-@Composable
-fun ReturnHomeScreen(
-    settings: AppSettings,
-    onBack: () -> Unit
-) {
-    val context = LocalContext.current
-    val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
-
-    var currentLocation by remember { mutableStateOf<Location?>(null) }
-    var routeToHome by remember { mutableStateOf<OsrmRoutingService.RouteResult?>(null) }
-
-    var etaText by remember { mutableStateOf("-- min") }
-    var distanceText by remember { mutableStateOf("-- km") }
-    var currentSpeed by remember { mutableStateOf("0 km/h") }
-    var isRecalculating by remember { mutableStateOf(false) }
-    var currentInstruction by remember { mutableStateOf("") }
-    var nextInstruction by remember { mutableStateOf("") }
-    var nextInstructionDistance by remember { mutableStateOf("") }
-    var isMapReady by remember { mutableStateOf(false) }
-    var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
-    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
-
-    val routePoints = remember(routeToHome) {
-        routeToHome?.geometry?.map { LatLng(it.first, it.second) } ?: emptyList()
-    }
-
-    val homePoint = remember(routeToHome) {
-        routeToHome?.geometry?.lastOrNull()?.let { LatLng(it.first, it.second) }
-    }
-
-    LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED) {
-
-            val locationListener = android.location.LocationListener { location ->
-                currentLocation = location
-                currentSpeed = if (location.hasSpeed()) {
-                    String.format("%.0f km/h", location.speed * 3.6)
-                } else "0 km/h"
-            }
-
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1500L, 0f, locationListener)
-            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1500L, 0f, locationListener)
-        }
-    }
-
-    LaunchedEffect(currentLocation, settings.homeAddress) {
-        if (currentLocation != null && settings.homeAddress.isNotBlank()) {
-            val homeLoc = GeocodingService.geocode(settings.homeAddress)
-            homeLoc?.let {
-                routeToHome = OsrmRoutingService.calculateRoute(currentLocation!!, it)
-            }
-        }
-    }
-
-    LaunchedEffect(isMapReady, routeToHome) {
-        if (!isMapReady || mapInstance == null) return@LaunchedEffect
-        val map = mapInstance!!
-
-        map.clear()
-
-        if (routePoints.isNotEmpty()) {
-            map.addPolyline(
-                PolylineOptions()
-                    .addAll(routePoints)
-                    .color(android.graphics.Color.rgb(0, 255, 0))
-                    .width(14f)
-            )
-
-            val allPts = routePoints.toMutableList()
-            currentLocation?.let { loc ->
-                allPts.add(LatLng(loc.latitude, loc.longitude))
-            }
-            val midLat = allPts.map { it.latitude }.let { (it.min() + it.max()) / 2.0 }
-            val midLng = allPts.map { it.longitude }.let { (it.min() + it.max()) / 2.0 }
-            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 12.0))
-        }
-
-        homePoint?.let {
-            map.addMarker(MarkerOptions().setPosition(it).setTitle("Domicile"))
-        }
-    }
-
-    LaunchedEffect(isMapReady, currentLocation) {
-        if (!isMapReady || mapInstance == null || currentLocation == null) return@LaunchedEffect
-        mapInstance?.animateCamera(CameraUpdateFactory.newLatLngZoom(
-            LatLng(currentLocation!!.latitude, currentLocation!!.longitude), 16.0
-        ))
-    }
-
-    LaunchedEffect(currentLocation, routeToHome) {
-        if (currentLocation == null || routeToHome == null) return@LaunchedEffect
-
-        val route = routeToHome!!
-        if (route.success && route.geometry.isNotEmpty()) {
-            val currentLoc = Location("current").apply {
-                latitude = currentLocation!!.latitude
-                longitude = currentLocation!!.longitude
-            }
-
-            var minDistance = Double.MAX_VALUE
-            var nearestIndex = 0
-            for (i in route.geometry.indices) {
-                val point = route.geometry[i]
-                val routePoint = Location("route").apply {
-                    latitude = point.first
-                    longitude = point.second
-                }
-                val distance = currentLoc.distanceTo(routePoint).toDouble()
-                if (distance < minDistance) {
-                    minDistance = distance
-                    nearestIndex = i
-                }
-            }
-
-            var allSteps = route.legs.flatMap { it.steps }
-            if (allSteps.isNotEmpty()) {
-                var stepIndex = 0
-                var accumulatedDistance = 0.0
-                for (i in allSteps.indices) {
-                    accumulatedDistance += allSteps[i].distance
-                    if (accumulatedDistance > minDistance + route.geometry.drop(nearestIndex).size * 5) {
-                        stepIndex = i
-                        break
-                    }
-                }
-
-                currentInstruction = OsrmRoutingService.getManeuverInstruction(
-                    allSteps.getOrElse(stepIndex) { allSteps.first() }.maneuver,
-                    allSteps.getOrElse(stepIndex) { allSteps.first() }.name
-                )
-
-                if (stepIndex + 1 < allSteps.size) {
-                    val nextStep = allSteps[stepIndex + 1]
-                    nextInstruction = OsrmRoutingService.getManeuverInstruction(nextStep.maneuver, nextStep.name)
-                    nextInstructionDistance = OsrmRoutingService.formatDistance(nextStep.distance)
-                } else {
-                    nextInstruction = ""
-                    nextInstructionDistance = ""
-                }
-            }
-
-            if (minDistance > 100.0) {
-                isRecalculating = true
-                val homeLoc = GeocodingService.geocode(settings.homeAddress)
-                if (homeLoc != null) {
-                    routeToHome = OsrmRoutingService.calculateRoute(currentLocation!!, homeLoc)
-                }
-                isRecalculating = false
-            }
-        }
-    }
-
-    LaunchedEffect(routeToHome) {
-        routeToHome?.let {
-            if (it.success) {
-                etaText = OsrmRoutingService.formatDuration(it.duration)
-                distanceText = OsrmRoutingService.formatDistance(it.distance)
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            mapViewRef?.let {
-                it.onPause()
-                it.onStop()
-                it.onDestroy()
-            }
-        }
-    }
-
-    Scaffold(
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 48.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(ComposeColor.White.copy(alpha = 0.95f))
-                        .shadow(4.dp, CircleShape)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = ComposeColor.White.copy(alpha = 0.95f),
-                    shadowElevation = 4.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Speed, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(currentSpeed, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
-                    }
-                }
-            }
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = {
-                    MapView(it).apply {
-                        onCreate(null)
-                        onStart()
-                        onResume()
-                        getMapAsync { map ->
-                            mapInstance = map
-                            map.setStyle("https://tiles.openfreemap.org/styles/liberty") {
-                                isMapReady = true
-                            }
-                        }
-                        mapViewRef = this
-                    }
-                }
-            )
-
-            AnimatedVisibility(
-                visible = currentInstruction.isNotBlank(),
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 110.dp, start = 16.dp, end = 16.dp)
-            ) {
-                InstructionCard(
-                    instruction = currentInstruction,
-                    nextInstruction = nextInstruction,
-                    nextDistance = nextInstructionDistance,
-                    isRecalculating = isRecalculating,
-                    eta = etaText,
-                    distance = distanceText
-                )
-            }
-
-            if (isRecalculating) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .background(ComposeColor.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                        .padding(16.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(color = ComposeColor.White, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Recalcul...", color = ComposeColor.White)
-                    }
-                }
-            }
-        }
-    }
-}
+private const val EMPTY_FC = """{"type":"FeatureCollection","features":[]}"""
 
 @Composable
 fun InstructionCard(
@@ -322,7 +56,7 @@ fun InstructionCard(
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = ComposeColor.White.copy(alpha = 0.95f),
+        color = Color.White.copy(alpha = 0.95f),
         shadowElevation = 8.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -334,7 +68,7 @@ fun InstructionCard(
                 Icon(
                     Icons.Default.Navigation,
                     contentDescription = null,
-                    tint = ComposeColor(0xFF10B981),
+                    tint = Color(0xFF10B981),
                     modifier = Modifier.size(28.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -372,6 +106,229 @@ fun InstructionCard(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("ETA", style = MaterialTheme.typography.labelSmall, color = Slate500)
                     Text(eta, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@SuppressLint("MissingPermission")
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+@Composable
+fun ReturnHomeScreen(
+    settings: AppSettings,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var homeLocation by remember { mutableStateOf<Location?>(null) }
+    var hasGeocoded by remember { mutableStateOf(false) }
+
+    val engine = remember {
+        NavigationEngine(context, scope)
+    }
+    val engineState by engine.state.collectAsState()
+
+    val cameraState = rememberCameraState()
+    val routeKey = remember(engineState.routePoints) { engineState.routePoints.size }
+
+    DisposableEffect(Unit) {
+        onDispose { engine.destroy() }
+    }
+
+    LaunchedEffect(settings.homeAddress) {
+        if (settings.homeAddress.isNotBlank() && !hasGeocoded) {
+            homeLocation = GeocodingService.geocode(settings.homeAddress)
+            hasGeocoded = true
+        }
+    }
+
+    LaunchedEffect(engineState.currentLocation, homeLocation) {
+        if (engineState.currentLocation != null && homeLocation != null && !engineState.isNavigating) {
+            val route = NavigationEngine.fetchRoute(
+                fromLat = engineState.currentLocation!!.latitude,
+                fromLng = engineState.currentLocation!!.longitude,
+                toLat = homeLocation!!.latitude,
+                toLng = homeLocation!!.longitude
+            )
+            if (route != null) {
+                engine.startNavigation(route)
+            }
+        }
+    }
+
+    LaunchedEffect(routeKey, engineState.currentLocation, homeLocation) {
+        val allPoints = mutableListOf<Pair<Double, Double>>()
+        allPoints.addAll(engineState.routePoints)
+        engineState.currentLocation?.let { allPoints.add(it.latitude to it.longitude) }
+        homeLocation?.let { allPoints.add(it.latitude to it.longitude) }
+
+        if (allPoints.isNotEmpty()) {
+            val minLat = allPoints.minOf { it.first }
+            val maxLat = allPoints.maxOf { it.first }
+            val minLng = allPoints.minOf { it.second }
+            val maxLng = allPoints.maxOf { it.second }
+            cameraState.animateTo(
+                CameraPosition(
+                    target = Position(
+                        longitude = (minLng + maxLng) / 2.0,
+                        latitude = (minLat + maxLat) / 2.0
+                    ),
+                    zoom = 12.0
+                )
+            )
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 48.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.95f))
+                        .shadow(4.dp, CircleShape)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.White.copy(alpha = 0.95f),
+                    shadowElevation = 4.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Speed, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(engineState.currentSpeed, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
+                    }
+                }
+            }
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            MaplibreMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraState = cameraState,
+                baseStyle = BaseStyle.Uri("https://tiles.openfreemap.org/styles/liberty"),
+                options = MapOptions(
+                    ornamentOptions = OrnamentOptions(
+                        isLogoEnabled = false,
+                        isAttributionEnabled = false,
+                        isCompassEnabled = false
+                    )
+                )
+            ) {
+                val routeSource = rememberGeoJsonSource(
+                    data = GeoJsonData.JsonString(EMPTY_FC),
+                    options = GeoJsonOptions(synchronousUpdate = true)
+                )
+                val vousSource = rememberGeoJsonSource(
+                    data = GeoJsonData.JsonString(EMPTY_FC),
+                    options = GeoJsonOptions(synchronousUpdate = true)
+                )
+                val homeSource = rememberGeoJsonSource(
+                    data = GeoJsonData.JsonString(EMPTY_FC),
+                    options = GeoJsonOptions(synchronousUpdate = true)
+                )
+
+                LaunchedEffect(routeKey) {
+                    val coords = engineState.routePoints.joinToString(",") { "[${it.second},${it.first}]" }
+                    val json = if (coords.isNotEmpty()) {
+                        """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
+                    } else EMPTY_FC
+                    routeSource.setData(GeoJsonData.JsonString(json))
+                }
+
+                LaunchedEffect(engineState.currentLocation) {
+                    val loc = engineState.currentLocation ?: return@LaunchedEffect
+                    val json = """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${loc.longitude},${loc.latitude}]}}]}"""
+                    vousSource.setData(GeoJsonData.JsonString(json))
+                }
+
+                LaunchedEffect(homeLocation) {
+                    if (homeLocation != null) {
+                        val json = """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${homeLocation!!.longitude},${homeLocation!!.latitude}]}}]}"""
+                        homeSource.setData(GeoJsonData.JsonString(json))
+                    } else {
+                        homeSource.setData(GeoJsonData.JsonString(EMPTY_FC))
+                    }
+                }
+
+                LineLayer(
+                    id = "route",
+                    source = routeSource,
+                    color = const(Color(0xFF10B981)),
+                    width = const(8.dp),
+                    cap = const(LineCap.Round),
+                    join = const(LineJoin.Round)
+                )
+
+                CircleLayer(
+                    id = "vous",
+                    source = vousSource,
+                    color = const(Color(0xFF2196F3)),
+                    radius = const(10.dp),
+                    strokeColor = const(Color.White),
+                    strokeWidth = const(3.dp)
+                )
+
+                CircleLayer(
+                    id = "home",
+                    source = homeSource,
+                    color = const(Color(0xFF10B981)),
+                    radius = const(12.dp),
+                    strokeColor = const(Color.White),
+                    strokeWidth = const(3.dp)
+                )
+            }
+
+            AnimatedVisibility(
+                visible = engineState.currentInstruction.isNotBlank(),
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 110.dp, start = 16.dp, end = 16.dp)
+            ) {
+                InstructionCard(
+                    instruction = engineState.currentInstruction,
+                    nextInstruction = engineState.nextInstruction,
+                    nextDistance = engineState.nextInstructionDistance,
+                    isRecalculating = false,
+                    eta = engineState.etaText,
+                    distance = engineState.distanceText
+                )
+            }
+
+            if (engineState.isCalculating) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Calcul...", color = Color.White)
+                    }
                 }
             }
         }

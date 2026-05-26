@@ -3,13 +3,11 @@ package com.drawtaxi.app.logic.sms
 import android.content.Context
 import android.util.Log
 import com.drawtaxi.app.data.RideRequest
-import com.drawtaxi.app.logic.ai.LlamaModelManager
-import com.drawtaxi.app.logic.ai.LlmRunner
+import com.drawtaxi.app.logic.ai.NexaEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
-import java.io.File
 import kotlin.text.Regex
 import kotlin.text.RegexOption
 
@@ -145,7 +143,6 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 
                 val cleaned = response.trim().uppercase()
                 if (cleaned.contains("TAXI") && !cleaned.contains("NON_TAXI")) {
-                    LlamaModelManager.markUsed()
                     return true
                 }
                 return false
@@ -177,7 +174,6 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
 
                 val result = runAiInference(context, smsBody)
                 if (result != null) {
-                    LlamaModelManager.markUsed()
                     Log.d(TAG, "AI parsing successful: ${result.aiReasoning}")
                     return result
                 }
@@ -240,41 +236,11 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
     }
 
     private suspend fun runInferenceWithTimeout(context: Context, prompt: String, timeoutSeconds: Int): String? {
-        return withContext(Dispatchers.IO) {
-            withTimeoutOrNull(timeoutSeconds * 1000L) {
-                runAiInferenceSync(context, prompt)
-            }
-        }
-    }
-
-    private suspend fun runAiInferenceSync(context: Context, prompt: String): String? {
-        return try {
-            val modelFile = getModelFile(context)
-
-            if (!modelFile.exists()) {
-                Log.e(TAG, "Model file not found")
-                return null
-            }
-
-            Log.d(TAG, "Running inference with model: ${modelFile.name} (${modelFile.length() / 1024 / 1024} MB)")
-
-            LlmRunner.run(modelFile.absolutePath, prompt, timeoutMs = 60_000L)
-        } catch (e: UnsatisfiedLinkError) {
-            Log.e(TAG, "Native library not loaded: ${e.message}")
-            return null
-        } catch (e: Exception) {
-            Log.e(TAG, "Inference error: ${e.message}")
-            return null
-        }
+        return NexaEngine.runInference(context, prompt, timeoutMs = timeoutSeconds * 1000L)
     }
 
     fun isAiAvailable(context: Context): Boolean {
-        return LlmRunner.isNativeLibraryAvailable() && getModelFile(context).exists()
-    }
-
-    private fun getModelFile(context: Context): File {
-        val modelName = "llama-3.2-3b-instruct-q4_k_m.gguf"
-        return File(context.filesDir, modelName)
+        return NexaEngine.isAvailable()
     }
 
     private fun parseWithFallback(smsBody: String): AiParsedResult {
