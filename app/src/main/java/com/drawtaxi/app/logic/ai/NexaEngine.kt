@@ -97,8 +97,10 @@ object NexaEngine {
         }
     }
 
-    fun isAvailable(): Boolean {
-        return llmWrapper != null
+    fun isAvailable(context: Context): Boolean {
+        if (llmWrapper != null) return true
+        val modelFile = File(context.filesDir, MODEL_FILENAME)
+        return modelFile.exists() && modelFile.canRead()
     }
 
     fun unloadModel() {

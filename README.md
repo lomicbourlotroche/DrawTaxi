@@ -1,6 +1,6 @@
 # DrawTaxi
 
-Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi/VTC. Réception automatique des commandes par SMS (avec parsing IA locale et regex optimisés), suivi de rentabilité, navigation GPS intégrée (MapLibre + OSRM), comptabilité et support Android Auto.
+Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi/VTC. Réception automatique des commandes par SMS (avec parsing IA locale via **Nexa SDK** et regex optimisés), suivi de rentabilité, navigation GPS intégrée (**MapLibre + OSRM + NavigationEngine**), comptabilité et support Android Auto.
 
 ---
 
@@ -15,7 +15,7 @@ Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi
   - Extraction robuste des **heures** (14h, 14h30, 14:30, dans 30min)
   - Gestion des **dates relatives** (lundi, demain, après-demain, 15 jan)
   - Vocabulaire enrichi pour les lieux ("rdv à", "direction", "prendre rue")
-- **Parsing IA** — Llama 3.2 3B (Q4_K_M, ~2 Go) exécuté localement avec timeout 60s pour classification et extraction structurée
+- **Parsing IA** — Llama 3.2 3B (Q4_K_M, ~2 Go) via **Nexa SDK** (on-device CPU/GPU/NPU), timeout 60s
 
 ### Gestion des Courses
 - **Devis** — Génération et envoi par SMS/WhatsApp/Email avec affichage de la **rentabilité estimée** avant envoi
@@ -29,10 +29,10 @@ Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi
 - **Statistiques** — Revenus, bénéfices, rentabilité par jour/semaine/mois
 
 ### Navigation & Pilotage
-- **MapLibre Native** — Carte OpenStreetMap avec itinéraire OSRM
-- **FusedLocationProvider** — Localisation précise en temps réel
-- **Mode pilotage** — Vitesse, ETA, distance restante, instructions tour-à-tour
-- **Geocoding Robuste** — Multi-provider (Photon, Nominatim, Android Geocoder) avec **fallback POI** et timeout 15s
+- **MapLibre Native** — Carte OpenStreetMap avec `maplibre-compose 0.13.0`
+- **NavigationEngine** — Wrapper autour de `maplibre-navigation-core 5.0.0-pre12` avec `MapLibreNavigation`, OSRM, polyline decoder
+- **Mode pilotage** — Vitesse, ETA, distance restante, instructions tour-à-tour en français
+- **Geocoding** — **Photon uniquement** (`photon.komoot.io`), pas de fallback
 - **LocationTrackingService** — Service foreground de suivi GPS avec historique
 
 ### Comptabilité & Factures
@@ -45,10 +45,11 @@ Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi
 - **Templates personnalisables** — Devis, refus, arrivée, absence, demande d'infos
 - **OVH** — SMTP (envoi) + IMAP (réception des réservations web) avec credentials chiffrés
 
-### Intelligence Artificielle (Locale)
+### Intelligence Artificielle (Locale — Nexa SDK)
 - **Llama 3.2 3B Instruct** — Modèle GGUF téléchargé depuis HuggingFace (~2 Go)
-- **Téléchargement** — DownloadManager + fallback OkHttp, reprise, 5 tentatives, validation SHA256 optionnelle
-- **Gestion** — Auto-déchargement après 10 min d'inactivité, statuts : NOT_DOWNLOADED → DOWNLOADING → READY → UNLOADED
+- **Nexa SDK** (`ai.nexa:core:0.0.24`) — Inférence on-device (CPU/GPU/NPU), pas de JNI/CMake
+- **Téléchargement** — `LlamaModelManager` : DownloadManager + fallback OkHttp, reprise, 5 tentatives
+- **Gestion** — `NexaEngine` : chargement paresseux, timeout 60s, flux streamé (`generateStreamFlow`)
 - **Utilisation** — Classification SMS (TAXI/NON_TAXI), parsing SMS (JSON structuré), parsing email
 
 ### Android Auto
@@ -82,17 +83,17 @@ Application Android native (Kotlin + Jetpack Compose) de gestion de courses taxi
 ```
 com.drawtaxi.app/
 ├── MainActivity.kt              # Single Activity, navigation state-machine
-├── TaxiApplication.kt           # Init DB/Repository + callback onNewSms() + Battery Optimization
+├── TaxiApplication.kt           # Init DB/Repository/ Nexa SDK + callback onNewSms() + Battery Opt.
 ├── car/                         # Android Auto
 │   ├── TaxiCarAppService.kt
 │   ├── RideListScreen.kt
 │   ├── RideDetailCarScreen.kt
-│   └── EditRideCarScreen.kt     # Édition inline distance/prix
+│   └── EditRideCarScreen.kt
 ├── data/                        # Data layer
 │   ├── Models.kt                # RideRequest, AppSettings, Quote, Absence, Client, StatsReport
 │   ├── TaxiRepository.kt        # Repository (Flow → StateFlow)
 │   ├── BackupManager.kt         # Backup/restore JSON
-│   ├── SecureCredentialsManager.kt # Chiffrement credentials OVH
+│   ├── SecureCredentialsManager.kt
 │   └── local/
 │       ├── AppDatabase.kt       # Room v6 (rides, quotes, absences)
 │       ├── RideEntity.kt        # Entities + domain mappers
@@ -100,49 +101,46 @@ com.drawtaxi.app/
 │       └── SettingsManager.kt   # DataStore (~50 clés)
 ├── logic/                       # Business logic
 │   ├── ai/
-│   │   ├── LlamaModelManager.kt # Download & manage Llama 3.2
-│   │   └── LlmRunner.kt         # Native inference runner (timeout 60s)
+│   │   ├── NexaEngine.kt        # Nexa SDK inference wrapper (Flow stream)
+│   │   └── LlamaModelManager.kt  # Download GGUF via DownloadManager/OkHttp
 │   ├── geocoding/
-│   │   ├── GeocodingService.kt  # Multi-provider geocoding + Fallback POI + Timeout 15s
-│   │   └── AddressNormalizer.kt
+│   │   └── GeocodingService.kt   # Photon uniquement (komoot)
 │   ├── messaging/
-│   │   ├── MessageSender.kt     # SMS/WhatsApp/Email
+│   │   ├── MessageSender.kt
 │   │   ├── NotificationHelper.kt
-│   │   ├── EmailFormParser.kt   # Web form email parser
-│   │   ├── OvhMailSender.kt     # SMTP OVH
+│   │   ├── EmailFormParser.kt
+│   │   ├── OvhMailSender.kt
 │   │   └── WebFormApiHandler.kt
 │   ├── pricing/
-│   │   ├── PriceEngine.kt       # Full pricing with surcharges & TVA 10%
+│   │   ├── PriceEngine.kt
 │   │   ├── QuoteResponseHandler.kt
-│   │   └── RideCalculator.kt    # Period stats & daily breakdown
+│   │   └── RideCalculator.kt
 │   ├── routing/
-│   │   ├── OsrmRoutingService.kt
-│   │   ├── FetchRoute.kt        # OSRM route fetch
-│   │   └── OsmRoutingService.kt
+│   │   └── NavigationEngine.kt   # MapLibreNavigation + OSRM + polyline decode + instructions FR
 │   └── sms/
-│       ├── ParseSms.kt          # Regex parser optimisé (noms, dates, heures)
-│       ├── AiSmsParser.kt       # AI parser (Llama 3.2)
-│       ├── SmsProcessor.kt      # Processing pipeline orchestrator
-│       ├── SmsWatcher.kt        # ContentObserver
-│       ├── SmsScanner.kt        # One-time historical scan
+│       ├── ParseSms.kt           # Regex parser optimisé
+│       ├── AiSmsParser.kt        # AI parser (NexaEngine)
+│       ├── SmsProcessor.kt       # Pipeline orchestrator
+│       ├── SmsWatcher.kt
+│       ├── SmsScanner.kt
 │       ├── SmsUtils.kt
-│       └── RideMatcher.kt       # Match SMS → existing rides
+│       └── RideMatcher.kt
 ├── receiver/
-│   ├── SmsReceiver.kt           # BroadcastReceiver (priority 999, rate limiting 60s)
-│   └── BootReceiver.kt          # Boot + package replaced
+│   ├── SmsReceiver.kt
+│   └── BootReceiver.kt
 ├── service/
 │   ├── foreground/
 │   │   ├── SmsForegroundService.kt
-│   │   └── OvhImapService.kt    # Utilise SecureCredentialsManager
+│   │   └── OvhImapService.kt
 │   ├── tracking/
 │   │   └── LocationTrackingService.kt
 │   └── worker/
 │       ├── SmsScanWorker.kt
 │       └── StatsReportScheduler.kt
 ├── ui/
-│   ├── TaxiViewModel.kt         # ViewModel principal
+│   ├── TaxiViewModel.kt
 │   ├── components/
-│   │   ├── BottomNavigation.kt  # 4 tabs flottants
+│   │   ├── BottomNavigation.kt   # 4 tabs flottants
 │   │   ├── MainTopBar.kt
 │   │   ├── RideCard.kt / TaxiCard.kt
 │   │   ├── RideMap.kt / RouteToClientMap.kt / NavigationMapView.kt
@@ -154,7 +152,7 @@ com.drawtaxi.app/
 │   │   ├── dashboard/DashboardScreen.kt
 │   │   ├── home/HomeScreen.kt
 │   │   ├── invoices/InvoiceScreen.kt + AccountingScreen.kt
-│   │   ├── messages/ControlCenterScreen.kt + QuoteScreen.kt (Rentabilité avant envoi)
+│   │   ├── messages/ControlCenterScreen.kt + QuoteScreen.kt
 │   │   ├── navigation/GpsNavigationScreen.kt + RideNavigationScreen.kt
 │   │   ├── onboarding/OnboardingScreen.kt + AiModelDownloadScreen.kt
 │   │   ├── rides/
@@ -164,7 +162,7 @@ com.drawtaxi.app/
 │   │   │   └── ReturnHomeScreen.kt
 │   │   └── settings/ (~15 écrans)
 │   └── theme/
-│       ├── Color.kt             # Palette Tailwind
+│       ├── Color.kt
 │       ├── Theme.kt
 │       └── Typography.kt
 └── util/
@@ -300,8 +298,8 @@ Le moteur de tarification calcule le prix complet avec :
 7. **Cache déduplication** : fenêtre 30s
 
 ### IA (AiSmsParser)
-- Modèle Llama 3.2 3B quantifié (Q4_K_M) exécuté en local
-- Timeout 60s sur l'inférence pour éviter les blocages
+- Modèle Llama 3.2 3B quantifié (Q4_K_M) exécuté via **Nexa SDK** (CPU/GPU/NPU)
+- Timeout 60s sur l'inférence, flux streamé (`generateStreamFlow`)
 - Classification binaire : TAXI / NON_TAXI
 - Extraction JSON structurée : départ, arrivée, heure, date, passagers, prix, nom, email
 - Fallback automatique vers regex si modèle non disponible
@@ -320,7 +318,7 @@ SMS entrant
     └─ TaxiApplication.onNewSms()
         │
         └─ SmsProcessor.processSms()
-            ├─ AiSmsParser.parseWithAI() (timeout 60s) ou fallback regex
+            ├─ AiSmsParser.parseWithAI() (Nexa SDK, timeout 60s) ou fallback regex
             ├─ QuoteResponseHandler.handleResponse() (réponse à devis ?)
             ├─ RideMatcher.matchSmsToRides() → NEW / DUPLICATE / MODIFICATION / DELETION
             └─ NotificationHelper (alerte nouvelle course / mise à jour)
@@ -344,27 +342,30 @@ SMS entrant
 
 ---
 
-## Dépendances Clés
+## Dépendances Clés (4 SDKs)
 
 ```kotlin
 // Compose BOM 2024.05.00
 implementation("androidx.compose.material3:material3")
-implementation("androidx.navigation:navigation-compose:2.7.7")
 implementation("androidx.compose.material:material-icons-extended")
 
-// Room 2.6.1
-ksp("androidx.room:room-compiler:2.6.1")
+// [SDK 1] Room 2.8.4 (KSP)
+ksp("androidx.room:room-compiler:2.8.4")
 
 // DataStore Preferences 1.0.0
 implementation("androidx.datastore:datastore-preferences:1.0.0")
 
-// MapLibre Native 11.12.1
-implementation("org.maplibre.gl:android-sdk:11.12.1")
-implementation("org.maplibre.navigation:navigation-core:5.0.0-pre11")
-implementation("org.maplibre.navigation:navigation-ui-android:5.0.0-pre11")
+// [SDK 2] MapLibre Compose 0.13.0 (rendu carte Compose-native)
+implementation("org.maplibre.compose:maplibre-compose:0.13.0") {
+    exclude(group = "org.maplibre.gl", module = "android-sdk-geojson")
+    exclude(group = "org.maplibre.gl", module = "android-sdk-turf")
+}
 
-// Google Play Services Location 21.1.0
-implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+// [SDK 3] MapLibre Navigation Core 5.0.0-pre12 (moteur navigation tour-à-tour)
+implementation("org.maplibre.navigation:navigation-core:5.0.0-pre12")
+
+// [SDK 4] Nexa SDK (ai.nexa:core:0.0.24) — Inférence IA on-device
+implementation("ai.nexa:core:0.0.24")
 
 // Android Auto 1.4.0
 implementation("androidx.car.app:app:1.4.0")
@@ -372,7 +373,7 @@ implementation("androidx.car.app:app:1.4.0")
 // WorkManager 2.9.0
 implementation("androidx.work:work-runtime-ktx:2.9.0")
 
-// OkHttp 4.12.0 (IA inference, géocodage fallback)
+// OkHttp 4.12.0 (téléchargement modèle, géocodage Photon)
 implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
 // JavaMail 1.6.7 (OVH SMTP/IMAP)
@@ -409,20 +410,24 @@ implementation("androidx.security:security-crypto:1.0.0")
 |-----------|--------|
 | Kotlin | 2.1.0 |
 | JVM Target | 1.8 |
-| Compose Compiler | 2.1.0 |
-| Min SDK | 24 |
+| Compose Compiler | plugin (`org.jetbrains.kotlin.plugin.compose`) |
+| Min SDK | 27 |
 | Target SDK | 35 |
-| Compile SDK | 35 |
-| Room | 2.6.1 |
+| Compile SDK | 36 |
+| Room | 2.8.4 |
 | Database version | 6 |
+| KSP | 2.1.0-1.0.29 |
 
 ---
 
 ## Notes Importantes
 
+- **4 SDKs intégrés** : Room (DB), MapLibre (cartes), MapLibre Navigation (guidage), Nexa (IA)
+- **Nexa SDK remplace llama.cpp** — Plus de JNI, CMake, ou bibliothèques natives. Inférence via `LlmWrapper.generateStreamFlow()` (Flow Kotlin)
+- **Photon uniquement** pour le géocodage — pas de Nominatim ni Android Geocoder
+- **NavigationEngine** — Wrapper unique autour de `MapLibreNavigation` + OSRM `fetchRoute()` + polyline decoder
 - **Pas de PDF** — Pas de génération de factures dans l'app
 - **Pas d'API Kolecto** — L'écran factures prépare les données pour saisie manuelle sur Kolecto web
-- **Pas de reçus automatiques** — Le chauffeur remplit Kolecto manuellement, aucun reçu texte n'est envoyé par l'app
 - **Modèle IA** — Llama 3.2 3B (~2 Go) téléchargé au premier lancement, stocké dans `filesDir`
 - **SMS permissions critiques** — L'app ne fonctionne pas sans `RECEIVE_SMS`, `READ_SMS`, `SEND_SMS`
 - **Foreground service** — SmsForegroundService se redémarre automatiquement si tué

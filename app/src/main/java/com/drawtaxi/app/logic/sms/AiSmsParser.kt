@@ -240,7 +240,7 @@ Si un champ n'est pas présent, utilise une chaîne vide ou 0.
     }
 
     fun isAiAvailable(context: Context): Boolean {
-        return NexaEngine.isAvailable()
+        return NexaEngine.isAvailable(context)
     }
 
     private fun parseWithFallback(smsBody: String): AiParsedResult {
