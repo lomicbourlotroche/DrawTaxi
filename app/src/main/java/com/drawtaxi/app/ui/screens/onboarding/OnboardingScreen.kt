@@ -10,7 +10,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,7 +37,7 @@ fun OnboardingScreen(
     var companyName by remember { mutableStateOf(settings.companyName) }
     var driverName by remember { mutableStateOf(settings.name) }
 
-    Surface(
+    DrawTaxiSurface(
         modifier = Modifier.fillMaxSize(),
         color = Color.White
     ) {
@@ -49,7 +51,7 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(40.dp))
             
             // Logo / Icon
-            Surface(
+            DrawTaxiSurface(
                 modifier = Modifier.size(80.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = settings.brandColor.copy(0.1f)
@@ -68,7 +70,7 @@ fun OnboardingScreen(
             
             Text(
                 text = "Bienvenue sur DrawTaxi",
-                style = MaterialTheme.typography.headlineMedium,
+                style = drawTaxiType().headlineMedium,
                 fontWeight = FontWeight.Black,
                 color = Slate900,
                 textAlign = TextAlign.Center
@@ -76,7 +78,7 @@ fun OnboardingScreen(
             
             Text(
                 text = "Configurons votre outil de travail en quelques secondes.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = drawTaxiType().bodyMedium,
                 color = Slate400,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp)
@@ -130,7 +132,7 @@ fun OnboardingScreen(
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            Button(
+            DrawTaxiSolidButton(
                 onClick = {
                     onUpdateSettings(settings.copy(
                         companyName = companyName,
@@ -142,7 +144,7 @@ fun OnboardingScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = settings.brandColor),
+                containerColor = settings.brandColor,
                 enabled = companyName.isNotBlank() && driverName.isNotBlank()
             ) {
                 Text("SUIVANT", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -160,7 +162,7 @@ fun OnboardingSection(title: String, content: @Composable ColumnScope.() -> Unit
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = title.uppercase(),
-            style = MaterialTheme.typography.labelLarge,
+            style = drawTaxiType().labelLarge,
             color = Slate400,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 16.dp)
@@ -225,3 +227,21 @@ fun PermissionItem(
         }
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun OnboardingScreenPreview() {
+    val sampleSettings = AppSettings()
+    DrawTaxiTheme {
+        OnboardingScreen(
+            settings = sampleSettings,
+            onUpdateSettings = {},
+            onRequestSms = {},
+            onRequestNotification = {},
+            onRequestLocation = {},
+            onComplete = {}
+        )
+    }
+}
+
+

@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,11 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.ui.components.TaxiCard
-import com.drawtaxi.app.ui.components.TaxiInputField
-import com.drawtaxi.app.ui.theme.Slate500
-import com.drawtaxi.app.ui.theme.Slate700
-import com.drawtaxi.app.ui.theme.Slate200
-import com.drawtaxi.app.ui.theme.TaxiRed
+import com.drawtaxi.app.ui.theme.*
 import kotlinx.coroutines.delay
 
 import androidx.compose.ui.tooling.preview.Preview
@@ -78,16 +75,16 @@ fun SettingsMain(
                 Icon(Icons.Default.Route, contentDescription = null, tint = settings.brandColor, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Coût déplacement domicile → client", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = Slate700)
-                    Text("€/km pour le trajet jusqu'au point de départ", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    Text("Coût déplacement domicile → client", style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Medium, color = Slate700)
+                    Text("€/km pour le trajet jusqu'au point de départ", style = drawTaxiType().bodySmall, color = Slate500)
                 }
                 OutlinedTextField(
                     value = coutParKmDeplacement,
                     onValueChange = { if (it.all { c -> c.isDigit() || c == '.' }) coutParKmDeplacement = it },
                     modifier = Modifier.width(80.dp),
-                    textStyle = MaterialTheme.typography.bodyMedium,
+                    textStyle = drawTaxiType().bodyMedium,
                     singleLine = true,
-                    shape = MaterialTheme.shapes.medium
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
         }
@@ -144,7 +141,7 @@ fun SettingsMain(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = statusText,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = drawTaxiType().bodyMedium,
                     color = statusColor,
                     fontWeight = FontWeight.Medium
                 )
@@ -160,7 +157,7 @@ fun SettingsMain(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Modèle: Llama 3.2 3B. Fallback automatique vers regex si indisponible.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = drawTaxiType().bodySmall,
                     color = Slate500
                 )
             }
@@ -168,7 +165,7 @@ fun SettingsMain(
             // Bouton téléchargement modèle si non disponible
             if (settings.aiEnabled && !isAiAvailable) {
                 Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(
+                DrawTaxiOutlinedButton(
                     onClick = { onNavigate("aiDownload") },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(12.dp)
@@ -200,16 +197,16 @@ fun SettingsMain(
                 Icon(Icons.Default.Schedule, contentDescription = null, tint = settings.brandColor, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Scan SMS périodique", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = Slate700)
-                    Text("Intervalle entre chaque scan automatique (minutes)", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    Text("Scan SMS périodique", style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Medium, color = Slate700)
+                    Text("Intervalle entre chaque scan automatique (minutes)", style = drawTaxiType().bodySmall, color = Slate500)
                 }
                 OutlinedTextField(
                     value = smsScanInterval,
                     onValueChange = { if (it.all { c -> c.isDigit() }) smsScanInterval = it },
                     modifier = Modifier.width(80.dp),
-                    textStyle = MaterialTheme.typography.bodyMedium,
+                    textStyle = drawTaxiType().bodyMedium,
                     singleLine = true,
-                    shape = MaterialTheme.shapes.medium
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -246,3 +243,18 @@ fun SettingsMain(
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun SettingsMainPreview() {
+    val sampleSettings = AppSettings()
+    DrawTaxiTheme {
+        SettingsMain(
+            settings = sampleSettings,
+            onUpdate = {},
+            onNavigate = {}
+        )
+    }
+}
+
+

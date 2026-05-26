@@ -11,7 +11,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,16 +28,7 @@ import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.sms.parseSms
 import com.drawtaxi.app.logic.routing.NavigationEngine
-import com.drawtaxi.app.ui.theme.Slate400
-import com.drawtaxi.app.ui.theme.Slate500
-import com.drawtaxi.app.ui.theme.Slate700
-import com.drawtaxi.app.ui.theme.Amber50
-import com.drawtaxi.app.ui.theme.Amber500
-import com.drawtaxi.app.ui.theme.Amber700
-import com.drawtaxi.app.ui.theme.Rose50
-import com.drawtaxi.app.ui.theme.Rose500
-import com.drawtaxi.app.ui.theme.Rose700
-import com.drawtaxi.app.ui.theme.Emerald500
+import com.drawtaxi.app.ui.theme.*
 import androidx.compose.ui.platform.LocalContext
 import android.location.Location
 import android.util.Log
@@ -55,7 +48,6 @@ import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
 import org.maplibre.spatialk.geojson.Position
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RideCreateScreen(
     initialRide: RideRequest? = null,
@@ -260,16 +252,16 @@ fun RideCreateScreen(
         }
     }
 
-    Scaffold(
+    DrawTaxiScaffold(
         topBar = {
-            TopAppBar(
+            DrawTaxiTopBar(
                 title = { Text("Nouvelle Course", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onCancel) {
+                    DrawTaxiIconButton(onClick = onCancel) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Annuler")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                backgroundColor = Color.White
             )
         }
     ) { padding ->
@@ -287,9 +279,9 @@ fun RideCreateScreen(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text("Message original", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text("Message original", style = drawTaxiType().labelSmall, color = Color.Gray)
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(sharedText, style = MaterialTheme.typography.bodySmall, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                        Text(sharedText, style = drawTaxiType().bodySmall, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                     }
                 }
             }
@@ -335,7 +327,7 @@ fun RideCreateScreen(
                 }
             }
 
-            Text("Détails de la course", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
+            Text("Détails de la course", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
 
             TaxiCard(title = "Trajet") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -385,7 +377,7 @@ fun RideCreateScreen(
                     )
                     
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(
+                        DrawTaxiOutlinedButton(
                             onClick = { datePickerDialog.show() },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
@@ -398,7 +390,7 @@ fun RideCreateScreen(
                             )
                         }
                         
-                        OutlinedButton(
+                        DrawTaxiOutlinedButton(
                             onClick = { timePickerDialog.show() },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
@@ -433,18 +425,18 @@ fun RideCreateScreen(
                                 if (distanceKm > 0) {
                                     Text(
                                         text = "✓",
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        style = drawTaxiType().bodyMedium,
                                         color = Emerald500,
                                         modifier = Modifier.padding(end = 8.dp)
                                     )
                                 }
                             }
                         )
-                        Button(
+                        DrawTaxiSolidButton(
                             onClick = { calculateRoute() },
                             enabled = !isCalculatingRoute && departure.length >= 3 && arrival.length >= 3,
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = brandColor),
+                            containerColor = brandColor,
                             modifier = Modifier.align(Alignment.Bottom)
                         ) {
                             if (isCalculatingRoute) {
@@ -477,7 +469,7 @@ fun RideCreateScreen(
                             color = Amber500
                         )
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("Calcul de l'itinéraire...", style = MaterialTheme.typography.bodyMedium, color = Amber700)
+                        Text("Calcul de l'itinéraire...", style = drawTaxiType().bodyMedium, color = Amber700)
                     }
                 }
             }
@@ -494,7 +486,7 @@ fun RideCreateScreen(
                     ) {
                         Icon(Icons.Default.Warning, contentDescription = null, tint = Rose500, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(error, style = MaterialTheme.typography.bodyMedium, color = Rose700)
+                        Text(error, style = drawTaxiType().bodyMedium, color = Rose700)
                     }
                 }
             }
@@ -511,13 +503,13 @@ fun RideCreateScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Distance", style = MaterialTheme.typography.bodySmall, color = Slate500)
-                            Text(String.format("%.1f km", distanceKm), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Distance", style = drawTaxiType().bodySmall, color = Slate500)
+                            Text(String.format("%.1f km", distanceKm), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                         }
                         if (price.isNotBlank()) {
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("Prix estimé", style = MaterialTheme.typography.bodySmall, color = Slate500)
-                                Text("$price €", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
+                                Text("Prix estimé", style = drawTaxiType().bodySmall, color = Slate500)
+                                Text("$price €", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
                             }
                         }
                     }
@@ -663,7 +655,7 @@ fun RideCreateScreen(
             )
 
             if (isTimerRunning && timeLeft > 0) {
-                TextButton(
+                DrawTaxiSolidButton(
                     onClick = { stopTimer() },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -679,7 +671,7 @@ fun RideCreateScreen(
 
             if (missingFields.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
+                DrawTaxiOutlinedButton(
                     onClick = {
                         val fieldsText = missingFields.joinToString(", ")
                         val template = settings.missingInfoTemplate
@@ -695,7 +687,7 @@ fun RideCreateScreen(
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(16.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, brandColor.copy(0.2f))
+                    borderColor = brandColor.copy(0.2f)
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp), tint = brandColor)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -715,9 +707,25 @@ private fun TaxiCard(title: String, content: @Composable () -> Unit) {
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(title, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(12.dp))
             content()
         }
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun RideCreateScreenPreview() {
+    val sampleSettings = AppSettings()
+    DrawTaxiTheme {
+        RideCreateScreen(
+            initialRide = null,
+            settings = sampleSettings,
+            onConfirm = {},
+            onCancel = {}
+        )
+    }
+}
+
+

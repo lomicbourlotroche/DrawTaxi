@@ -8,8 +8,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,7 +23,7 @@ import com.drawtaxi.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-@Deprecated("Replaced by DashboardScreen", level = DeprecationLevel.HIDDEN)
+@Deprecated("Replaced by DashboardScreen", level = DeprecationLevel.WARNING)
 @Composable
 fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideRequest>, brandColor: Color) {
     val now = Calendar.getInstance()
@@ -55,14 +57,14 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
     LazyColumn(modifier = Modifier.fillMaxSize().background(Slate50)) {
         item {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Statistiques", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Slate900, modifier = Modifier.padding(horizontal = 16.dp))
+            Text(text = "Statistiques", style = drawTaxiType().headlineMedium, fontWeight = FontWeight.Bold, color = Slate900, modifier = Modifier.padding(horizontal = 16.dp))
             Spacer(modifier = Modifier.height(16.dp))
         }
 
         item {
             Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Aujourd'hui", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Aujourd'hui", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         StatCard(value = String.format("%.2f €", todayRevenue), label = "revenus", icon = Icons.Default.AttachMoney, brandColor = brandColor)
@@ -83,7 +85,7 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
         item {
             Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Cette semaine", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Cette semaine", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         StatCard(value = String.format("%.2f €", weekRevenue), label = "revenus", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = brandColor)
@@ -104,7 +106,7 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
         item {
             Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Ce mois", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Ce mois", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         StatCard(value = String.format("%.2f €", monthRevenue), label = "revenus", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = brandColor)
@@ -123,7 +125,7 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
         item {
             Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Moyennes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Moyennes", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                     AverageRow(label = "Panier moyen (mois)", value = if (monthRides.isNotEmpty()) String.format("%.2f €", monthRevenue / monthRides.size) else "—")
                     AverageRow(label = "Revenu moyen / jour (semaine)", value = if (weekRides.isNotEmpty()) String.format("%.2f €", weekRevenue / 7) else "—")
                     AverageRow(label = "Distance moyenne / course", value = if (monthRides.isNotEmpty()) String.format("%.1f km", monthKm / monthRides.size) else "—")
@@ -135,7 +137,7 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
         item {
             Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("État actuel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("État actuel", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         StatCard(value = "${pendingRides.size}", label = "en attente", icon = Icons.Default.HourglassEmpty, brandColor = Color(0xFFEAB308))
@@ -154,7 +156,21 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
 @Composable
 private fun AverageRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = Slate600)
-        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = Slate900)
+        Text(text = label, style = drawTaxiType().bodyMedium, color = Slate600)
+        Text(text = value, style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Bold, color = Slate900)
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun StatsScreenPreview() {
+    DrawTaxiTheme {
+        StatsScreen(
+            validatedRides = emptyList(),
+            pendingRides = emptyList(),
+            brandColor = Color(0xFF6366F1)
+        )
+    }
+}
+
+

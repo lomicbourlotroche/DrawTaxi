@@ -9,7 +9,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
+import com.drawtaxi.app.ui.theme.*
+
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,7 +28,6 @@ import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.messaging.OvhMailSender
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OvhMailSettingsScreen(
     settings: AppSettings,
@@ -53,18 +56,16 @@ fun OvhMailSettingsScreen(
     var testStatus by remember { mutableStateOf<TestStatus?>(null) }
     var showPassword by remember { mutableStateOf(false) }
 
-    Scaffold(
+    DrawTaxiScaffold(
         topBar = {
-            TopAppBar(
+            DrawTaxiTopBar(
                 title = { Text("Configuration Email OVH", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    DrawTaxiIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                )
+                backgroundColor = Color.White
             )
         }
     ) { padding ->
@@ -88,23 +89,23 @@ fun OvhMailSettingsScreen(
                         Column {
                             Text(
                                 text = "Activer l'envoi via OVH",
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = drawTaxiType().bodyLarge,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = "Envoyer factures et confirmations",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = drawTaxiType().bodySmall,
                                 color = Color.Gray
                             )
                         }
-                        Switch(
+                        DrawTaxiSwitch(
                             checked = smtpEnabled,
                             onCheckedChange = { smtpEnabled = it }
                         )
                     }
                     
                     if (smtpEnabled) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        DrawTaxiDivider(modifier = Modifier.padding(vertical = 8.dp))
                         
                         OutlinedTextField(
                             value = smtpServer,
@@ -151,7 +152,7 @@ fun OvhMailSettingsScreen(
                             ),
                             singleLine = true,
                             trailingIcon = {
-                                IconButton(onClick = { showPassword = !showPassword }) {
+                                DrawTaxiIconButton(onClick = { showPassword = !showPassword }) {
                                     Icon(
                                         if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                         contentDescription = if (showPassword) "Masquer" else "Afficher"
@@ -185,7 +186,7 @@ fun OvhMailSettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("Utiliser SSL/TLS")
-                            Switch(
+                            DrawTaxiSwitch(
                                 checked = smtpUseSsl,
                                 onCheckedChange = { smtpUseSsl = it }
                             )
@@ -205,23 +206,23 @@ fun OvhMailSettingsScreen(
                         Column {
                             Text(
                                 text = "Surveiller les emails entrants",
-                                style = MaterialTheme.typography.bodyLarge,
+                                style = drawTaxiType().bodyLarge,
                                 fontWeight = FontWeight.Medium
                             )
                             Text(
                                 text = "Créer automatiquement des courses",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = drawTaxiType().bodySmall,
                                 color = Color.Gray
                             )
                         }
-                        Switch(
+                        DrawTaxiSwitch(
                             checked = imapEnabled,
                             onCheckedChange = { imapEnabled = it }
                         )
                     }
                     
                     if (imapEnabled) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        DrawTaxiDivider(modifier = Modifier.padding(vertical = 8.dp))
                         
                         OutlinedTextField(
                             value = imapServer,
@@ -276,7 +277,8 @@ fun OvhMailSettingsScreen(
                             is TestStatus.Loading -> {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
+                                    strokeWidth = 2.dp,
+                                    color = brandColor
                                 )
                             }
                             is TestStatus.Success -> {
@@ -312,7 +314,7 @@ fun OvhMailSettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
+                DrawTaxiOutlinedButton(
                     onClick = {
                         scope.launch {
                             testStatus = TestStatus.Loading("Test en cours...")
@@ -340,7 +342,7 @@ fun OvhMailSettingsScreen(
                     Text("Tester")
                 }
                 
-                Button(
+                DrawTaxiSolidButton(
                     onClick = {
                         onUpdate(
                             settings.copy(
@@ -362,7 +364,7 @@ fun OvhMailSettingsScreen(
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = brandColor)
+                    containerColor = brandColor
                 ) {
                     Icon(Icons.Default.Save, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -394,12 +396,12 @@ private fun SettingsCard(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = drawTaxiColors().primary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = drawTaxiType().titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -414,3 +416,18 @@ private sealed class TestStatus(val message: String) {
     class Success(message: String) : TestStatus(message)
     class Error(message: String) : TestStatus(message)
 }
+
+@Preview(showBackground = true)
+@Composable
+fun OvhMailSettingsScreenPreview() {
+    val sampleSettings = AppSettings()
+    DrawTaxiTheme {
+        OvhMailSettingsScreen(
+            settings = sampleSettings,
+            onUpdate = {},
+            onBack = {}
+        )
+    }
+}
+
+

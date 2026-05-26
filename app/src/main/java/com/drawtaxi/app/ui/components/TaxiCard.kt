@@ -1,21 +1,21 @@
 package com.drawtaxi.app.ui.components
 
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.drawtaxi.app.ui.components.core.DrawTaxiCard
+import com.drawtaxi.app.ui.components.core.DrawTaxiIcon
 import com.drawtaxi.app.ui.theme.*
 
 @Composable
@@ -33,53 +33,43 @@ fun TaxiCard(
         null
     }
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .shadow(
-                elevation = 4.dp,
-                shape = RoundedCornerShape(20.dp),
-                ambientColor = Color.Black.copy(alpha = 0.05f),
-                spotColor = Color.Black.copy(alpha = 0.08f)
-            ),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+    DrawTaxiCard(
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        backgroundColor = Color.Transparent
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            if (title != null) {
-                Row(
-                    modifier = Modifier.padding(bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (titleIcon != null) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = brandColor.copy(alpha = 0.1f),
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    imageVector = titleIcon,
-                                    contentDescription = null,
-                                    tint = brandColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                    }
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (backgroundBrush != null) {
+                Box(modifier = Modifier.matchParentSize().background(backgroundBrush))
+            } else {
+                Box(modifier = Modifier.matchParentSize().background(drawTaxiColors().surface))
             }
-            content()
+            Column(modifier = Modifier.matchParentSize().padding(16.dp)) {
+                if (title != null) {
+                    Row(
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (titleIcon != null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(brandColor.copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                DrawTaxiIcon(imageVector = titleIcon, contentDescription = null, tint = brandColor, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+                        androidx.compose.material3.Text(
+                            text = title,
+                            style = drawTaxiType().titleMedium,
+                            color = drawTaxiColors().onSurface,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                content()
+            }
         }
     }
 }
@@ -90,21 +80,18 @@ fun TaxiCardHighlighted(
     brandColor: Color,
     content: @Composable RowScope.() -> Unit
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = brandColor.copy(alpha = 0.08f)
-        ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, brandColor.copy(alpha = 0.2f))
+    DrawTaxiCard(
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        backgroundColor = Color.Transparent
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            content = content
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.matchParentSize().background(brandColor.copy(alpha = 0.08f)))
+            Row(
+                modifier = Modifier.matchParentSize().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                content = content
+            )
+        }
     }
 }
 
@@ -120,31 +107,68 @@ fun StatCard(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = brandColor.copy(alpha = 0.1f),
-            modifier = Modifier.size(40.dp)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(brandColor.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = brandColor,
-                    modifier = Modifier.size(20.dp)
+            DrawTaxiIcon(imageVector = icon, contentDescription = null, tint = brandColor, modifier = Modifier.size(20.dp))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        androidx.compose.material3.Text(
+            text = value,
+            style = drawTaxiType().titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = drawTaxiColors().onSurface
+        )
+        androidx.compose.material3.Text(
+            text = label,
+            style = drawTaxiType().labelSmall,
+            color = drawTaxiColors().onSurfaceVariant
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun TaxiCardPreview() {
+    DrawTaxiTheme {
+        Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+            TaxiCard(
+                title = "Card Title",
+                titleIcon = Icons.Default.Star,
+                brandColor = Color(0xFF6366F1)
+            ) {
+                androidx.compose.material3.Text(
+                    text = "This is a card content.",
+                    style = drawTaxiType().bodyMedium,
+                    modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun TaxiCardHighlightedPreview() {
+    DrawTaxiTheme {
+        TaxiCardHighlighted(
+            brandColor = Color(0xFF6366F1)
+        ) {
+            StatCard(
+                value = "10",
+                label = "Pending",
+                icon = Icons.Default.Star,
+                brandColor = Color(0xFF6366F1)
+            )
+            StatCard(
+                value = "45",
+                label = "Completed",
+                icon = Icons.Default.Star,
+                brandColor = Color(0xFF6366F1)
+            )
+        }
     }
 }

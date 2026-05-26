@@ -6,6 +6,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
+import com.drawtaxi.app.ui.theme.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,7 +57,7 @@ fun ProInfoSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onBa
     }
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(bottom = 8.dp)) {
+        DrawTaxiSolidButton(onClick = onBack, modifier = Modifier.padding(bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.ChevronLeft, contentDescription = null)
                 Text("Retour", fontWeight = FontWeight.SemiBold)
@@ -84,7 +86,7 @@ fun ProInfoSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onBa
             )
             Text(
                 text = "Utilisez [FIELDS] pour les infos manquantes.",
-                style = MaterialTheme.typography.labelSmall,
+                style = drawTaxiType().labelSmall,
                 color = Slate400,
                 modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
             )
@@ -113,3 +115,5 @@ fun ProInfoSettingsPreview() {
         ProInfoSettings(settings = mockSettings, onUpdate = {}, onBack = {})
     }
 }
+
+

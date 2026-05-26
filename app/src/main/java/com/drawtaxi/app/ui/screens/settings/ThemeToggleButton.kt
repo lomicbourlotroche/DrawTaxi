@@ -2,6 +2,7 @@ package com.drawtaxi.app.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -39,3 +40,5 @@ fun ThemeToggleButtonPreview() {
         ThemeToggleButton(label = "Minimal", isSelected = false, onClick = {}, modifier = Modifier.weight(1f))
     }
 }
+
+

@@ -7,7 +7,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,8 +18,9 @@ import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.ui.theme.*
+import com.drawtaxi.app.ui.components.core.*
+import androidx.compose.ui.tooling.preview.Preview
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RideCompletionScreen(
     ride: RideRequest,
@@ -67,25 +67,25 @@ fun RideCompletionScreen(
     } else 0.0
 
     Column(modifier = Modifier.fillMaxSize().background(Slate50)) {
-        TopAppBar(
+        DrawTaxiTopBar(
             title = {
                 Column {
                     Text("Terminer la course")
                     if (hasChanges) {
                         Text(
                             text = "Modifications détectées",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = drawTaxiType().bodySmall,
                             color = Color(0xFFCA8A04)
                         )
                     }
                 }
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                DrawTaxiIconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            backgroundColor = Color.Transparent
         )
 
         LazyColumn(
@@ -96,7 +96,7 @@ fun RideCompletionScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Informations de la course", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Informations de la course", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                         
                         OutlinedTextField(
                             value = departure,
@@ -151,7 +151,7 @@ fun RideCompletionScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Rentabilité estimée", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Rentabilité estimée", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Rentabilité", color = Slate500)
@@ -192,7 +192,7 @@ fun RideCompletionScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Détail du prix", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Détail du prix", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Prix de base", color = Slate500)
@@ -232,7 +232,7 @@ fun RideCompletionScreen(
                             }
                         }
                         
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        DrawTaxiDivider(modifier = Modifier.padding(vertical = 4.dp))
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Sous-total HT", color = Slate500)
@@ -259,7 +259,7 @@ fun RideCompletionScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Coordonnées client", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Coordonnées client", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Téléphone", color = Slate500)
@@ -282,15 +282,15 @@ fun RideCompletionScreen(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Button(
+                DrawTaxiSolidButton(
                     onClick = { showConfirmDialog = true },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = settings.brandColor),
+                    containerColor = settings.brandColor,
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Terminer la course", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(text = "Terminer la course", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.height(100.dp))
@@ -312,7 +312,7 @@ fun RideCompletionScreen(
                 }
             },
             confirmButton = {
-                Button(
+                DrawTaxiSolidButton(
                     onClick = {
                         val dist = distanceKm.toDoubleOrNull() ?: ride.distanceKm
                         val prc = price.toDoubleOrNull() ?: priceBreakdown.totalTTC
@@ -336,16 +336,42 @@ fun RideCompletionScreen(
                         showConfirmDialog = false
                         onComplete(updatedRide)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = settings.brandColor)
+                    containerColor = settings.brandColor
                 ) {
                     Text("Confirmer")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) {
+                DrawTaxiSolidButton(onClick = { showConfirmDialog = false }) {
                     Text("Annuler")
                 }
             }
         )
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun RideCompletionScreenPreview() {
+    val sampleSettings = AppSettings()
+    val sampleRide = RideRequest(
+        id = "1",
+        sender = "0612345678",
+        body = "Taxi depuis Paris vers Lyon à 14h30",
+        departure = "Paris",
+        arrival = "Lyon",
+        time = "14:30",
+        price = 45.0,
+        distanceKm = 18.5
+    )
+    DrawTaxiTheme {
+        RideCompletionScreen(
+            ride = sampleRide,
+            settings = sampleSettings,
+            onComplete = {},
+            onBack = {}
+        )
+    }
+}
+
+

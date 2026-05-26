@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 
 import androidx.compose.runtime.*
 
@@ -33,6 +34,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 
 import androidx.compose.ui.text.font.FontWeight
+
+import androidx.compose.ui.tooling.preview.Preview
 
 import androidx.compose.ui.unit.dp
 
@@ -78,10 +81,8 @@ data class DailyStats(
 
 
 
-@Deprecated("Replaced by DashboardScreen", level = DeprecationLevel.HIDDEN)
-
+@Deprecated("Replaced by DashboardScreen", level = DeprecationLevel.WARNING)
 @Composable
-
 fun AccountingScreen(
 
     validatedRides: List<RideRequest>,
@@ -254,7 +255,7 @@ fun AccountingScreen(
 
                 text = "Comptabilité & Rentabilité",
 
-                style = MaterialTheme.typography.headlineMedium,
+                style = drawTaxiType().headlineMedium,
 
                 fontWeight = FontWeight.Bold,
 
@@ -326,7 +327,7 @@ fun AccountingScreen(
 
                         text = String.format("%.2f €", totalRevenue),
 
-                        style = MaterialTheme.typography.displaySmall,
+                        style = drawTaxiType().displaySmall,
 
                         fontWeight = FontWeight.Black,
 
@@ -334,7 +335,7 @@ fun AccountingScreen(
 
                     )
 
-                    Text(text = "Revenus totaux", style = MaterialTheme.typography.bodyMedium, color = Slate500)
+                    Text(text = "Revenus totaux", style = drawTaxiType().bodyMedium, color = Slate500)
 
                     
 
@@ -356,7 +357,7 @@ fun AccountingScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    HorizontalDivider(color = Slate100)
+                    DrawTaxiDivider(color = Slate100)
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -387,7 +388,7 @@ fun AccountingScreen(
 
                     Column(modifier = Modifier.padding(16.dp)) {
 
-                        Text("Détail par jour", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Détail par jour", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
 
                         Spacer(modifier = Modifier.height(12.dp))
 
@@ -397,7 +398,7 @@ fun AccountingScreen(
 
                             if (stats != dailyStats.take(7).last()) {
 
-                                HorizontalDivider(color = Slate100, modifier = Modifier.padding(vertical = 8.dp))
+                                DrawTaxiDivider(color = Slate100, modifier = Modifier.padding(vertical = 8.dp))
 
                             }
 
@@ -429,13 +430,13 @@ fun AccountingScreen(
 
                             Text("Générer des factures", fontWeight = FontWeight.Bold)
 
-                            Text("Créer des factures pour Kolecto", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                            Text("Créer des factures pour Kolecto", style = drawTaxiType().bodySmall, color = Slate500)
 
                         }
 
                     }
 
-                    Button(onClick = onNavigateToInvoices, shape = RoundedCornerShape(12.dp)) {
+                    DrawTaxiSolidButton(onClick = onNavigateToInvoices, shape = RoundedCornerShape(12.dp)) {
 
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
 
@@ -463,7 +464,7 @@ fun AccountingScreen(
 
             ) {
 
-                OutlinedButton(
+                DrawTaxiOutlinedButton(
 
                     onClick = onExportCsv,
 
@@ -477,16 +478,11 @@ fun AccountingScreen(
 
                 }
 
-                Button(
-
+                DrawTaxiSolidButton(
                     onClick = onNavigateToInvoices,
-
                     modifier = Modifier.weight(1f),
-
                     shape = RoundedCornerShape(12.dp),
-
-                    colors = ButtonDefaults.buttonColors(containerColor = brandColor)
-
+                    containerColor = brandColor
                 ) {
 
                     Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -521,9 +517,9 @@ private fun ProfitStatColumn(value: String, label: String, icon: androidx.compos
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        Text(text = value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = color)
+        Text(text = value, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = color)
 
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Slate500)
+        Text(text = label, style = drawTaxiType().labelSmall, color = Slate500)
 
     }
 
@@ -545,9 +541,9 @@ private fun DailyStatRowWithProfit(stats: DailyStats, brandColor: Color) {
 
             Column {
 
-                Text(text = stats.dayName.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
+                Text(text = stats.dayName.uppercase(), style = drawTaxiType().labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
 
-                Text(text = stats.date, style = MaterialTheme.typography.labelSmall, color = Slate500)
+                Text(text = stats.date, style = drawTaxiType().labelSmall, color = Slate500)
 
             }
 
@@ -559,15 +555,15 @@ private fun DailyStatRowWithProfit(stats: DailyStats, brandColor: Color) {
 
             Column(horizontalAlignment = Alignment.End) {
 
-                Text(text = String.format("%.2f €", stats.totalRevenue), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Slate900)
+                Text(text = String.format("%.2f €", stats.totalRevenue), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = Slate900)
 
-                Text(text = "${stats.rideCount} courses • ${String.format("%.0f", stats.totalKm)} km", style = MaterialTheme.typography.labelSmall, color = Slate500)
+                Text(text = "${stats.rideCount} courses • ${String.format("%.0f", stats.totalKm)} km", style = drawTaxiType().labelSmall, color = Slate500)
 
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Surface(shape = RoundedCornerShape(8.dp), color = when {
+            DrawTaxiSurface(shape = RoundedCornerShape(8.dp), color = when {
 
                 stats.avgProfitability >= 70 -> Green100
 
@@ -581,7 +577,7 @@ private fun DailyStatRowWithProfit(stats: DailyStats, brandColor: Color) {
 
                     text = "${String.format("%.0f", stats.avgProfitability)}%",
 
-                    style = MaterialTheme.typography.labelMedium,
+                    style = drawTaxiType().labelMedium,
 
                     fontWeight = FontWeight.Bold,
 
@@ -606,4 +602,91 @@ private fun DailyStatRowWithProfit(stats: DailyStats, brandColor: Color) {
     }
 
 }
+
+
+
+@Suppress("DEPRECATION")
+@Preview(showBackground = true)
+@Composable
+fun AccountingScreenPreview() {
+
+    val today = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+
+    val sampleRides = listOf(
+
+        RideRequest(
+
+            id = "1",
+
+            sender = "0601020304",
+
+            body = "Course 1",
+
+            departure = "Gare de Lyon",
+
+            arrival = "Orly",
+
+            time = "10:00",
+
+            date = today,
+
+            timestamp = System.currentTimeMillis(),
+
+            price = 45.0,
+
+            distanceKm = 18.5,
+
+            isPending = false
+
+        ),
+
+        RideRequest(
+
+            id = "2",
+
+            sender = "0601020304",
+
+            body = "Course 2",
+
+            departure = "Eiffel Tower",
+
+            arrival = "Louvre",
+
+            time = "14:30",
+
+            date = today,
+
+            timestamp = System.currentTimeMillis(),
+
+            price = 25.0,
+
+            distanceKm = 5.2,
+
+            isPending = false
+
+        )
+
+    )
+
+
+
+    DrawTaxiTheme(brandColor = Indigo500) {
+
+        AccountingScreen(
+
+            validatedRides = sampleRides,
+
+            brandColor = Indigo500,
+
+            onExportCsv = {},
+
+            onNavigateToInvoices = {}
+
+        )
+
+    }
+
+}
+
+
 

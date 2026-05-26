@@ -10,7 +10,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,28 +52,28 @@ fun AgendaScreen(
             .fillMaxSize()
             .background(Slate50)
     ) {
-        TopAppBar(
+        DrawTaxiTopBar(
             title = {
                 Column {
                     Text("Agenda - Absences")
                     Text(
                         text = "Gérez vos jours d'absence",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = drawTaxiType().bodySmall,
                         color = Slate500
                     )
                 }
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                DrawTaxiIconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                 }
             },
             actions = {
-                IconButton(onClick = { showAddDialog = true }) {
+                DrawTaxiIconButton(onClick = { showAddDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = "Ajouter absence")
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            backgroundColor = Color.Transparent
         )
 
         if (absences.isEmpty()) {
@@ -91,21 +93,21 @@ fun AgendaScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
                         text = "Aucune absence planifiée",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = drawTaxiType().titleMedium,
                         color = Slate400,
                         fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Ajoutez vos jours d'absence pour envoyer automatiquement un message aux clients",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = drawTaxiType().bodyMedium,
                         color = Slate500,
                         modifier = Modifier.padding(horizontal = 32.dp)
                     )
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(
+                    DrawTaxiSolidButton(
                         onClick = { showAddDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = settings.brandColor)
+                        containerColor = settings.brandColor
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
@@ -122,7 +124,7 @@ fun AgendaScreen(
                 item {
                     Text(
                         text = "Absences enregistrées",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = drawTaxiType().titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = Slate800
                     )
@@ -143,13 +145,13 @@ fun AgendaScreen(
                     TaxiCard(title = "Message d'absence") {
                         Text(
                             text = settings.absenceMessageTemplate,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = drawTaxiType().bodyMedium,
                             color = Slate600
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "Ce message sera envoyé automatiquement aux clients pendant vos absences.",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = drawTaxiType().bodySmall,
                             color = Slate400
                         )
                     }
@@ -168,7 +170,7 @@ fun AgendaScreen(
             title = { Text("Ajouter une absence") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(
+                    DrawTaxiOutlinedButton(
                         onClick = {
                             isPickingStartDate = true
                             showDatePicker = true
@@ -180,7 +182,7 @@ fun AgendaScreen(
                         Text("Date début: ${dateFormat.format(Date(startDate))}")
                     }
 
-                    OutlinedButton(
+                    DrawTaxiOutlinedButton(
                         onClick = {
                             isPickingStartDate = false
                             showDatePicker = true
@@ -204,23 +206,21 @@ fun AgendaScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Switch(
+                        DrawTaxiSwitch(
                             checked = autoSendMessage,
                             onCheckedChange = { autoSendMessage = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = settings.brandColor
-                            )
+                            checkedTrackColor = settings.brandColor
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Envoyer message auto",
-                            style = MaterialTheme.typography.bodyMedium
+                            style = drawTaxiType().bodyMedium
                         )
                     }
                 }
             },
             confirmButton = {
-                Button(
+                DrawTaxiSolidButton(
                     onClick = {
                         if (endDate >= startDate) {
                             onAddAbsence(
@@ -237,13 +237,13 @@ fun AgendaScreen(
                             autoSendMessage = true
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = settings.brandColor)
+                    containerColor = settings.brandColor
                 ) {
                     Text("Ajouter")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddDialog = false }) {
+                DrawTaxiSolidButton(onClick = { showAddDialog = false }) {
                     Text("Annuler")
                 }
             }
@@ -257,7 +257,7 @@ fun AgendaScreen(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                DrawTaxiSolidButton(onClick = {
                     datePickerState.selectedDateMillis?.let { millis ->
                         if (isPickingStartDate) {
                             startDate = millis
@@ -277,7 +277,7 @@ fun AgendaScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
+                DrawTaxiSolidButton(onClick = { showDatePicker = false }) {
                     Text("Annuler")
                 }
             }
@@ -323,7 +323,7 @@ private fun AbsenceCard(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "${dateFormat.format(Date(absence.startDate))} → ${dateFormat.format(Date(absence.endDate))}",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = drawTaxiType().titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -332,7 +332,7 @@ private fun AbsenceCard(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = absence.reason,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = drawTaxiType().bodyMedium,
                             color = Slate600
                         )
                     }
@@ -348,7 +348,7 @@ private fun AbsenceCard(
                                 isPast -> "Passée"
                                 else -> ""
                             },
-                            style = MaterialTheme.typography.labelSmall
+                            style = drawTaxiType().labelSmall
                         )
                     },
                     colors = AssistChipDefaults.assistChipColors(
@@ -381,14 +381,14 @@ private fun AbsenceCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = if (absence.messageSent) "Message envoyé" else "Message en attente",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = drawTaxiType().bodySmall,
                         color = if (absence.messageSent) Green600 else Slate500
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider(color = Slate100)
+            DrawTaxiDivider(color = Slate100)
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(
@@ -396,26 +396,26 @@ private fun AbsenceCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (!absence.messageSent && absence.autoSendMessage) {
-                    OutlinedButton(
+                    DrawTaxiOutlinedButton(
                         onClick = onSendMessage,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Envoyer", style = MaterialTheme.typography.labelMedium)
+                        Text("Envoyer", style = drawTaxiType().labelMedium)
                     }
                 }
 
-                OutlinedButton(
+                DrawTaxiOutlinedButton(
                     onClick = { showDeleteDialog = true },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Red500)
+                    contentColor = Red500
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Supprimer", style = MaterialTheme.typography.labelMedium)
+                    Text("Supprimer", style = drawTaxiType().labelMedium)
                 }
             }
         }
@@ -427,23 +427,41 @@ private fun AbsenceCard(
             title = { Text("Supprimer cette absence ?") },
             text = { Text("Cette action est irréversible.") },
             confirmButton = {
-                Button(
+                DrawTaxiSolidButton(
                     onClick = {
                         onDelete()
                         showDeleteDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Red500)
+                    containerColor = Red500
                 ) {
                     Text("Supprimer")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
+                DrawTaxiSolidButton(onClick = { showDeleteDialog = false }) {
                     Text("Annuler")
                 }
             }
         )
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun AgendaScreenPreview() {
+    val sampleSettings = AppSettings()
+    DrawTaxiTheme {
+        AgendaScreen(
+            absences = emptyList(),
+            settings = sampleSettings,
+            onAddAbsence = {},
+            onDeleteAbsence = {},
+            onSendMessage = {},
+            onBack = {}
+        )
+    }
+}
+
+
 
 

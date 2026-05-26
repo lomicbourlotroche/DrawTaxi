@@ -3,6 +3,7 @@ package com.drawtaxi.app.ui.screens.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,7 +26,7 @@ fun TaxiToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     icon: ImageVector
 ) {
-    Surface(
+    DrawTaxiSurface(
         shape = RoundedCornerShape(12.dp),
         color = Slate50,
         modifier = Modifier.fillMaxWidth()
@@ -43,16 +44,9 @@ fun TaxiToggleRow(
                     Text(subtitle, fontSize = 11.sp, color = Slate400)
                 }
             }
-            Switch(
+            DrawTaxiSwitch(
                 checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = TaxiRed,
-                    uncheckedThumbColor = Slate400,
-                    uncheckedTrackColor = Slate200,
-                    uncheckedBorderColor = Color.Transparent
-                )
+                onCheckedChange = onCheckedChange
             )
         }
     }
@@ -71,3 +65,5 @@ fun TaxiToggleRowPreview() {
         )
     }
 }
+
+

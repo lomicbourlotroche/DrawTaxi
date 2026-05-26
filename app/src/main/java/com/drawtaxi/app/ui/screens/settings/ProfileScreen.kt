@@ -2,6 +2,7 @@ package com.drawtaxi.app.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,12 +25,10 @@ fun ProfileScreen(
             Text("Historique complet", color = Slate700, fontWeight = FontWeight.Bold)
             Text("${validatedCount + pendingCount} courses enregistrées", color = Slate400, fontSize = 12.sp)
             Spacer(modifier = Modifier.height(16.dp))
-            Button(
+            DrawTaxiSolidButton(
                 onClick = onClearHistory,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Red.copy(0.1f), 
-                    contentColor = Color.Red
-                )
+                containerColor = Color.Red.copy(0.1f), 
+                contentColor = Color.Red
             ) {
                 Text("Effacer tout l'historique")
             }
@@ -46,3 +45,5 @@ fun ProfileScreenPreview() {
         onClearHistory = {}
     )
 }
+
+

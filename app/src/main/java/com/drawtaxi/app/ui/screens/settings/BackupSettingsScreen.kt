@@ -10,24 +10,27 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.BackupManager
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.ui.components.TaxiCard
+import com.drawtaxi.app.ui.components.core.*
 import com.drawtaxi.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackupSettingsScreen(
     settings: AppSettings,
@@ -111,16 +114,14 @@ fun BackupSettingsScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        TopAppBar(
-            title = { Text("Sauvegarde & Restauration") },
+        DrawTaxiTopBar(
+            title = { Text(text = "Sauvegarde & Restauration", style = drawTaxiType().titleLarge) },
             navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+                DrawTaxiIconButton(onClick = onBack) {
+                    DrawTaxiIcon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = androidx.compose.ui.graphics.Color.Transparent
-            )
+            backgroundColor = Color.Transparent
         )
 
         TaxiCard(title = "Sauvegarde manuelle") {
@@ -151,13 +152,12 @@ fun BackupSettingsScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
+                            modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
                             text = if (isExporting) "Export en cours..." else "Import en cours...",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = drawTaxiType().bodyMedium,
                             color = Slate600
                         )
                     }
@@ -174,7 +174,7 @@ fun BackupSettingsScreen(
                 Column {
                     Text(
                         text = lastBackupDate,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = drawTaxiType().bodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = Slate800
                     )
@@ -182,12 +182,12 @@ fun BackupSettingsScreen(
                         val daysSince = ((System.currentTimeMillis() - settings.lastBackupDate) / (1000 * 60 * 60 * 24)).toInt()
                         Text(
                             text = if (daysSince == 0) "Aujourd'hui" else "Il y a $daysSince jour${if (daysSince > 1) "s" else ""}",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = drawTaxiType().bodySmall,
                             color = Slate500
                         )
                     }
                 }
-                Icon(
+                DrawTaxiIcon(
                     imageVector = if (settings.lastBackupDate > 0) Icons.Default.CheckCircle else Icons.Default.History,
                     contentDescription = null,
                     tint = if (settings.lastBackupDate > 0) Green500 else Slate400,
@@ -213,7 +213,7 @@ fun BackupSettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Fréquence",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = drawTaxiType().labelMedium,
                         color = Slate500,
                         fontWeight = FontWeight.Bold
                     )
@@ -233,13 +233,13 @@ fun BackupSettingsScreen(
         TaxiCard(title = "Restauration") {
             Text(
                 text = "La restauration remplacera toutes vos données actuelles (courses et paramètres) par le contenu de la sauvegarde.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = drawTaxiType().bodyMedium,
                 color = Slate600
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Assurez-vous d'exporter vos données actuelles avant d'importer une sauvegarde.",
-                style = MaterialTheme.typography.bodySmall,
+                style = drawTaxiType().bodySmall,
                 color = Slate400
             )
         }
@@ -248,43 +248,48 @@ fun BackupSettingsScreen(
     }
 
     if (showRestoreDialog && restoreInfo != null && restoreContent != null) {
-        AlertDialog(
+        DrawTaxiAlertDialog(
             onDismissRequest = { showRestoreDialog = false },
-            icon = { Icon(Icons.Default.Restore, contentDescription = null) },
-            title = { Text("Restaurer la sauvegarde") },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    DrawTaxiIcon(imageVector = Icons.Default.Restore, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "Restaurer la sauvegarde", style = drawTaxiType().titleLarge)
+                }
+            },
             text = {
                 Column {
-                    Text("Voulez-vous restaurer cette sauvegarde ?")
+                    Text(text = "Voulez-vous restaurer cette sauvegarde ?", style = drawTaxiType().bodyMedium)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Slate50)
+                    DrawTaxiCard(
+                        backgroundColor = Slate50
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 text = "Date: ${restoreInfo?.dateFormatted}",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = drawTaxiType().bodyMedium
                             )
                             Text(
                                 text = "Courses: ${restoreInfo?.rideCount}",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = drawTaxiType().bodyMedium
                             )
                             Text(
                                 text = "Version: ${restoreInfo?.version}",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = drawTaxiType().bodyMedium
                             )
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Attention: Toutes vos données actuelles seront remplacées.",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = drawTaxiType().bodySmall,
                         color = TaxiRed,
                         fontWeight = FontWeight.Bold
                     )
                 }
             },
             confirmButton = {
-                Button(
+                DrawTaxiButton(
                     onClick = {
                         showRestoreDialog = false
                         isImporting = true
@@ -304,18 +309,18 @@ fun BackupSettingsScreen(
                         restoreContent = null
                         restoreInfo = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = TaxiRed)
+                    containerColor = TaxiRed
                 ) {
-                    Text("Restaurer")
+                    Text(text = "Restaurer", style = drawTaxiType().labelLarge)
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                DrawTaxiButton(onClick = {
                     showRestoreDialog = false
                     restoreContent = null
                     restoreInfo = null
                 }) {
-                    Text("Annuler")
+                    Text(text = "Annuler", style = drawTaxiType().labelLarge)
                 }
             }
         )
@@ -338,10 +343,10 @@ private fun IntervalSelector(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         intervals.forEach { (value, label) ->
-            FilterChip(
+            DrawTaxiFilterChip(
                 selected = selectedInterval == value,
                 onClick = { onIntervalSelected(value) },
-                label = { Text(label, fontSize = 12.sp) },
+                label = { Text(text = label, fontSize = 12.sp, style = drawTaxiType().labelSmall) },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -368,7 +373,7 @@ private fun SettingsMenuItem(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
+                DrawTaxiIcon(
                     imageVector = icon,
                     contentDescription = null,
                     tint = if (enabled) TaxiRed else Slate400,
@@ -379,11 +384,12 @@ private fun SettingsMenuItem(
                     text = title,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = if (enabled) Slate700 else Slate400
+                    color = if (enabled) Slate700 else Slate400,
+                    style = drawTaxiType().bodyMedium
                 )
             }
-            Icon(
-                Icons.Default.ChevronRight,
+            DrawTaxiIcon(
+                imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
                 tint = Slate400,
                 modifier = Modifier.size(18.dp)
@@ -392,4 +398,17 @@ private fun SettingsMenuItem(
     }
 }
 
-
+@Preview(showBackground = true)
+@Composable
+fun BackupSettingsScreenPreview() {
+    val sampleSettings = AppSettings()
+    DrawTaxiTheme {
+        BackupSettingsScreen(
+            settings = sampleSettings,
+            allRides = emptyList(),
+            onUpdateSettings = {},
+            onRestore = { _, _ -> },
+            onBack = {}
+        )
+    }
+}

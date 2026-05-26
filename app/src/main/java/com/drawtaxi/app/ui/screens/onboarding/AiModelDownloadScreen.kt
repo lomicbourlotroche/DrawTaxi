@@ -13,7 +13,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,7 +68,7 @@ fun AiModelDownloadScreen(
         }
     }
 
-    Surface(
+    DrawTaxiSurface(
         modifier = Modifier.fillMaxSize(),
         color = if (isComplete) Emerald50 else Slate50
     ) {
@@ -79,7 +81,7 @@ fun AiModelDownloadScreen(
         ) {
             Spacer(modifier = Modifier.height(40.dp))
 
-            Surface(
+            DrawTaxiSurface(
                 modifier = Modifier.size(80.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = if (isComplete) Emerald500.copy(0.1f) else brandColor.copy(0.1f)
@@ -98,7 +100,7 @@ fun AiModelDownloadScreen(
 
             Text(
                 text = if (isComplete) "Modèle prêt !" else "Intelligence Artificielle",
-                style = MaterialTheme.typography.headlineMedium,
+                style = drawTaxiType().headlineMedium,
                 fontWeight = FontWeight.Black,
                 color = Slate900,
                 textAlign = TextAlign.Center
@@ -109,7 +111,7 @@ fun AiModelDownloadScreen(
                     "Llama 3.2 3B est installé. Le parsing SMS sera plus précis."
                 else
                     "Téléchargez le modèle Llama 3.2 pour un parsing SMS intelligent hors ligne.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = drawTaxiType().bodyMedium,
                 color = Slate400,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp)
@@ -177,12 +179,12 @@ fun AiModelDownloadScreen(
                     ) {
                         Text(
                             text = statusText,
-                            style = MaterialTheme.typography.labelMedium,
+                            style = drawTaxiType().labelMedium,
                             color = Slate500
                         )
                         Text(
                             text = "${(animatedProgress * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelMedium,
+                            style = drawTaxiType().labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = brandColor
                         )
@@ -196,12 +198,12 @@ fun AiModelDownloadScreen(
                         ) {
                             Text(
                                 text = downloadSpeed,
-                                style = MaterialTheme.typography.labelSmall,
+                                style = drawTaxiType().labelSmall,
                                 color = Slate400
                             )
                             Text(
                                 text = timeRemaining,
-                                style = MaterialTheme.typography.labelSmall,
+                                style = drawTaxiType().labelSmall,
                                 color = Slate400
                             )
                         }
@@ -212,7 +214,7 @@ fun AiModelDownloadScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "${downloadedMb} Mo / 2 000 Mo",
-                            style = MaterialTheme.typography.labelSmall,
+                            style = drawTaxiType().labelSmall,
                             color = Slate400
                         )
                     }
@@ -224,7 +226,7 @@ fun AiModelDownloadScreen(
             if (!isComplete) {
                 val connectionType = remember { LlamaModelManager.getConnectionType(context) }
                 if (connectionType != "WiFi") {
-                    Surface(
+                    DrawTaxiSurface(
                         shape = RoundedCornerShape(8.dp),
                         color = Amber100,
                         modifier = Modifier.padding(bottom = 16.dp)
@@ -242,7 +244,7 @@ fun AiModelDownloadScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Connexion $connectionType - ~2 Go à télécharger",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = drawTaxiType().labelSmall,
                                 color = Amber700
                             )
                         }
@@ -252,7 +254,7 @@ fun AiModelDownloadScreen(
                 var retryCount by remember { mutableStateOf(0) }
                 var lastError by remember { mutableStateOf("") }
 
-                Button(
+                DrawTaxiSolidButton(
                     onClick = {
                         isDownloading = true
                         hasError = false
@@ -311,7 +313,7 @@ fun AiModelDownloadScreen(
                         .fillMaxWidth()
                         .height(56.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = brandColor),
+                    containerColor = brandColor,
                     enabled = !isDownloading
                 ) {
                     if (isDownloading) {
@@ -334,7 +336,7 @@ fun AiModelDownloadScreen(
 
                 if (hasError) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
+                    DrawTaxiSurface(
                         shape = RoundedCornerShape(8.dp),
                         color = Rose100,
                         modifier = Modifier.fillMaxWidth()
@@ -352,14 +354,14 @@ fun AiModelDownloadScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = statusText,
-                                style = MaterialTheme.typography.labelSmall,
+                                style = drawTaxiType().labelSmall,
                                 color = Rose700,
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Conseils : Vérifiez votre connexion WiFi, désactivez le VPN, ou réessayez plus tard.",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = drawTaxiType().labelSmall,
                                 color = Rose600,
                                 textAlign = TextAlign.Center
                             )
@@ -369,7 +371,7 @@ fun AiModelDownloadScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                TextButton(
+                DrawTaxiSolidButton(
                     onClick = onSkip,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -380,13 +382,13 @@ fun AiModelDownloadScreen(
                     )
                 }
             } else {
-                Button(
+                DrawTaxiSolidButton(
                     onClick = onComplete,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald500)
+                    containerColor = Emerald500
                 ) {
                     Text("CONTINUER", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                     Spacer(modifier = Modifier.width(8.dp))
@@ -409,7 +411,7 @@ private fun FeatureItem(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(
+        DrawTaxiSurface(
             modifier = Modifier.size(40.dp),
             shape = RoundedCornerShape(10.dp),
             color = Indigo500.copy(0.1f)
@@ -439,3 +441,17 @@ private fun FeatureItem(
         }
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun AiModelDownloadScreenPreview() {
+    DrawTaxiTheme {
+        AiModelDownloadScreen(
+            brandColor = Color(0xFF6366F1),
+            onSkip = {},
+            onComplete = {}
+        )
+    }
+}
+
+

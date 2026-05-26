@@ -9,7 +9,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
+import com.drawtaxi.app.ui.theme.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.AppSettings
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PricingSettingsScreen(
     settings: AppSettings,
@@ -72,18 +74,16 @@ fun PricingSettingsScreen(
         )
     }
 
-    Scaffold(
+    DrawTaxiScaffold(
         topBar = {
-            TopAppBar(
+            DrawTaxiTopBar(
                 title = { Text("Tarifs & Coûts", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    DrawTaxiIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
-                )
+                backgroundColor = Color.White
             )
         }
     ) { padding ->
@@ -200,7 +200,7 @@ fun PricingSettingsScreen(
                     )
                     Text(
                         "Utilisé pour calculer la rentabilité : distance(domicile → départ) × coût/km",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = drawTaxiType().bodySmall,
                         color = com.drawtaxi.app.ui.theme.Slate500
                     )
                 }
@@ -265,7 +265,7 @@ private fun PricingCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = drawTaxiType().titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -302,3 +302,18 @@ private fun PricingInput(
         )
     )
 }
+
+@Preview(showBackground = true)
+@Composable
+fun PricingSettingsScreenPreview() {
+    val sampleSettings = AppSettings()
+    DrawTaxiTheme {
+        PricingSettingsScreen(
+            settings = sampleSettings,
+            onUpdate = {},
+            onBack = {}
+        )
+    }
+}
+
+

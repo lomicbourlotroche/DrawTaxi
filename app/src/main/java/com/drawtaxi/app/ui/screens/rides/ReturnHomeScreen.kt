@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,10 +24,8 @@ import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.geocoding.GeocodingService
 import com.drawtaxi.app.logic.routing.NavigationEngine
-import com.drawtaxi.app.ui.theme.Amber500
-import com.drawtaxi.app.ui.theme.Slate400
-import com.drawtaxi.app.ui.theme.Slate500
-import com.drawtaxi.app.ui.theme.Slate700
+import com.drawtaxi.app.ui.theme.*
+import com.drawtaxi.app.ui.components.core.*
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.expressions.dsl.const
@@ -54,7 +53,7 @@ fun InstructionCard(
     eta: String,
     distance: String
 ) {
-    Surface(
+    DrawTaxiSurface(
         shape = RoundedCornerShape(16.dp),
         color = Color.White.copy(alpha = 0.95f),
         shadowElevation = 8.dp,
@@ -75,13 +74,13 @@ fun InstructionCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         instruction,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = drawTaxiType().titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     if (nextInstruction.isNotBlank()) {
                         Text(
                             "Puis $nextInstruction dans $nextDistance",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = drawTaxiType().bodySmall,
                             color = Slate500
                         )
                     }
@@ -93,19 +92,19 @@ fun InstructionCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Recalcul de l'itinéraire...", style = MaterialTheme.typography.bodySmall, color = Amber500)
+                    Text("Recalcul de l'itinéraire...", style = drawTaxiType().bodySmall, color = Amber500)
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Distance", style = MaterialTheme.typography.labelSmall, color = Slate500)
-                    Text(distance, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("Distance", style = drawTaxiType().labelSmall, color = Slate500)
+                    Text(distance, style = drawTaxiType().titleSmall, fontWeight = FontWeight.Bold)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("ETA", style = MaterialTheme.typography.labelSmall, color = Slate500)
-                    Text(eta, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("ETA", style = drawTaxiType().labelSmall, color = Slate500)
+                    Text(eta, style = drawTaxiType().titleSmall, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -113,7 +112,7 @@ fun InstructionCard(
 }
 
 @SuppressLint("MissingPermission")
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun ReturnHomeScreen(
     settings: AppSettings,
@@ -181,7 +180,7 @@ fun ReturnHomeScreen(
         }
     }
 
-    Scaffold(
+    DrawTaxiScaffold(
         topBar = {
             Row(
                 modifier = Modifier
@@ -190,7 +189,7 @@ fun ReturnHomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
+                DrawTaxiIconButton(
                     onClick = onBack,
                     modifier = Modifier
                         .size(44.dp)
@@ -201,7 +200,7 @@ fun ReturnHomeScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
                 }
 
-                Surface(
+                DrawTaxiSurface(
                     shape = RoundedCornerShape(20.dp),
                     color = Color.White.copy(alpha = 0.95f),
                     shadowElevation = 4.dp
@@ -212,7 +211,7 @@ fun ReturnHomeScreen(
                     ) {
                         Icon(Icons.Default.Speed, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(engineState.currentSpeed, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
+                        Text(engineState.currentSpeed, style = drawTaxiType().labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
                     }
                 }
             }
@@ -325,7 +324,7 @@ fun ReturnHomeScreen(
                         .padding(16.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Calcul...", color = Color.White)
                     }
@@ -334,3 +333,19 @@ fun ReturnHomeScreen(
         }
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun ReturnHomeScreenPreview() {
+    val sampleSettings = AppSettings(
+        homeAddress = "12 rue de la Paix, Paris"
+    )
+    DrawTaxiTheme {
+        ReturnHomeScreen(
+            settings = sampleSettings,
+            onBack = {}
+        )
+    }
+}
+
+

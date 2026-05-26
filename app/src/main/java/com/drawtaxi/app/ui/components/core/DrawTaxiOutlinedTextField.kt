@@ -1,4 +1,4 @@
-package com.drawtaxi.app.ui.components
+package com.drawtaxi.app.ui.components.core
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,28 +12,45 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.drawtaxi.app.ui.theme.*
 
 @Composable
-fun TaxiInputField(
+fun DrawTaxiOutlinedTextField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
     placeholder: String = "",
-    isNumber: Boolean = false
+    isNumber: Boolean = false,
+    isError: Boolean = false,
+    singleLine: Boolean = true,
+    maxLines: Int = 1,
+    leadingIcon: (@Composable () -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    val borderColor = if (isFocused) drawTaxiColors().primary else Slate200
+    val borderColor = when {
+        isError -> drawTaxiColors().error
+        isFocused -> drawTaxiColors().primary
+        else -> Slate200
+    }
+    val labelColor = when {
+        isError -> drawTaxiColors().error
+        isFocused -> drawTaxiColors().primary
+        else -> Slate400
+    }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-        androidx.compose.material3.Text(
-            text = label.uppercase(),
-            style = drawTaxiType().labelSmall, color = Slate400,
-            modifier = Modifier.padding(bottom = 4.dp, start = 4.dp), fontWeight = FontWeight.Bold
-        )
+    Column(modifier = modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        if (label.isNotBlank()) {
+            androidx.compose.material3.Text(
+                text = label.uppercase(),
+                style = drawTaxiType().labelSmall,
+                color = labelColor,
+                modifier = Modifier.padding(bottom = 4.dp, start = 4.dp),
+                fontWeight = FontWeight.Bold
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -47,10 +64,12 @@ fun TaxiInputField(
                 value = value,
                 onValueChange = onValueChange,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp).onFocusChanged { isFocused = it.isFocused },
-                singleLine = true,
+                singleLine = singleLine,
+                maxLines = maxLines,
                 textStyle = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, color = drawTaxiColors().onSurface),
                 cursorBrush = SolidColor(drawTaxiColors().primary),
                 keyboardOptions = KeyboardOptions(keyboardType = if (isNumber) KeyboardType.Decimal else KeyboardType.Text),
+                visualTransformation = VisualTransformation.None,
                 decorationBox = { innerTextField ->
                     Box {
                         if (value.isEmpty()) {
@@ -59,37 +78,6 @@ fun TaxiInputField(
                         innerTextField()
                     }
                 }
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun TaxiInputFieldPreview() {
-    DrawTaxiTheme {
-        Box(modifier = Modifier.padding(16.dp)) {
-            TaxiInputField(
-                label = "Nom d'utilisateur",
-                value = "Jean Dupont",
-                onValueChange = {},
-                placeholder = "Entrez votre nom"
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun TaxiInputFieldEmptyPreview() {
-    DrawTaxiTheme {
-        Box(modifier = Modifier.padding(16.dp)) {
-            TaxiInputField(
-                label = "Téléphone",
-                value = "",
-                onValueChange = {},
-                placeholder = "06 12 34 56 78",
-                isNumber = true
             )
         }
     }

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,13 +22,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.ui.components.TaxiCard
+import com.drawtaxi.app.ui.components.core.*
 import com.drawtaxi.app.ui.theme.*
 import kotlinx.coroutines.launch
 import java.io.OutputStreamWriter
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportScreen(
     rides: List<RideRequest>,
@@ -80,14 +81,14 @@ fun ExportScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
+        DrawTaxiTopBar(
             title = { Text("Export & Rapports") },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                DrawTaxiIconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            backgroundColor = Color.Transparent
         )
 
         LazyColumn(
@@ -132,12 +133,12 @@ fun ExportScreen(
                         Column {
                             Text(
                                 text = "${filteredRides.size} courses",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = drawTaxiType().titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 text = "Total: ${String.format("%.2f €", totalAmount)}",
-                                style = MaterialTheme.typography.headlineMedium,
+                                style = drawTaxiType().headlineMedium,
                                 fontWeight = FontWeight.Black,
                                 color = brandColor
                             )
@@ -156,11 +157,11 @@ fun ExportScreen(
                 TaxiCard(title = "Export CSV") {
                     Text(
                         text = "Exportez vos données au format CSV pour une utilisation dans Excel ou Google Sheets.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = drawTaxiType().bodyMedium,
                         color = Slate600
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(
+                    DrawTaxiSolidButton(
                         onClick = {
                             val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
                             val filename = "drawtaxi_export_${dateFormat.format(Date())}.csv"
@@ -208,7 +209,7 @@ fun ExportScreen(
                             if (filteredRides.size > 5) {
                                 Text(
                                     text = "... et ${filteredRides.size - 5} autres courses",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = drawTaxiType().labelSmall,
                                     color = Slate500,
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
@@ -237,17 +238,17 @@ private fun ExportPreviewRow(ride: RideRequest) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "${ride.departure} → ${ride.arrival}",
-                style = MaterialTheme.typography.bodyMedium
+                style = drawTaxiType().bodyMedium
             )
             Text(
                 text = ride.date.ifBlank { dateFormat.format(Date(ride.timestamp)) },
-                style = MaterialTheme.typography.labelSmall,
+                style = drawTaxiType().labelSmall,
                 color = Slate500
             )
         }
         Text(
             text = if (ride.price > 0) String.format("%.2f €", ride.price) else "—",
-            style = MaterialTheme.typography.titleMedium,
+            style = drawTaxiType().titleMedium,
             fontWeight = FontWeight.Bold,
             color = if (ride.price > 0) Green600 else Slate400
         )
@@ -273,3 +274,17 @@ private fun generateCsv(rides: List<RideRequest>): String {
     
     return sb.toString()
 }
+
+@Preview(showBackground = true)
+@Composable
+fun ExportScreenPreview() {
+    DrawTaxiTheme {
+        ExportScreen(
+            rides = emptyList(),
+            brandColor = Color(0xFF6366F1),
+            onBack = {}
+        )
+    }
+}
+
+

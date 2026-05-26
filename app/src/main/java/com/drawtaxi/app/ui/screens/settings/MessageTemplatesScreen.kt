@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -16,9 +17,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.ui.components.TaxiCard
+import com.drawtaxi.app.ui.components.core.*
 import com.drawtaxi.app.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessageTemplatesScreen(
     settings: AppSettings,
@@ -31,14 +32,14 @@ fun MessageTemplatesScreen(
     var editingText by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
+        DrawTaxiTopBar(
             title = { Text("Templates de Messages") },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                DrawTaxiIconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            backgroundColor = Color.Transparent
         )
 
         LazyColumn(
@@ -61,7 +62,7 @@ fun MessageTemplatesScreen(
                             maxLines = 3
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(
+                        FilledIconButton(
                             onClick = {
                                 if (newTemplate.isNotBlank()) {
                                     templates = (templates + newTemplate).toMutableList()
@@ -69,7 +70,7 @@ fun MessageTemplatesScreen(
                                     onUpdateSettings(settings.copy(messageTemplates = templates))
                                 }
                             },
-                            colors = IconButtonDefaults.iconButtonColors(
+                            colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = Green500,
                                 contentColor = Color.White
                             )
@@ -83,7 +84,7 @@ fun MessageTemplatesScreen(
             item {
                 Text(
                     text = "Templates enregistrés",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = drawTaxiType().titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
@@ -129,7 +130,7 @@ fun MessageTemplatesScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Ces templates seront disponibles sur l'écran de détail de course pour envoyer rapidement des messages au client.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = drawTaxiType().bodySmall,
                     color = Slate500
                 )
             }
@@ -152,7 +153,7 @@ fun MessageTemplatesScreen(
                 )
             },
             confirmButton = {
-                Button(
+                DrawTaxiSolidButton(
                     onClick = {
                         templates = templates.toMutableList().also {
                             it[editingIndex] = editingText
@@ -166,7 +167,7 @@ fun MessageTemplatesScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
+                DrawTaxiSolidButton(onClick = {
                     editingIndex = -1
                     editingText = ""
                 }) {
@@ -193,7 +194,7 @@ private fun TemplateItem(
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = template,
-                style = MaterialTheme.typography.bodyMedium,
+                style = drawTaxiType().bodyMedium,
                 color = Slate700
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -201,7 +202,7 @@ private fun TemplateItem(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onEdit) {
+                DrawTaxiSolidButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Modifier")
@@ -224,21 +225,36 @@ private fun TemplateItem(
             title = { Text("Supprimer ce template ?") },
             text = { Text("Cette action est irréversible.") },
             confirmButton = {
-                Button(
+                DrawTaxiSolidButton(
                     onClick = {
                         onDelete()
                         showDeleteDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Red500)
+                    containerColor = Red500
                 ) {
                     Text("Supprimer")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
+                DrawTaxiSolidButton(onClick = { showDeleteDialog = false }) {
                     Text("Annuler")
                 }
             }
         )
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun MessageTemplatesScreenPreview() {
+    val sampleSettings = AppSettings()
+    DrawTaxiTheme {
+        MessageTemplatesScreen(
+            settings = sampleSettings,
+            onUpdateSettings = {},
+            onBack = {}
+        )
+    }
+}
+
+

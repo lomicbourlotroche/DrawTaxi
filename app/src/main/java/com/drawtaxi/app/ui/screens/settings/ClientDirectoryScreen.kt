@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,11 +24,11 @@ import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.Client
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.ui.components.TaxiCard
+import com.drawtaxi.app.ui.components.core.*
 import com.drawtaxi.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClientDirectoryScreen(
     rides: List<RideRequest>,
@@ -66,22 +67,22 @@ fun ClientDirectoryScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
+        DrawTaxiTopBar(
             title = { Text("Carnet Client") },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                DrawTaxiIconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                 }
             },
             actions = {
                 Text(
                     text = "${clients.size} client${if (clients.size > 1) "s" else ""}",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = drawTaxiType().labelMedium,
                     color = Slate500
                 )
                 Spacer(modifier = Modifier.width(16.dp))
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            backgroundColor = Color.Transparent
         )
 
         if (clients.isEmpty()) {
@@ -99,12 +100,12 @@ fun ClientDirectoryScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Aucun client",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = drawTaxiType().titleMedium,
                         color = Slate500
                     )
                     Text(
                         text = "Vos clients apparaîtront ici",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = drawTaxiType().bodySmall,
                         color = Slate400
                     )
                 }
@@ -124,7 +125,7 @@ fun ClientDirectoryScreen(
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
                             if (searchQuery.isNotBlank()) {
-                                IconButton(onClick = { searchQuery = "" }) {
+                                DrawTaxiIconButton(onClick = { searchQuery = "" }) {
                                     Icon(Icons.Default.Clear, contentDescription = "Effacer")
                                 }
                             }
@@ -209,12 +210,12 @@ private fun ClientCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = client.name,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = drawTaxiType().titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = client.phone,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = drawTaxiType().bodySmall,
                     color = Slate500
                 )
                 Row(
@@ -230,13 +231,13 @@ private fun ClientCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "${client.rideCount} course${if (client.rideCount > 1) "s" else ""}",
-                        style = MaterialTheme.typography.labelSmall,
+                        style = drawTaxiType().labelSmall,
                         color = Slate500
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = String.format("%.2f €", client.totalAmount),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = drawTaxiType().labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Green600
                     )
@@ -244,14 +245,14 @@ private fun ClientCard(
             }
             
             Row {
-                IconButton(onClick = onSms) {
+                DrawTaxiIconButton(onClick = onSms) {
                     Icon(
                         Icons.Default.Sms,
                         contentDescription = "SMS",
                         tint = Slate500
                     )
                 }
-                IconButton(onClick = onCall) {
+                DrawTaxiIconButton(onClick = onCall) {
                     Icon(
                         Icons.Default.Phone,
                         contentDescription = "Appeler",
@@ -288,16 +289,16 @@ private fun ClientDetailBottomSheet(
                 Column {
                     Text(
                         text = client.name,
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = drawTaxiType().headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = client.phone,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = drawTaxiType().bodyMedium,
                         color = Slate500
                     )
                 }
-                IconButton(onClick = onDismiss) {
+                DrawTaxiIconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Fermer")
                 }
             }
@@ -308,7 +309,7 @@ private fun ClientDetailBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedButton(
+                DrawTaxiOutlinedButton(
                     onClick = {
                         val intent = Intent(Intent.ACTION_DIAL).apply {
                             data = Uri.parse("tel:${client.phone}")
@@ -321,7 +322,7 @@ private fun ClientDetailBottomSheet(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Appeler")
                 }
-                OutlinedButton(
+                DrawTaxiOutlinedButton(
                     onClick = {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
                             data = Uri.parse("sms:${client.phone}")
@@ -351,29 +352,29 @@ private fun ClientDetailBottomSheet(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = "${client.rideCount}",
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = drawTaxiType().headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = brandColor
                         )
-                        Text("Courses", style = MaterialTheme.typography.labelSmall, color = Slate500)
+                        Text("Courses", style = drawTaxiType().labelSmall, color = Slate500)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = String.format("%.2f €", client.totalAmount),
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = drawTaxiType().headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = Green600
                         )
-                        Text("Total dépensé", style = MaterialTheme.typography.labelSmall, color = Slate500)
+                        Text("Total dépensé", style = drawTaxiType().labelSmall, color = Slate500)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = if (client.lastRideDate > 0) dateFormat.format(Date(client.lastRideDate)) else "—",
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = drawTaxiType().bodyLarge,
                             fontWeight = FontWeight.Bold,
                             color = Slate700
                         )
-                        Text("Dernière course", style = MaterialTheme.typography.labelSmall, color = Slate500)
+                        Text("Dernière course", style = drawTaxiType().labelSmall, color = Slate500)
                     }
                 }
             }
@@ -382,7 +383,7 @@ private fun ClientDetailBottomSheet(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Historique des courses",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = drawTaxiType().titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -404,17 +405,17 @@ private fun ClientDetailBottomSheet(
                             Column {
                                 Text(
                                     text = "${ride.departure} → ${ride.arrival}",
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = drawTaxiType().bodyMedium
                                 )
                                 Text(
                                     text = ride.date.ifBlank { dateFormat.format(Date(ride.timestamp)) },
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = drawTaxiType().labelSmall,
                                     color = Slate500
                                 )
                             }
                             Text(
                                 text = if (ride.price > 0) String.format("%.2f €", ride.price) else "—",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = drawTaxiType().titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = if (ride.price > 0) brandColor else Slate400
                             )
@@ -427,3 +428,17 @@ private fun ClientDetailBottomSheet(
         }
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun ClientDirectoryScreenPreview() {
+    DrawTaxiTheme {
+        ClientDirectoryScreen(
+            rides = emptyList(),
+            brandColor = Color(0xFF6366F1),
+            onBack = {}
+        )
+    }
+}
+
+

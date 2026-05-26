@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,7 +30,7 @@ fun BrandingSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onB
     val colors = listOf(TaxiRed, Color(0xFF7C3AED), Color(0xFFDB2777), Color(0xFF019669), Color(0xFFEA580C), Slate800)
     
     Column(modifier = Modifier.fillMaxSize().background(Slate50).verticalScroll(rememberScrollState())) {
-        TextButton(onClick = onBack, modifier = Modifier.padding(bottom = 8.dp)) {
+        DrawTaxiSolidButton(onClick = onBack, modifier = Modifier.padding(bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.ChevronLeft, contentDescription = null)
                 Text("Retour", fontWeight = FontWeight.SemiBold)
@@ -44,8 +45,8 @@ fun BrandingSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onB
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.LocalTaxi, contentDescription = null, tint = settings.brandColor, modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(settings.companyName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = settings.brandColor)
-                    Text(settings.name, style = MaterialTheme.typography.bodyMedium, color = Slate600)
+                    Text(settings.companyName, style = drawTaxiType().titleLarge, fontWeight = FontWeight.Bold, color = settings.brandColor)
+                    Text(settings.name, style = drawTaxiType().bodyMedium, color = Slate600)
                 }
             }
         }
@@ -91,3 +92,5 @@ fun BrandingSettingsPreview() {
         BrandingSettings(settings = mockSettings, onUpdate = {}, onBack = {})
     }
 }
+
+

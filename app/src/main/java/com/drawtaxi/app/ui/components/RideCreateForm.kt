@@ -1,5 +1,7 @@
 package com.drawtaxi.app.ui.components
 
+import androidx.compose.ui.tooling.preview.Preview
+import com.drawtaxi.app.ui.theme.DrawTaxiTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -171,5 +173,29 @@ fun RideCreateForm(
                 }
             }
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun RideCreateFormPreview() {
+    DrawTaxiTheme {
+        Box(modifier = Modifier.padding(16.dp)) {
+            RideCreateForm(
+                sender = "John Doe",
+                onSenderChange = {},
+                date = "26/05/2026",
+                onDateChange = {},
+                time = "14h30",
+                onTimeChange = {},
+                departure = "Gare de Lyon, Paris",
+                onDepartureChange = {},
+                arrival = "Aéroport CDG, Roissy",
+                onArrivalChange = {},
+                price = "85.50",
+                onPriceChange = {},
+                brandColor = Color(0xFF6366F1)
+            )
+        }
     }
 }

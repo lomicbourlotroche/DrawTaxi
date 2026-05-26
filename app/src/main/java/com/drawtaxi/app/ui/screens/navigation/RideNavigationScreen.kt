@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.drawtaxi.app.ui.components.core.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
@@ -57,7 +59,7 @@ enum class NavigationPhase {
 }
 
 @SuppressLint("MissingPermission")
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun RideNavigationScreen(
     ride: RideRequest,
@@ -178,38 +180,35 @@ fun RideNavigationScreen(
         }
     }
 
-    Scaffold(
-        floatingActionButton = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                FloatingActionButton(
-                    onClick = { showCallDialog = true },
-                    containerColor = Emerald500,
-                    contentColor = Color.White,
-                    shape = CircleShape,
-                    modifier = Modifier.size(52.dp)
-                ) {
-                    Icon(Icons.Default.Phone, contentDescription = "Appeler", modifier = Modifier.size(24.dp))
-                }
-                FloatingActionButton(
-                    onClick = { showMessageDialog = true },
-                    containerColor = Indigo500,
-                    contentColor = Color.White,
-                    shape = CircleShape,
-                    modifier = Modifier.size(52.dp)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Message", modifier = Modifier.size(24.dp))
-                }
-            }
-        }
-    ) { padding ->
+    DrawTaxiScaffold { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 140.dp)
+            ) {
+                DrawTaxiIconButton(
+                    onClick = { showCallDialog = true },
+                    shape = CircleShape,
+                    size = 52.dp,
+                    modifier = Modifier.background(Emerald500, CircleShape)
+                ) {
+                    Icon(Icons.Default.Phone, contentDescription = "Appeler", modifier = Modifier.size(24.dp), tint = Color.White)
+                }
+                DrawTaxiIconButton(
+                    onClick = { showMessageDialog = true },
+                    shape = CircleShape,
+                    size = 52.dp,
+                    modifier = Modifier.background(Indigo500, CircleShape)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Message", modifier = Modifier.size(24.dp), tint = Color.White)
+                }
+            }
             MaplibreMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraState = cameraState,
@@ -317,7 +316,7 @@ fun RideNavigationScreen(
                         .padding(16.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Calcul...", color = Color.White)
                     }
@@ -330,7 +329,7 @@ fun RideNavigationScreen(
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
-                Surface(
+                DrawTaxiSurface(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.White.copy(alpha = 0.95f),
                     shadowElevation = 8.dp
@@ -343,14 +342,15 @@ fun RideNavigationScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Vitesse: ${engineState.currentSpeed}", style = MaterialTheme.typography.bodySmall)
-                            Text("Distance: ${engineState.distanceText}", style = MaterialTheme.typography.bodySmall)
+                            Text("Vitesse: ${engineState.currentSpeed}", style = drawTaxiType().bodySmall)
+                            Text("Distance: ${engineState.distanceText}", style = drawTaxiType().bodySmall)
                             if (currentPhase == NavigationPhase.TO_PICKUP) {
-                                Button(
+                                DrawTaxiSolidButton(
                                     onClick = { currentPhase = NavigationPhase.TO_DESTINATION },
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                    minHeight = 36.dp,
+                                    modifier = Modifier.width(160.dp)
                                 ) {
-                                    Text("Démarrer course", style = MaterialTheme.typography.labelMedium)
+                                    Text("Démarrer course", style = drawTaxiType().labelMedium)
                                 }
                             }
                         }
@@ -427,9 +427,36 @@ private fun PhaseButton(
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = drawTaxiType().labelSmall,
             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
             color = if (isActive) Indigo500 else Slate500
         )
     }
 }
+
+@Preview(showBackground = true)
+@Composable
+fun RideNavigationScreenPreview() {
+    val sampleSettings = AppSettings()
+    val sampleRide = RideRequest(
+        id = "1",
+        sender = "0612345678",
+        body = "Taxi depuis Paris vers Lyon",
+        departure = "Paris",
+        arrival = "Lyon",
+        time = "14:30",
+        price = 45.0,
+        distanceKm = 18.5
+    )
+    DrawTaxiTheme {
+        RideNavigationScreen(
+            ride = sampleRide,
+            settings = sampleSettings,
+            brandColor = Color(0xFF6366F1),
+            onBack = {},
+            onComplete = {}
+        )
+    }
+}
+
+
