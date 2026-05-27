@@ -1,5 +1,7 @@
 package com.drawtaxi.app.ui.screens.rides
 
+import java.util.Locale
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -75,7 +77,7 @@ fun RideCreateScreen(
     var distanceKm by remember { mutableStateOf(initialRide?.distanceKm ?: 0.0) }
     var isCalculatingRoute by remember { mutableStateOf(false) }
     var routeError by remember { mutableStateOf<String?>(null) }
-    var distanceInput by remember { mutableStateOf(if (initialRide?.distanceKm ?: 0.0 > 0) String.format("%.1f", initialRide?.distanceKm ?: 0.0) else "") }
+    var distanceInput by remember { mutableStateOf(if (initialRide?.distanceKm ?: 0.0 > 0) String.format(Locale.getDefault(), "%.1f", initialRide?.distanceKm ?: 0.0) else "") }
     var hasCalculatedRoute by remember { mutableStateOf(initialRide?.distanceKm ?: 0.0 > 0) }
     var departureLocation by remember { mutableStateOf<android.location.Location?>(null) }
     var arrivalLocation by remember { mutableStateOf<android.location.Location?>(null) }
@@ -99,7 +101,7 @@ fun RideCreateScreen(
             tvaTransportRate = settings.tvaTransportRate,
             tvaWaitTimeRate = settings.tvaWaitTimeRate
         )
-        price = String.format("%.2f", priceBreakdown.totalTTC).replace(",", ".")
+        price = String.format(Locale.getDefault(), "%.2f", priceBreakdown.totalTTC).replace(",", ".")
     }
 
     fun calculateRoute() {
@@ -176,7 +178,7 @@ fun RideCreateScreen(
                     arrivalLocation = arrLocation
                     routePositions = rPoints
                     distanceKm = dist
-                    distanceInput = String.format("%.1f", dist)
+                    distanceInput = String.format(Locale.getDefault(), "%.1f", dist)
                     recalculatePriceFromDistance(dist)
                     isCalculatingRoute = false
                     hasCalculatedRoute = true
@@ -204,7 +206,7 @@ fun RideCreateScreen(
     LaunchedEffect(initialRide?.id) {
         if (initialRide != null && initialRide.distanceKm > 0) {
             distanceKm = initialRide.distanceKm
-            distanceInput = String.format("%.1f", initialRide.distanceKm)
+            distanceInput = String.format(Locale.getDefault(), "%.1f", initialRide.distanceKm)
             recalculatePriceFromDistance(initialRide.distanceKm)
             hasCalculatedRoute = true
         } else if (departure.length >= 3 && arrival.length >= 3) {
@@ -368,7 +370,7 @@ fun RideCreateScreen(
                     val timePickerDialog = android.app.TimePickerDialog(
                         context,
                         { _, hourOfDay, minute ->
-                            time = String.format("%02dh%02d", hourOfDay, minute)
+                            time = String.format(Locale.getDefault(), "%02dh%02d", hourOfDay, minute)
                             stopTimer()
                         },
                         calendar.get(java.util.Calendar.HOUR_OF_DAY),
@@ -504,7 +506,7 @@ fun RideCreateScreen(
                     ) {
                         Column {
                             Text("Distance", style = drawTaxiType().bodySmall, color = Slate500)
-                            Text(String.format("%.1f km", distanceKm), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
+                            Text(String.format(Locale.getDefault(), "%.1f km", distanceKm), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                         }
                         if (price.isNotBlank()) {
                             Column(horizontalAlignment = Alignment.End) {
@@ -725,6 +727,21 @@ fun RideCreateScreenPreview() {
             onConfirm = {},
             onCancel = {}
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun TaxiCardPreview() {
+    DrawTaxiTheme {
+        Box(modifier = Modifier.padding(16.dp)) {
+            TaxiCard(title = "Information Client") {
+                Text(
+                    text = "Prénom: Jean\nNom: Dupont\nTéléphone: 0601020304",
+                    style = drawTaxiType().bodyMedium
+                )
+            }
+        }
     }
 }
 

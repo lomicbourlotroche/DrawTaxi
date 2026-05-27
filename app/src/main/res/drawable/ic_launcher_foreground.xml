@@ -1,1 +1,33 @@
-<?xml version="1.0" encoding="utf-8"?><vector xmlns:android="http://schemas.android.com/apk/res/android"    android:width="108dp"    android:height="108dp"    android:viewportWidth="108"    android:viewportHeight="108">    <!-- Taxi roof sign -->    <path        android:fillColor="#FCD34D"        android:pathData="M48,38 L48,34 C48,33 48.8,32 50,32 L58,32 C59.2,32 60,33 60,34 L60,38 Z" />    <!-- Car body (RED) -->    <path        android:fillColor="#DC2626"        android:pathData="M34,58 L34,48 C34,47 34.5,46 35.5,46 L39,46 L42,40 C42.5,39 43.5,38 44.5,38 L63.5,38 C64.5,38 65.5,39 66,40 L69,46 L72.5,46 C73.5,46 74,47 74,48 L74,58 C74,59 73.1,60 72,60 L70,60 L70,63 C70,64.1 69.1,65 68,65 L65,65 C63.9,65 63,64.1 63,63 L63,60 L45,60 L45,63 C45,64.1 44.1,65 43,65 L40,65 C38.9,65 38,64.1 38,63 L38,60 L36,60 C34.9,60 34,59 34,58 Z" />    <!-- Windshield (WHITE) -->    <path        android:fillColor="#FFFFFF"        android:pathData="M42.5,46 L44.5,41 C44.8,40.4 45.3,40 46,40 L62,40 C62.7,40 63.2,40.4 63.5,41 L65.5,46 Z" />    <!-- Left headlight -->    <path        android:fillColor="#FCD34D"        android:pathData="M37,48 L42,48 L42,51 L37,51 Z" />    <!-- Right headlight -->    <path        android:fillColor="#FCD34D"        android:pathData="M66,48 L71,48 L71,51 L66,51 Z" />    <!-- Bumper -->    <path        android:fillColor="#E5E7EB"        android:pathData="M38,57 L70,57 L70,58.5 L38,58.5 Z" /></vector>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Roues (Slate 800 #1E293B) - Placées derrière le corps -->
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M34,58 L42,58 L42,65 C42,67 41,68 39,68 L37,68 C35,68 34,67 34,65 Z M66,58 L74,58 L74,65 C74,67 73,68 71,68 L69,68 C67,68 66,67 66,65 Z" />
+
+    <!-- Corps principal du Taxi (Indigo Primaire #6366F1) -->
+    <path
+        android:fillColor="#6366F1"
+        android:pathData="M28,58 L28,48 C28,45 30,44 32,44 L36,44 L40,36 C41,34 43,33 45,33 L63,33 C65,33 67,34 68,36 L72,44 L76,44 C78,44 80,45 80,48 L80,58 C80,60 78,62 76,62 L32,62 C30,62 28,60 28,58 Z" />
+
+    <!-- Pare-brise -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,44 L44,38 C44.5,37 45.5,36.5 46.5,36.5 L61.5,36.5 C62.5,36.5 63.5,37 64,38 L66,44 Z" />
+
+    <!-- Signal TAXI sur le toit (Amber #F59E0B) -->
+    <path
+        android:fillColor="#F59E0B"
+        android:pathData="M46,28 L62,28 C64,28 65,29 65,31 L65,33 L43,33 L43,31 C43,29 44,28 46,28 Z" />
+
+    <!-- Phares LED -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:alpha="0.9"
+        android:pathData="M32,50 L38,50 L38,53 L32,53 Z M70,50 L76,50 L76,53 L70,53 Z" />
+
+</vector>

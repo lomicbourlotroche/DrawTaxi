@@ -1,5 +1,7 @@
 package com.drawtaxi.app.car
 
+import java.util.Locale
+
 import android.content.Intent
 import android.net.Uri
 import android.text.SpannableString
@@ -111,7 +113,7 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
         if (rideData.distanceKm > 0) {
             paneBuilder.addRow(
                 Row.Builder()
-                    .setTitle(String.format("%.1f km", rideData.distanceKm))
+                    .setTitle(String.format(Locale.getDefault(), "%.1f km", rideData.distanceKm))
                     .addText(SpannableString("Distance"))
                     .setImage(
                         CarIcon.Builder(
@@ -125,7 +127,7 @@ class RideDetailCarScreen(carContext: CarContext, private val rideId: String) : 
         if (rideData.price > 0) {
             paneBuilder.addRow(
                 Row.Builder()
-                    .setTitle(String.format("%.2f €", rideData.price))
+                    .setTitle(String.format(Locale.getDefault(), "%.2f €", rideData.price))
                     .addText(SpannableString("Prix"))
                     .setImage(
                         CarIcon.Builder(

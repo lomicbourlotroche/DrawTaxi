@@ -3,8 +3,9 @@ package com.drawtaxi.app.logic.sms
 import android.content.Context
 import android.util.Log
 import com.drawtaxi.app.data.RideRequest
-import com.drawtaxi.app.logic.pricing.QuoteResponseHandler
-import com.drawtaxi.app.data.TaxiRepository
+import com.drawtaxi.app.logic.pricing.QuoteResponseHandler
+import com.drawtaxi.app.data.TaxiRepository
+import com.drawtaxi.app.logic.sms.AiParsedResult
 
 object SmsProcessor {
 
@@ -72,17 +73,17 @@ object SmsProcessor {
                     handleDeletion(repository, matchInfo.matchedRide)
                 }
 
-                RideMatchResult.MODIFICATION -> {
-                    handleModification(repository, matchInfo.matchedRide, address, body, timestamp)
-                }
+                RideMatchResult.MODIFICATION -> {
+                    handleModification(repository, matchInfo.matchedRide, address, body, timestamp, aiResult)
+                }
 
                 RideMatchResult.ADDITION -> {
                     handleNewRideWithAI(context, repository, address, body, timestamp, aiResult, settings)
                 }
 
-                RideMatchResult.CLARIFICATION -> {
-                    handleClarification(repository, matchInfo.matchedRide, address, body, timestamp)
-                }
+                RideMatchResult.CLARIFICATION -> {
+                    handleClarification(repository, matchInfo.matchedRide, address, body, timestamp, aiResult)
+                }
 
                 RideMatchResult.DUPLICATE -> {
                     Log.d(TAG, "Doublon détecté, ignoré")
@@ -174,68 +175,65 @@ object SmsProcessor {
         }
     }
 
-    private suspend fun handleModification(
-        repository: TaxiRepository,
-        matchedRide: RideRequest?,
-        address: String,
-        body: String,
-        timestamp: Long
-    ): ProcessResult {
-        return if (matchedRide != null) {
-            val parsedRide = parseSms(address, body, timestamp)
-            if (parsedRide != null) {
-                val updatedRide = matchedRide.copy(
-                    departure = parsedRide.departure.ifBlank { matchedRide.departure },
-                    arrival = parsedRide.arrival.ifBlank { matchedRide.arrival },
-                    time = parsedRide.time.ifBlank { matchedRide.time },
-                    body = matchedRide.body + "\n--- MODIFICATION ---\n" + body
-                )
-                repository.updateRide(updatedRide)
-                Log.d(TAG, "Course modifiée: ${updatedRide.id}")
-                ProcessResult(
-                    action = Action.RIDE_UPDATED,
-                    ride = updatedRide,
-                    notificationTitle = "Course modifiée",
-                    notificationBody = "${updatedRide.departure} → ${updatedRide.arrival}"
-                )
-            } else {
-                ProcessResult(Action.NO_ACTION, null)
-            }
-        } else {
-            ProcessResult(Action.NO_ACTION, null)
-        }
-    }
+    private suspend fun handleModification(
+        repository: TaxiRepository,
+        matchedRide: RideRequest?,
+        address: String,
+        body: String,
+        timestamp: Long,
+        aiResult: AiParsedResult? = null
+    ): ProcessResult {
+        return if (matchedRide != null) {
+            val updatedRide = matchedRide.copy(
+                departure = aiResult?.departure?.takeIf { it.isNotBlank() } ?: matchedRide.departure,
+                arrival = aiResult?.arrival?.takeIf { it.isNotBlank() } ?: matchedRide.arrival,
+                time = aiResult?.time?.takeIf { it.isNotBlank() } ?: matchedRide.time,
+                body = matchedRide.body + "\n--- MODIFICATION ---\n" + body
+            )
+            repository.updateRide(updatedRide)
+            Log.d(TAG, "Course modifiée: ${updatedRide.id}")
+            ProcessResult(
+                action = Action.RIDE_UPDATED,
+                ride = updatedRide,
+                notificationTitle = "Course modifiée",
+                notificationBody = "${updatedRide.departure} → ${updatedRide.arrival}"
+            )
+        } else {
+            ProcessResult(Action.NO_ACTION, null)
+        }
+    }
 
     private suspend fun handleClarification(
-        repository: TaxiRepository,
-        matchedRide: RideRequest?,
-        address: String,
-        body: String,
-        timestamp: Long
-    ): ProcessResult {
-        return if (matchedRide != null) {
-            val parsedRide = parseSms(address, body, timestamp)
-            val updatedRide = if (parsedRide != null && (parsedRide.departure.isNotBlank() ||
-                parsedRide.arrival.isNotBlank() || parsedRide.time.isNotBlank())) {
-                matchedRide.copy(
-                    departure = parsedRide.departure.ifBlank { matchedRide.departure },
-                    arrival = parsedRide.arrival.ifBlank { matchedRide.arrival },
-                    time = parsedRide.time.ifBlank { matchedRide.time },
-                    body = matchedRide.body + "\n--- REPONSE ---\n" + body
-                )
-            } else {
-                matchedRide.copy(
-                    body = matchedRide.body + "\n--- REPONSE ---\n" + body
-                )
-            }
-            repository.updateRide(updatedRide)
-            Log.d(TAG, "Réponse ajoutée à la course: ${matchedRide.id}")
-            ProcessResult(
-                action = Action.RIDE_UPDATED,
-                ride = updatedRide
-            )
-        } else {
-            ProcessResult(Action.NO_ACTION, null)
-        }
-    }
+        repository: TaxiRepository,
+        matchedRide: RideRequest?,
+        address: String,
+        body: String,
+        timestamp: Long,
+        aiResult: AiParsedResult? = null
+    ): ProcessResult {
+        return if (matchedRide != null) {
+            val ai = aiResult
+            val hasAiInfo = ai != null && (ai.departure.isNotBlank() || ai.arrival.isNotBlank() || ai.time.isNotBlank())
+            val updatedRide = if (hasAiInfo) {
+                matchedRide.copy(
+                    departure = ai.departure.takeIf { it.isNotBlank() } ?: matchedRide.departure,
+                    arrival = ai.arrival.takeIf { it.isNotBlank() } ?: matchedRide.arrival,
+                    time = ai.time.takeIf { it.isNotBlank() } ?: matchedRide.time,
+                    body = matchedRide.body + "\n--- REPONSE ---\n" + body
+                )
+            } else {
+                matchedRide.copy(
+                    body = matchedRide.body + "\n--- REPONSE ---\n" + body
+                )
+            }
+            repository.updateRide(updatedRide)
+            Log.d(TAG, "Réponse ajoutée à la course: ${matchedRide.id}")
+            ProcessResult(
+                action = Action.RIDE_UPDATED,
+                ride = updatedRide
+            )
+        } else {
+            ProcessResult(Action.NO_ACTION, null)
+        }
+    }
 }

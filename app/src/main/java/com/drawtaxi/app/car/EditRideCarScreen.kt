@@ -1,5 +1,7 @@
 package com.drawtaxi.app.car
 
+import java.util.Locale
+
 import android.text.SpannableString
 import android.util.Log
 import androidx.car.app.CarContext
@@ -76,8 +78,8 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
                     .setTitle("Course terminée avec succès !")
                     .addText(SpannableString(
                         buildString {
-                            append("Distance: ${String.format("%.1f km", distanceKm)}")
-                            append("\nPrix: ${String.format("%.2f €", price)}")
+                            append("Distance: ${String.format(Locale.getDefault(), "%.1f km", distanceKm)}")
+                            append("\nPrix: ${String.format(Locale.getDefault(), "%.2f €", price)}")
                         }
                     ))
                     .build()
@@ -96,7 +98,7 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
             paneBuilder.addRow(
                 Row.Builder()
                     .setTitle("Distance")
-                    .addText(SpannableString(String.format("%.1f km", distanceKm)))
+                    .addText(SpannableString(String.format(Locale.getDefault(), "%.1f km", distanceKm)))
                     .setImage(
                         CarIcon.Builder(
                             IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_edit)
@@ -111,7 +113,7 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
             paneBuilder.addRow(
                 Row.Builder()
                     .setTitle("Prix")
-                    .addText(SpannableString(String.format("%.2f €", price)))
+                    .addText(SpannableString(String.format(Locale.getDefault(), "%.2f €", price)))
                     .setImage(
                         CarIcon.Builder(
                             IconCompat.createWithResource(carContext, android.R.drawable.ic_menu_edit)
@@ -146,14 +148,14 @@ class EditRideCarScreen(carContext: CarContext, private val rideId: String) : Sc
                 paneBuilder.addRow(
                     Row.Builder()
                         .setTitle("Rentabilité")
-                        .addText(SpannableString(String.format("%.1f%%", profitabilityPercent)))
+                        .addText(SpannableString(String.format(Locale.getDefault(), "%.1f%%", profitabilityPercent)))
                         .build()
                 )
 
                 paneBuilder.addRow(
                     Row.Builder()
                         .setTitle("Coût déplacement")
-                        .addText(SpannableString(String.format("%.2f € (%.1f km × %.2f €)", coutDeplacement, distanceDomicileEst, coutParKm)))
+                        .addText(SpannableString(String.format(Locale.getDefault(), "%.2f € (%.1f km × %.2f €)", coutDeplacement, distanceDomicileEst, coutParKm)))
                         .build()
                 )
             }

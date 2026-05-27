@@ -25,7 +25,7 @@ import java.util.*
 
 @Deprecated("Replaced by DashboardScreen", level = DeprecationLevel.WARNING)
 @Composable
-fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideRequest>, brandColor: Color) {
+fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideRequest>, brandColor: Color, coutParKmDeplacement: Double = 0.10) {
     val now = Calendar.getInstance()
     val today = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(now.time) }
     val weekAgo = remember(now) {
@@ -45,11 +45,11 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
     val weekKm = weekRides.sumOf { it.distanceKm }
     val monthRevenue = monthRides.sumOf { it.price }
     val monthKm = monthRides.sumOf { it.distanceKm }
-    val todayCoutDeplacement = todayRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+    val todayCoutDeplacement = todayRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * coutParKmDeplacement) }
     val todayNet = todayRevenue - todayCoutDeplacement
-    val weekCoutDeplacement = weekRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+    val weekCoutDeplacement = weekRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * coutParKmDeplacement) }
     val weekNet = weekRevenue - weekCoutDeplacement
-    val monthCoutDeplacement = monthRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+    val monthCoutDeplacement = monthRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * coutParKmDeplacement) }
     val monthNet = monthRevenue - monthCoutDeplacement
 
     val monthProfitability = if (monthRevenue > 0) (monthNet / monthRevenue) * 100.0 else 0.0
@@ -67,15 +67,15 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
                     Text("Aujourd'hui", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        StatCard(value = String.format("%.2f €", todayRevenue), label = "revenus", icon = Icons.Default.AttachMoney, brandColor = brandColor)
+                        StatCard(value = String.format(Locale.getDefault(), "%.2f €", todayRevenue), label = "revenus", icon = Icons.Default.AttachMoney, brandColor = brandColor)
                         StatCard(value = "${todayRides.size}", label = "courses", icon = Icons.Default.LocalTaxi, brandColor = brandColor)
-                        StatCard(value = String.format("%.0f km", todayKm), label = "parcourus", icon = Icons.Default.Route, brandColor = brandColor)
+                        StatCard(value = String.format(Locale.getDefault(), "%.0f km", todayKm), label = "parcourus", icon = Icons.Default.Route, brandColor = brandColor)
                     }
                     if (todayRides.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            StatCard(value = String.format("%.2f €", todayNet), label = "bénéfice", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = if (todayNet > 0) Green500 else Red500)
-                            StatCard(value = "${String.format("%.0f", if (todayRevenue > 0) (todayNet / todayRevenue) * 100.0 else 0.0)}%", label = "rentabilité", icon = Icons.Default.Analytics, brandColor = if (todayRevenue > 0 && (todayNet / todayRevenue) * 100.0 >= 70) Green500 else if (todayRevenue > 0 && (todayNet / todayRevenue) * 100.0 >= 50) Color(0xFFFFA500) else Red500)
+                            StatCard(value = String.format(Locale.getDefault(), "%.2f €", todayNet), label = "bénéfice", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = if (todayNet > 0) Green500 else Red500)
+                            StatCard(value = "${String.format(Locale.getDefault(), "%.0f", if (todayRevenue > 0) (todayNet / todayRevenue) * 100.0 else 0.0)}%", label = "rentabilité", icon = Icons.Default.Analytics, brandColor = if (todayRevenue > 0 && (todayNet / todayRevenue) * 100.0 >= 70) Green500 else if (todayRevenue > 0 && (todayNet / todayRevenue) * 100.0 >= 50) Color(0xFFFFA500) else Red500)
                         }
                     }
                 }
@@ -88,15 +88,15 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
                     Text("Cette semaine", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        StatCard(value = String.format("%.2f €", weekRevenue), label = "revenus", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = brandColor)
+                        StatCard(value = String.format(Locale.getDefault(), "%.2f €", weekRevenue), label = "revenus", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = brandColor)
                         StatCard(value = "${weekRides.size}", label = "courses", icon = Icons.Default.LocalTaxi, brandColor = brandColor)
-                        StatCard(value = String.format("%.0f km", weekKm), label = "parcourus", icon = Icons.Default.Route, brandColor = brandColor)
+                        StatCard(value = String.format(Locale.getDefault(), "%.0f km", weekKm), label = "parcourus", icon = Icons.Default.Route, brandColor = brandColor)
                     }
                     if (weekRides.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            StatCard(value = String.format("%.2f €", weekNet), label = "bénéfice", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = if (weekNet > 0) Green500 else Red500)
-                            StatCard(value = "${String.format("%.0f", if (weekRevenue > 0) (weekNet / weekRevenue) * 100.0 else 0.0)}%", label = "rentabilité", icon = Icons.Default.Analytics, brandColor = if (weekRevenue > 0 && (weekNet / weekRevenue) * 100.0 >= 70) Green500 else if (weekRevenue > 0 && (weekNet / weekRevenue) * 100.0 >= 50) Color(0xFFFFA500) else Red500)
+                            StatCard(value = String.format(Locale.getDefault(), "%.2f €", weekNet), label = "bénéfice", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = if (weekNet > 0) Green500 else Red500)
+                            StatCard(value = "${String.format(Locale.getDefault(), "%.0f", if (weekRevenue > 0) (weekNet / weekRevenue) * 100.0 else 0.0)}%", label = "rentabilité", icon = Icons.Default.Analytics, brandColor = if (weekRevenue > 0 && (weekNet / weekRevenue) * 100.0 >= 70) Green500 else if (weekRevenue > 0 && (weekNet / weekRevenue) * 100.0 >= 50) Color(0xFFFFA500) else Red500)
                         }
                     }
                 }
@@ -109,14 +109,14 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
                     Text("Ce mois", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        StatCard(value = String.format("%.2f €", monthRevenue), label = "revenus", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = brandColor)
+                        StatCard(value = String.format(Locale.getDefault(), "%.2f €", monthRevenue), label = "revenus", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = brandColor)
                         StatCard(value = "${monthRides.size}", label = "courses", icon = Icons.Default.LocalTaxi, brandColor = brandColor)
-                        StatCard(value = String.format("%.0f km", monthKm), label = "parcourus", icon = Icons.Default.Route, brandColor = brandColor)
+                        StatCard(value = String.format(Locale.getDefault(), "%.0f km", monthKm), label = "parcourus", icon = Icons.Default.Route, brandColor = brandColor)
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        StatCard(value = String.format("%.2f €", monthNet), label = "bénéfice", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = if (monthNet > 0) Green500 else Red500)
-                        StatCard(value = "${String.format("%.0f", monthProfitability)}%", label = "rentabilité", icon = Icons.Default.Analytics, brandColor = if (monthProfitability >= 70) Green500 else if (monthProfitability >= 50) Color(0xFFFFA500) else Red500)
+                        StatCard(value = String.format(Locale.getDefault(), "%.2f €", monthNet), label = "bénéfice", icon = Icons.AutoMirrored.Filled.TrendingUp, brandColor = if (monthNet > 0) Green500 else Red500)
+                        StatCard(value = "${String.format(Locale.getDefault(), "%.0f", monthProfitability)}%", label = "rentabilité", icon = Icons.Default.Analytics, brandColor = if (monthProfitability >= 70) Green500 else if (monthProfitability >= 50) Color(0xFFFFA500) else Red500)
                     }
                 }
             }
@@ -126,10 +126,10 @@ fun StatsScreen(validatedRides: List<RideRequest>, pendingRides: List<RideReques
             Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), shape = RoundedCornerShape(16.dp)) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Moyennes", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
-                    AverageRow(label = "Panier moyen (mois)", value = if (monthRides.isNotEmpty()) String.format("%.2f €", monthRevenue / monthRides.size) else "—")
-                    AverageRow(label = "Revenu moyen / jour (semaine)", value = if (weekRides.isNotEmpty()) String.format("%.2f €", weekRevenue / 7) else "—")
-                    AverageRow(label = "Distance moyenne / course", value = if (monthRides.isNotEmpty()) String.format("%.1f km", monthKm / monthRides.size) else "—")
-                    AverageRow(label = "Rentabilité moyenne", value = if (monthRides.isNotEmpty()) String.format("%.0f%%", monthProfitability) else "—")
+                    AverageRow(label = "Panier moyen (mois)", value = if (monthRides.isNotEmpty()) String.format(Locale.getDefault(), "%.2f €", monthRevenue / monthRides.size) else "—")
+                    AverageRow(label = "Revenu moyen / jour (semaine)", value = if (weekRides.isNotEmpty()) String.format(Locale.getDefault(), "%.2f €", weekRevenue / 7) else "—")
+                    AverageRow(label = "Distance moyenne / course", value = if (monthRides.isNotEmpty()) String.format(Locale.getDefault(), "%.1f km", monthKm / monthRides.size) else "—")
+                    AverageRow(label = "Rentabilité moyenne", value = if (monthRides.isNotEmpty()) String.format(Locale.getDefault(), "%.0f%%", monthProfitability) else "—")
                 }
             }
         }

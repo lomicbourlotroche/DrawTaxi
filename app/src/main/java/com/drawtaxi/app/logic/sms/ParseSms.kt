@@ -32,7 +32,10 @@ private val taxiKeywords = listOf(
     "taxi", "course", "chauffeur", "vtc", "uber", "bolt", "heetch",
     "aller", "départ", "depart", "réservation", "reservation", "réserve",
     "reserve", "bonjour", "slt", "svp", "merci", "rdv", "rendez-vous",
-    "transport", "trajet", "prise en charge", "aéroport", "gare"
+    "transport", "trajet", "prise en charge", "aéroport", "gare",
+    "besoin d'un taxi", "besoin de taxi", "commander", "commande de taxi",
+    "dépannage", "depannage", "transfert", "navette",
+    "déplacement", "deplacement", "voyage", "itinéraire"
 )
 
 private val departureKeywords = listOf(
@@ -40,13 +43,19 @@ private val departureKeywords = listOf(
     "départ :", "départ:", "depart :", "depart:", "enlèvement :", "enlèvement:",
     "prise en charge :", "prise en charge:", "depart de ", "dep. ", "-de ",
     "je suis à ", "je suis au ", "je suis rue ", "je suis avenue ", "je suis boulevard ",
+    "je suis place ", "je suis chemin ", "je suis route ", "je suis impasse ",
+    "je suis allée ", "je suis quai ", "je suis cours ",
     "出发", " starting from", " starting at",
     "mon adresse", "notre adresse", "à partir de ", "partant de ",
     "je pars de ", "pars de ", "au départ ", "point de départ ",
     "departing from", "from ", "from:", "depart from ", "pick up at ",
     "pickup at ", "address: ", "address :", "addr: ", "addr:",
     "rdv à ", "rdv au ", "rdv rue ", "rdv avenue ", "rendez-vous à ",
-    "prendre à ", "prendre au ", "prendre rue ", "prendre avenue "
+    "prendre à ", "prendre au ", "prendre rue ", "prendre avenue ",
+    "prendre place ", "prendre chemin ", "prendre route ", "prendre impasse ",
+    "prendre allée ", "prendre quai ",
+    "au niveau de ", "devant ", "à côté de ", "derrière ", "en face de ",
+    "proche ", "près de ", "angle ", "carrefour "
 )
 
 private val arrivalKeywords = listOf(
@@ -57,31 +66,49 @@ private val arrivalKeywords = listOf(
     "terminus", "gare", "aéroport", "airport", "hôtel", "hotel",
     "restaurant", "hôpital", "hopital", "clinique", "to: ", "to ",
     "drop off at ", "dropoff at ", "descendre à ", "descendre au ",
-    "jusqu'à ", "jusqu'au ", "récupérer à ", "récupérer au "
+    "jusqu'à ", "jusqu'au ", "récupérer à ", "récupérer au ",
+    "aller chercher ", "amener à ", "amener au ", "conduire à ", "conduire au ",
+    "emmener à ", "emmener au ", "se rendre à ", "se rendre au ",
+    "déposer à ", "déposer au ", "pour aller ", "pour aller à ", "pour aller au ",
+    "à destination de ", "en direction de ", "en route vers "
 )
 
 private val timeKeywords = listOf(
     " à ", " a ", "heure :", "heure:", " h ", "h ", "h:", "hh",
     "maintenant", "rdv :", "rdv:", "prévu à", "prevu a", "prevu ",
-    "dès que", "des que",
+    "dès que", "des que", "des que possible",
     "immediatement", "immédiatement", "urgent", "vite", " asap ",
     "dans ", "cet après-midi", "cet aprèm", "cette après-midi", "cette après midi",
     "cet aprem", "cette aprem", "ce matin", "ce soir", "ce midi",
     "demain", "aujourd'hui", "aujourd hui", "aujourdhui",
     "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
-    "at ", "time: ", "time :", "vers ", "aux alentours de "
+    "lun ", "mar ", "mer ", "jeu ", "ven ", "sam ", "dim ",
+    "lundi prochain", "mardi prochain", "mercredi prochain",
+    "jeudi prochain", "vendredi prochain", "samedi prochain", "dimanche prochain",
+    "at ", "time: ", "time :", "vers ", "aux alentours de ",
+    "aux environs de ", "vers les ", "vers le ",
+    "pour ", "pour ce", "pour ",
+    "après ", "après ", "avant ", "entre ",
+    "dans la matinée", "dans l'après-midi", "dans la soirée", "dans l'aprem",
+    "en soirée", "en matinée", "début d'après-midi",
+    "ce matin", "ce midi", "cet après-midi", "cette après-midi", "ce soir",
+    "cette nuit", "très tôt", "tard",
+    "réveil", "matin", "soir", "nuit",
+    "lendemain"
 )
 
 private val confirmationKeywords = listOf(
-    "c'est", "ces", "c'est quoi", "confirme", "confirmation",
+    "confirme", "confirmation",
     "ok", "okay", "oki", "oué", "ouep", "ouéé", "compris", "entendu",
     "reçu", "recus", "bien reçu", "bien recu", "roger", "yes",
-    "est ce", "est-ce", "peut etre", "peut-etre", "peut être",
     "d'accord", "dacc", "ok dac", "okdac", "nickel", "parfait",
     "super", "génial", "genial", "merci", "bonne journée", "bonne journee",
     "bonne soirée", "bonne soiree", "merci beaucoup", "merci bcp",
     "je confirme", "confirmé", "confirmee", "c'est noté", "c'est reglé", "c'est bon",
-    "validé", "valide", "accepté", "accepte"
+    "validé", "valide", "accepté", "accepte",
+    "impeccable", "parfaitement", "top", "ça marche", "ca marche",
+    "bon pour moi", "c'est bon pour moi", "très bien", "tres bien",
+    "pour moi c'est bon", "tout bon"
 )
 
 private val cancelKeywords = listOf(
@@ -90,7 +117,13 @@ private val cancelKeywords = listOf(
     "ne vient pas", "ne peut pas", "cancel", "cancelled",
     "delete", "stop", "stopped", "stopper", "ne plus", "stoppé", "stoppee",
     "plus besoin", "je n'ai plus", "pas la peine", "inutile",
-    "c'est annulé", "annule", "c'est bon j'ai", "j'ai trouvé"
+    "c'est annulé", "annule", "c'est bon j'ai", "j'ai trouvé",
+    "je me désiste", "je me desiste", "pas nécessaire", "pas necessaire",
+    "pas besoin finalement", "finalement non",
+    "j'ai oublié", "j'ai oublie", "oubli", "plus tard",
+    "report", "reporter", "remettre", "déprogrammer", "deprogrammer",
+    "annulation de course", "supprimer la course",
+    "finalement pas besoin", "non merci"
 )
 
 private val modifyKeywords = listOf(
@@ -99,7 +132,15 @@ private val modifyKeywords = listOf(
     "faux", "invers", "swap", "different", "autre", "nouveau", "nouvelle",
     "mise à jour", "mise a jour", "update", "instead", "actually", "en fait",
     "plutot", "plutôt", "autrement", "à la place", "je voudrais", "je veux",
-    "finalement", "en réalité", "en realite"
+    "finalement", "en réalité", "en realite",
+    "modif", "changement de plan", "changement de programme",
+    "décaler", "decaler", "repousser", "avancer", "retarder",
+    "modification d'adresse", "modification adresse",
+    "changement d'adresse", "changement adresse",
+    "changer l'heure", "changer le lieu",
+    "je souhaite modifier", "on modifie",
+    "finalement ce sera", "finalement c'est",
+    "au lieu de", "a la place de"
 )
 
 private val nbPassengersKeywords = listOf(
@@ -113,12 +154,18 @@ private val nameKeywords = listOf(
     "je m'appelle ", "je m'apelle ", "mon nom est ", "mon prénom est ",
     "c'est ", "moi c'est ", "ici ", "nom :", "nom:", "prénom :", "prenom:",
     "mr ", "mme ", "mlle ", "monsieur ", "madame ", "mademoiselle ",
-    "my name is ", "this is ", "name: ", "name "
+    "my name is ", "this is ", "name: ", "name ",
+    "appelle-moi ", "appelez-moi ", "client :", "client:",
+    "de la part de ", "pour le compte de ",
+    "réservé par ", "reserve par ", "au nom de "
 )
 
 private val priceKeywords = listOf(
     " euros", "euros", "€", "eur", " prix ", "cout", "coût", "tarif",
-    "environ ", "env ", "approx", "approximativement"
+    "environ ", "env ", "approx", "approximativement",
+    "prix", "forfait", "montant", "total", "facture",
+    "règlement", "reglement", "payer", "régler", "regler",
+    "estimation", "devis", "combien"
 )
 
 private val datePattern = Pattern.compile(
@@ -234,7 +281,17 @@ fun parseSmsAdvanced(sender: String, body: String, timestamp: Long = System.curr
         }
     }
     
-    val sortedTokens = allTokens.sortedBy { it.start }
+    // Resolve overlapping tokens (preferring higher confidence)
+    val resolvedTokens = mutableListOf<SmsToken>()
+    for (token in allTokens.sortedWith(compareBy({ it.start }, { -it.confidence }))) {
+        val overlaps = resolvedTokens.any { accepted ->
+            token.start < accepted.end && accepted.start < token.end
+        }
+        if (!overlaps) {
+            resolvedTokens.add(token)
+        }
+    }
+    val sortedTokens = resolvedTokens.sortedBy { it.start }
     
     val results = mutableMapOf<SmsField, String>()
     val confidenceMap = mutableMapOf<SmsField, Float>()
@@ -254,9 +311,9 @@ fun parseSmsAdvanced(sender: String, body: String, timestamp: Long = System.curr
             lowerBody.length
         }
         
-        if (token.field == SmsField.DE) {
+        if (token.field == SmsField.DE || token.field == SmsField.VERS) {
             for (j in i + 1 until sortedTokens.size) {
-                if (sortedTokens[j].field != SmsField.DE) {
+                if (sortedTokens[j].field != token.field) {
                     endLimit = sortedTokens[j].start
                     break
                 }
@@ -492,14 +549,32 @@ private fun extractTimeFromBody(body: String): String {
         }
     }
     
-    // Format "dans 30min" ou "dans 1h"
-    val dansPattern = Regex("dans\\s+(\\d+)\\s*(min|heure|h)")
+    // Format "dans 30min" ou "dans 1h" ou "dans 30 minutes" ou "dans 1 heure"
+    val dansPattern = Regex("dans\\s+(\\d+)\\s*(min|minutes|heure|heures|h)")
     for (m in dansPattern.findAll(lowerBody)) {
         val value = m.groupValues[1]
         val unit = m.groupValues[2]
         times.add("dans ${value}${if (unit.startsWith("h")) "h" else "min"}")
     }
-    
+
+    // Format "dans 1h30" (ex: "dans 1h30" → dans 1h30)
+    val dansHrMinPattern = Regex("dans\\s+(\\d+)h(\\d{1,2})")
+    for (m in dansHrMinPattern.findAll(lowerBody)) {
+        val h = m.groupValues[1]
+        val min = m.groupValues[2]
+        times.add("dans ${h}h${min}")
+    }
+
+    // Format "pour 14h", "pour 14h30"
+    val pourPattern = Regex("pour\\s+(\\d{1,2})h(\\d{0,2})")
+    for (m in pourPattern.findAll(lowerBody)) {
+        val h = m.groupValues[1].toIntOrNull() ?: continue
+        val min = m.groupValues[2].ifEmpty { "00" }
+        if (h in 0..23 && min.toInt() in 0..59) {
+            times.add("${h}h${min}")
+        }
+    }
+
     // Mots-clés temporels
     if (lowerBody.contains("demain")) times.add("demain")
     if (lowerBody.contains("aujourd'hui") || lowerBody.contains("aujourd hui")) times.add("aujourd'hui")
@@ -533,15 +608,28 @@ private fun extractDateFromBody(body: String): String {
         return java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(cal.time)
     }
     
-    // Jours de la semaine (ex: "lundi", "mardi prochain")
+    // Après-demain
+    if (lowerBody.contains("après-demain") || lowerBody.contains("apres-demain") || lowerBody.contains("après demain") || lowerBody.contains("apres demain")) {
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 2)
+        return java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(cal.time)
+    }
+
+    // Jours de la semaine (ex: "lundi", "mardi prochain", "lun", "mar")
     val days = mapOf(
         "lundi" to java.util.Calendar.MONDAY,
+        "lun" to java.util.Calendar.MONDAY,
         "mardi" to java.util.Calendar.TUESDAY,
+        "mar" to java.util.Calendar.TUESDAY,
         "mercredi" to java.util.Calendar.WEDNESDAY,
+        "mer" to java.util.Calendar.WEDNESDAY,
         "jeudi" to java.util.Calendar.THURSDAY,
+        "jeu" to java.util.Calendar.THURSDAY,
         "vendredi" to java.util.Calendar.FRIDAY,
+        "ven" to java.util.Calendar.FRIDAY,
         "samedi" to java.util.Calendar.SATURDAY,
-        "dimanche" to java.util.Calendar.SUNDAY
+        "sam" to java.util.Calendar.SATURDAY,
+        "dimanche" to java.util.Calendar.SUNDAY,
+        "dim" to java.util.Calendar.SUNDAY
     )
     
     for ((dayName, dayConst) in days) {

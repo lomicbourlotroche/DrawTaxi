@@ -2,6 +2,7 @@ package com.drawtaxi.app.ui.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -9,8 +10,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.logic.geocoding.GeocodingService
 import com.drawtaxi.app.logic.routing.NavigationEngine
+import com.drawtaxi.app.ui.theme.DrawTaxiTheme
+import com.drawtaxi.app.ui.theme.Slate100
 import com.drawtaxi.app.ui.theme.Slate400
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -183,6 +188,22 @@ fun RideMap(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(errorMessage!!, color = Slate400)
             }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun RideMapPreview() {
+    DrawTaxiTheme {
+        // Placeholder statique — MapLibre nécessite un contexte Android réel
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Slate100),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Carte : Paris → Lyon", color = Slate400)
         }
     }
 }

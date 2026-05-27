@@ -1,5 +1,6 @@
 package com.drawtaxi.app.ui.screens.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.messaging.OvhMailSender
 import kotlinx.coroutines.launch
@@ -59,10 +61,10 @@ fun OvhMailSettingsScreen(
     DrawTaxiScaffold(
         topBar = {
             DrawTaxiTopBar(
-                title = { Text("Configuration Email OVH", fontWeight = FontWeight.Bold) },
+                title = { DrawTaxiTopBarTitle("Configuration Email OVH") },
                 navigationIcon = {
                     DrawTaxiIconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+                        DrawTaxiIcon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
                     }
                 },
                 backgroundColor = Color.White
@@ -73,29 +75,30 @@ fun OvhMailSettingsScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .background(Slate50)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Section SMTP (Envoi)
             SettingsCard(title = "Envoi d'emails (SMTP)", icon = Icons.Default.Send) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     // Toggle activation
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(
+                        Column(modifier = Modifier.weight(1f)) {
+                            DrawTaxiText(
                                 text = "Activer l'envoi via OVH",
-                                style = drawTaxiType().bodyLarge,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
                             )
-                            Text(
+                            DrawTaxiText(
                                 text = "Envoyer factures et confirmations",
-                                style = drawTaxiType().bodySmall,
-                                color = Color.Gray
+                                color = Slate500,
+                                fontSize = 12.sp
                             )
                         }
                         DrawTaxiSwitch(
@@ -105,79 +108,57 @@ fun OvhMailSettingsScreen(
                     }
                     
                     if (smtpEnabled) {
-                        DrawTaxiDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        DrawTaxiDivider()
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = smtpServer,
                             onValueChange = { smtpServer = it },
-                            label = { Text("Serveur SMTP") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
+                            label = "Serveur SMTP",
+                            placeholder = "ssl0.ovh.net"
                         )
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = smtpPort,
                             onValueChange = { if (it.all { c -> c.isDigit() }) smtpPort = it },
-                            label = { Text("Port") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
+                            label = "Port",
+                            keyboardType = KeyboardType.Number
                         )
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = smtpUsername,
                             onValueChange = { smtpUsername = it },
-                            label = { Text("Nom d'utilisateur (email OVH)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Email,
-                                imeAction = ImeAction.Next
-                            ),
-                            singleLine = true
+                            label = "Nom d'utilisateur (email OVH)",
+                            keyboardType = KeyboardType.Email
                         )
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = smtpPassword,
                             onValueChange = { smtpPassword = it },
-                            label = { Text("Mot de passe") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
+                            label = "Mot de passe",
                             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Password,
-                                imeAction = ImeAction.Next
-                            ),
-                            singleLine = true,
+                            keyboardType = KeyboardType.Password,
                             trailingIcon = {
-                                DrawTaxiIconButton(onClick = { showPassword = !showPassword }) {
-                                    Icon(
+                                DrawTaxiIconButton(onClick = { showPassword = !showPassword }, size = 32.dp) {
+                                    DrawTaxiIcon(
                                         if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = if (showPassword) "Masquer" else "Afficher"
+                                        contentDescription = if (showPassword) "Masquer" else "Afficher",
+                                        tint = Slate400
                                     )
                                 }
                             }
                         )
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = fromEmail,
                             onValueChange = { fromEmail = it },
-                            label = { Text("Email expéditeur") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                            singleLine = true
+                            label = "Email expéditeur",
+                            keyboardType = KeyboardType.Email
                         )
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = fromName,
                             onValueChange = { fromName = it },
-                            label = { Text("Nom affiché") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
+                            label = "Nom affiché"
                         )
                         
                         Row(
@@ -185,7 +166,7 @@ fun OvhMailSettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Utiliser SSL/TLS")
+                            DrawTaxiText("Utiliser SSL/TLS", fontWeight = FontWeight.Medium)
                             DrawTaxiSwitch(
                                 checked = smtpUseSsl,
                                 onCheckedChange = { smtpUseSsl = it }
@@ -197,22 +178,22 @@ fun OvhMailSettingsScreen(
             
             // Section IMAP (Réception)
             SettingsCard(title = "Réception d'emails (IMAP)", icon = Icons.Default.MarkEmailRead) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(
+                        Column(modifier = Modifier.weight(1f)) {
+                            DrawTaxiText(
                                 text = "Surveiller les emails entrants",
-                                style = drawTaxiType().bodyLarge,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
                             )
-                            Text(
+                            DrawTaxiText(
                                 text = "Créer automatiquement des courses",
-                                style = drawTaxiType().bodySmall,
-                                color = Color.Gray
+                                color = Slate500,
+                                fontSize = 12.sp
                             )
                         }
                         DrawTaxiSwitch(
@@ -222,35 +203,27 @@ fun OvhMailSettingsScreen(
                     }
                     
                     if (imapEnabled) {
-                        DrawTaxiDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        DrawTaxiDivider()
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = imapServer,
                             onValueChange = { imapServer = it },
-                            label = { Text("Serveur IMAP") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
+                            label = "Serveur IMAP",
+                            placeholder = "ssl0.ovh.net"
                         )
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = imapPort,
                             onValueChange = { if (it.all { c -> c.isDigit() }) imapPort = it },
-                            label = { Text("Port IMAP") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
+                            label = "Port IMAP",
+                            keyboardType = KeyboardType.Number
                         )
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = imapInterval,
                             onValueChange = { if (it.all { c -> c.isDigit() }) imapInterval = it },
-                            label = { Text("Intervalle de vérification (minutes)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
+                            label = "Intervalle de vérification (minutes)",
+                            keyboardType = KeyboardType.Number
                         )
                     }
                 }
@@ -258,38 +231,36 @@ fun OvhMailSettingsScreen(
             
             // Test de connexion
             testStatus?.let { status ->
-                Card(
+                DrawTaxiCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = when (status) {
-                            is TestStatus.Success -> Color(0xFFD1FAE5)
-                            is TestStatus.Error -> Color(0xFFFFE4E6)
-                            is TestStatus.Loading -> Color(0xFFF3F4F6)
-                        }
-                    )
+                    backgroundColor = when (status) {
+                        is TestStatus.Success -> Color(0xFFD1FAE5)
+                        is TestStatus.Error -> Color(0xFFFFE4E6)
+                        is TestStatus.Loading -> Slate100
+                    },
+                    elevation = 0.dp,
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         when (status) {
                             is TestStatus.Loading -> {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
+                                    modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp,
                                     color = brandColor
                                 )
                             }
                             is TestStatus.Success -> {
-                                Icon(
+                                DrawTaxiIcon(
                                     Icons.Default.CheckCircle,
                                     contentDescription = null,
                                     tint = Color(0xFF10B981)
                                 )
                             }
                             is TestStatus.Error -> {
-                                Icon(
+                                DrawTaxiIcon(
                                     Icons.Default.Error,
                                     contentDescription = null,
                                     tint = Color(0xFFF43F5E)
@@ -297,13 +268,15 @@ fun OvhMailSettingsScreen(
                             }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(
+                        DrawTaxiText(
                             text = status.message,
                             color = when (status) {
                                 is TestStatus.Success -> Color(0xFF065F46)
                                 is TestStatus.Error -> Color(0xFF9F1239)
-                                is TestStatus.Loading -> Color.Gray
-                            }
+                                is TestStatus.Loading -> Slate600
+                            },
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 14.sp
                         )
                     }
                 }
@@ -312,7 +285,7 @@ fun OvhMailSettingsScreen(
             // Boutons d'action
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 DrawTaxiOutlinedButton(
                     onClick = {
@@ -334,12 +307,11 @@ fun OvhMailSettingsScreen(
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
                     enabled = smtpEnabled && smtpUsername.isNotBlank() && smtpPassword.isNotBlank()
                 ) {
-                    Icon(Icons.Default.NetworkCheck, contentDescription = null)
+                    DrawTaxiIcon(Icons.Default.NetworkCheck, contentDescription = null, tint = if (smtpEnabled && smtpUsername.isNotBlank() && smtpPassword.isNotBlank()) brandColor else brandColor.copy(alpha = 0.4f))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Tester")
+                    DrawTaxiText("Tester", fontWeight = FontWeight.Bold, color = if (smtpEnabled && smtpUsername.isNotBlank() && smtpPassword.isNotBlank()) brandColor else brandColor.copy(alpha = 0.4f))
                 }
                 
                 DrawTaxiSolidButton(
@@ -363,12 +335,11 @@ fun OvhMailSettingsScreen(
                         onBack()
                     },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
                     containerColor = brandColor
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
+                    DrawTaxiIcon(Icons.Default.Save, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sauvegarder")
+                    DrawTaxiText("Sauvegarder", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
             
@@ -383,31 +354,27 @@ private fun SettingsCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     content: @Composable () -> Unit
 ) {
-    Card(
+    DrawTaxiCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = 2.dp
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = drawTaxiColors().primary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = title,
-                    style = drawTaxiType().titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            content()
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            DrawTaxiIcon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = drawTaxiColors().primary
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            DrawTaxiText(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
         }
+        Spacer(modifier = Modifier.height(16.dp))
+        content()
     }
 }
 
@@ -427,6 +394,22 @@ fun OvhMailSettingsScreenPreview() {
             onUpdate = {},
             onBack = {}
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun SettingsCardPreview() {
+    DrawTaxiTheme {
+        Box(modifier = Modifier.padding(16.dp)) {
+            SettingsCard(
+                title = "Configuration SMTP",
+                icon = Icons.Default.Send,
+                content = {
+                    DrawTaxiText("Configuration du serveur d'envoi d'emails.")
+                }
+            )
+        }
     }
 }
 

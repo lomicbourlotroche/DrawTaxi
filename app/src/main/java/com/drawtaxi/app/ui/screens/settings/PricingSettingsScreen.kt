@@ -1,5 +1,6 @@
 package com.drawtaxi.app.ui.screens.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,9 +9,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
 import com.drawtaxi.app.ui.components.core.*
 import com.drawtaxi.app.ui.theme.*
+import androidx.compose.material3.*
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
@@ -18,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.AppSettings
 import kotlinx.coroutines.delay
 
@@ -91,17 +92,18 @@ fun PricingSettingsScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .background(Slate50)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Section Tarifs de base
+            Spacer(modifier = Modifier.height(4.dp))
             PricingCard(
                 title = "Tarifs de base",
                 icon = Icons.Default.Payments,
                 brandColor = brandColor
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     PricingInput(
                         label = "Prix au kilomètre (€)",
                         value = pricePerKm,
@@ -135,7 +137,7 @@ fun PricingSettingsScreen(
                 icon = Icons.Default.NightsStay,
                 brandColor = brandColor
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -191,7 +193,7 @@ fun PricingSettingsScreen(
                 icon = Icons.Default.Route,
                 brandColor = brandColor
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     PricingInput(
                         label = "Coût par km de déplacement (€)",
                         value = coutParKmDeplacement,
@@ -201,7 +203,7 @@ fun PricingSettingsScreen(
                     Text(
                         "Utilisé pour calculer la rentabilité : distance(domicile → départ) × coût/km",
                         style = drawTaxiType().bodySmall,
-                        color = com.drawtaxi.app.ui.theme.Slate500
+                        color = Slate500
                     )
                 }
             }
@@ -212,7 +214,7 @@ fun PricingSettingsScreen(
                 icon = Icons.Default.AccountBalance,
                 brandColor = brandColor
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     PricingInput(
                         label = "TVA transport (%)",
                         value = tvaTransport,
@@ -242,7 +244,7 @@ private fun PricingCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         ),
@@ -251,7 +253,7 @@ private fun PricingCard(
         )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(20.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
@@ -260,16 +262,16 @@ private fun PricingCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = brandColor,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(28.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = title,
                     style = drawTaxiType().titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.ExtraBold
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             content()
         }
     }
@@ -291,14 +293,22 @@ private fun PricingInput(
                 onValueChange(it)
             }
         },
-        label = { Text(label) },
+        label = { 
+            Text(
+                text = label,
+                style = drawTaxiType().bodySmall,
+                color = Slate500
+            ) 
+        },
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         singleLine = true,
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = brandColor,
-            focusedLabelColor = brandColor
+            focusedLabelColor = brandColor,
+            unfocusedBorderColor = Slate200,
+            unfocusedLabelColor = Slate500
         )
     )
 }

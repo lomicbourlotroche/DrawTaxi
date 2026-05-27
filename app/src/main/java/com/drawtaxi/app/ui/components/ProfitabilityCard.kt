@@ -1,9 +1,12 @@
 package com.drawtaxi.app.ui.components
 
+import java.util.Locale
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
@@ -11,8 +14,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.logic.pricing.PriceEngine
@@ -40,56 +45,129 @@ fun ProfitabilityAnalysisCard(
         )
         priceBreakdown.totalTTC
     }
-    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: ride.distanceKm * 0.3
+    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: (ride.distanceKm * 0.3)
     val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
-    val totalCost = coutDeplacement
-    val netProfit = actualPrice - totalCost
+    val netProfit = actualPrice - coutDeplacement
     val profitabilityPercent = if (actualPrice > 0) (netProfit / actualPrice) * 100 else 0.0
 
     val (statusColor, statusText, statusIcon) = when {
-        profitabilityPercent >= 50 -> Triple(Emerald500, "Excellente rentabilite", Icons.Default.TrendingUp)
-        profitabilityPercent >= 30 -> Triple(Amber500, "Rentabilite correcte", Icons.Default.CheckCircle)
-        profitabilityPercent >= 15 -> Triple(Orange500, "Rentabilite faible", Icons.Default.Warning)
-        else -> Triple(Rose500, "Course non rentable", Icons.Default.TrendingDown)
+        profitabilityPercent >= 50 -> Triple(drawTaxiColors().tertiary, "Excellente rentabilité", Icons.AutoMirrored.Filled.TrendingUp)
+        profitabilityPercent >= 30 -> Triple(Amber500, "Rentabilité correcte", Icons.Default.CheckCircle)
+        profitabilityPercent >= 15 -> Triple(Orange500, "Rentabilité faible", Icons.Default.Warning)
+        else -> Triple(drawTaxiColors().error, "Course non rentable", Icons.AutoMirrored.Filled.TrendingDown)
     }
 
-    DrawTaxiCard(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), elevation = 2.dp) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    DrawTaxiCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        elevation = 0.dp,
+        backgroundColor = drawTaxiColors().surface
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    DrawTaxiIcon(Icons.Default.Analytics, contentDescription = null, tint = settings.brandColor, modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    androidx.compose.material3.Text("Analyse de rentabilite", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(settings.brandColor.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        DrawTaxiIcon(Icons.Default.Analytics, contentDescription = null, tint = settings.brandColor, modifier = Modifier.size(24.dp))
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        androidx.compose.material3.Text(
+                            "Analyse de rentabilité",
+                            style = drawTaxiType().titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = drawTaxiColors().onSurface
+                        )
+                        androidx.compose.material3.Text(
+                            statusText,
+                            style = drawTaxiType().bodySmall,
+                            color = statusColor,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
-                DrawTaxiChip(containerColor = statusColor.copy(alpha = 0.1f), labelColor = statusColor) {
+                DrawTaxiChip(
+                    containerColor = statusColor.copy(alpha = 0.12f),
+                    labelColor = statusColor,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
                     DrawTaxiIcon(statusIcon, contentDescription = null, tint = statusColor, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    androidx.compose.material3.Text(String.format("%.0f%%", profitabilityPercent), style = drawTaxiType().labelMedium, fontWeight = FontWeight.Bold, color = statusColor)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    androidx.compose.material3.Text(
+                        String.format(Locale.getDefault(), "%.0f%%", profitabilityPercent),
+                        style = drawTaxiType().labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = statusColor
+                    )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            DrawTaxiProgressBar(progress = (profitabilityPercent / 100).coerceIn(0.0, 1.0).toFloat(), color = statusColor)
-            Spacer(modifier = Modifier.height(4.dp))
-            androidx.compose.material3.Text(statusText, style = drawTaxiType().bodySmall, color = statusColor, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(16.dp))
-            DrawTaxiDivider()
-            Spacer(modifier = Modifier.height(16.dp))
-            CostRow(label = "Prix total TTC", value = actualPrice, color = Emerald500, isPositive = true)
-            Spacer(modifier = Modifier.height(8.dp))
-            DrawTaxiDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-            androidx.compose.material3.Text("Couts estimes", style = drawTaxiType().labelSmall, color = Slate500, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(8.dp))
-            CostRow(label = "Deplacement", value = coutDeplacement, color = Slate600, isPositive = false)
-            Spacer(modifier = Modifier.height(8.dp))
-            DrawTaxiDivider()
-            Spacer(modifier = Modifier.height(8.dp))
-            CostRow(label = "BENEFICE NET", value = netProfit, color = if (netProfit >= 0) Emerald500 else Rose500, isPositive = netProfit >= 0, isBold = true)
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                InfoChip(icon = Icons.Default.Schedule, label = "Duree", value = "${ride.durationMinutes} min")
-                InfoChip(icon = Icons.Default.LocalGasStation, label = "Carburant", value = String.format("%.1f L", ride.distanceKm * 0.07))
-                InfoChip(icon = Icons.Default.Speed, label = "Distance", value = "${String.format("%.1f", ride.distanceKm)} km")
+            Spacer(modifier = Modifier.height(20.dp))
+            DrawTaxiProgressBar(
+                progress = (profitabilityPercent / 100).coerceIn(0.0, 1.0).toFloat(),
+                color = statusColor,
+                height = 6.dp
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(drawTaxiColors().surfaceVariant.copy(alpha = 0.5f))
+                    .padding(16.dp)
+            ) {
+                CostRow(label = "Chiffre d'affaires", value = actualPrice, color = drawTaxiColors().tertiary, isPositive = true, isBold = true)
+                Spacer(modifier = Modifier.height(12.dp))
+                DrawTaxiDivider(color = drawTaxiColors().outline.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(12.dp))
+                androidx.compose.material3.Text(
+                    "DÉPENSES ESTIMÉES",
+                    style = drawTaxiType().labelSmall,
+                    color = drawTaxiColors().onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                CostRow(label = "Frais d'approche (domicile)", value = coutDeplacement, color = drawTaxiColors().onSurfaceVariant, isPositive = false)
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Text(
+                    "BÉNÉFICE NET",
+                    style = drawTaxiType().titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = drawTaxiColors().onSurface
+                )
+                androidx.compose.material3.Text(
+                    text = String.format(Locale.getDefault(), "%.2f €", netProfit),
+                    style = drawTaxiType().headlineSmall,
+                    color = if (netProfit >= 0) drawTaxiColors().tertiary else drawTaxiColors().error,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                InfoChip(icon = Icons.Default.Schedule, label = "Durée", value = "${ride.durationMinutes} min", modifier = Modifier.weight(1f))
+                val fuelLiters = ride.distanceKm * 0.07 // Heuristic 7L/100km
+                InfoChip(icon = Icons.Default.LocalGasStation, label = "Carburant", value = String.format(Locale.getDefault(), "%.1f L", fuelLiters), modifier = Modifier.weight(1f))
+                InfoChip(icon = Icons.Default.Speed, label = "Distance", value = "${String.format(Locale.getDefault(), "%.1f", ride.distanceKm)} km", modifier = Modifier.weight(1f))
             }
         }
     }
@@ -98,18 +176,34 @@ fun ProfitabilityAnalysisCard(
 @Composable
 private fun CostRow(label: String, value: Double, color: Color, isPositive: Boolean, isBold: Boolean = false) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        androidx.compose.material3.Text(text = label, style = if (isBold) drawTaxiType().bodyMedium else drawTaxiType().bodySmall, color = if (isBold) Slate900 else Slate600, fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal)
-        androidx.compose.material3.Text(text = "${if (isPositive) "" else "-"}${String.format("%.2f", value)} euro", style = drawTaxiType().bodyMedium, color = color, fontWeight = if (isBold) FontWeight.Bold else FontWeight.Medium)
+        androidx.compose.material3.Text(
+            text = label,
+            style = if (isBold) drawTaxiType().bodyLarge else drawTaxiType().bodyMedium,
+            color = if (isBold) drawTaxiColors().onSurface else drawTaxiColors().onSurfaceVariant,
+            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal
+        )
+        androidx.compose.material3.Text(
+            text = "${if (isPositive) "" else "-"}${String.format(Locale.getDefault(), "%.2f €", value)}",
+            style = if (isBold) drawTaxiType().bodyLarge else drawTaxiType().bodyMedium,
+            color = if (isBold && isPositive) drawTaxiColors().tertiary else color,
+            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Medium
+        )
     }
 }
 
 @Composable
-private fun InfoChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        DrawTaxiIcon(icon, contentDescription = null, tint = Slate400, modifier = Modifier.size(20.dp))
-        Spacer(modifier = Modifier.height(4.dp))
-        androidx.compose.material3.Text(text = label, style = drawTaxiType().labelSmall, color = Slate500)
-        androidx.compose.material3.Text(text = value, style = drawTaxiType().bodySmall, fontWeight = FontWeight.Bold, color = Slate700)
+private fun InfoChip(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(drawTaxiColors().surfaceVariant.copy(alpha = 0.3f))
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        DrawTaxiIcon(icon, contentDescription = null, tint = drawTaxiColors().onSurfaceVariant, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+        androidx.compose.material3.Text(text = label, style = drawTaxiType().labelSmall, color = drawTaxiColors().onSurfaceVariant)
+        androidx.compose.material3.Text(text = value, style = drawTaxiType().bodySmall, fontWeight = FontWeight.Bold, color = drawTaxiColors().onSurface)
     }
 }
 
@@ -134,7 +228,7 @@ fun QuoteProfitabilityDialog(
         },
         confirmButton = {
             DrawTaxiSolidButton(onClick = onConfirm, containerColor = settings.brandColor) {
-                DrawTaxiIcon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                DrawTaxiIcon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 androidx.compose.material3.Text("Envoyer le devis")
             }

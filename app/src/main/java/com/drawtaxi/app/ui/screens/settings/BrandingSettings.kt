@@ -70,13 +70,6 @@ fun BrandingSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onB
                 }
             }
         }
-
-        TaxiCard(title = "Thème", brandColor = settings.brandColor) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ThemeToggleButton(label = "Moderne", isSelected = settings.theme == "modern", onClick = { onUpdate(settings.copy(theme = "modern")) }, modifier = Modifier.weight(1f))
-                ThemeToggleButton(label = "Minimal", isSelected = settings.theme == "minimal", onClick = { onUpdate(settings.copy(theme = "minimal")) }, modifier = Modifier.weight(1f))
-            }
-        }
     }
 }
 
@@ -85,7 +78,6 @@ fun BrandingSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onB
 fun BrandingSettingsPreview() {
     val mockSettings = AppSettings(
         brandColor = TaxiRed,
-        theme = "modern",
         companyName = "DrawTaxi Service"
     )
     Box(modifier = Modifier.padding(16.dp)) {

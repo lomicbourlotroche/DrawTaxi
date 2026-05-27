@@ -15,10 +15,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.drawtaxi.app.ui.components.core.DrawTaxiText
 import com.drawtaxi.app.ui.theme.Slate100
 import com.drawtaxi.app.ui.theme.Slate600
+import com.drawtaxi.app.ui.theme.DrawTaxiTheme
+import com.drawtaxi.app.ui.theme.Emerald500
+import com.drawtaxi.app.ui.theme.Emerald50
 
 @Composable
 fun DrawTaxiChip(
@@ -57,11 +62,33 @@ fun DrawTaxiStatusChip(
         containerColor = containerColor,
         labelColor = labelColor
     ) {
-        androidx.compose.material3.Text(
+        DrawTaxiText(
             text = statusText,
             color = labelColor,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiChipPreview() {
+    DrawTaxiTheme {
+        DrawTaxiChip {
+            DrawTaxiText("Chip", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Slate600)
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiStatusChipPreview() {
+    DrawTaxiTheme {
+        DrawTaxiStatusChip(
+            statusText = "Validé",
+            containerColor = Emerald50,
+            labelColor = Emerald500
         )
     }
 }

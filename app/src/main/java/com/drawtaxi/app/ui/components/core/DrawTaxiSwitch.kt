@@ -19,7 +19,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.drawtaxi.app.ui.theme.DrawTaxiTheme
 import com.drawtaxi.app.ui.theme.Slate200
 import com.drawtaxi.app.ui.theme.TaxiRed
 
@@ -54,5 +56,21 @@ fun DrawTaxiSwitch(
                 .clip(CircleShape)
                 .background(thumbColor)
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiSwitchOnPreview() {
+    DrawTaxiTheme {
+        DrawTaxiSwitch(checked = true, onCheckedChange = {})
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiSwitchOffPreview() {
+    DrawTaxiTheme {
+        DrawTaxiSwitch(checked = false, onCheckedChange = {})
     }
 }

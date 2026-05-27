@@ -30,11 +30,7 @@ object NotificationHelper {
             putExtra("ride_id", rideId)
         }
 
-        val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
         val pendingIntent: PendingIntent = PendingIntent.getActivity(context, 0, intent, flags)
 
@@ -82,11 +78,7 @@ object NotificationHelper {
             rideId?.let { putExtra("ride_id", it) }
         }
 
-        val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
         val pendingIntent: PendingIntent = PendingIntent.getActivity(context, 0, intent, flags)
 

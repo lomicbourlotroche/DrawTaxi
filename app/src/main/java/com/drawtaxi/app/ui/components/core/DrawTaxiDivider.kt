@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.drawtaxi.app.ui.theme.DrawTaxiTheme
 import com.drawtaxi.app.ui.theme.Slate100
 
 @Composable
@@ -22,4 +24,12 @@ fun DrawTaxiDivider(
             .height(thickness)
             .background(color)
     )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiDividerPreview() {
+    DrawTaxiTheme {
+        DrawTaxiDivider()
+    }
 }

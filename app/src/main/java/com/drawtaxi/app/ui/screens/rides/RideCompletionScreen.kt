@@ -1,5 +1,7 @@
 package com.drawtaxi.app.ui.screens.rides
 
+import java.util.Locale
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -60,7 +62,7 @@ fun RideCompletionScreen(
     )
     
     val calculatedPrice = price.toDoubleOrNull() ?: priceBreakdown.totalTTC
-    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: 5.0
+    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: (ride.distanceKm * 0.3)
     val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
     val profitability = if (calculatedPrice > 0) {
         RideRequest.calculateProfitability(calculatedPrice, coutDeplacement)
@@ -98,51 +100,46 @@ fun RideCompletionScreen(
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Informations de la course", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                         
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = departure,
                             onValueChange = { departure = it },
-                            label = { Text("Lieu de départ") },
+                            label = "Lieu de départ",
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            leadingIcon = { Icon(Icons.Default.TripOrigin, contentDescription = null, tint = settings.brandColor) }
+                            leadingIcon = { DrawTaxiIcon(Icons.Default.TripOrigin, contentDescription = null, tint = settings.brandColor, modifier = Modifier.size(18.dp)) }
                         )
 
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = arrival,
                             onValueChange = { arrival = it },
-                            label = { Text("Lieu d'arrivée") },
+                            label = "Lieu d'arrivée",
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            leadingIcon = { Icon(Icons.Default.Place, contentDescription = null, tint = Red500) }
+                            leadingIcon = { DrawTaxiIcon(Icons.Default.Place, contentDescription = null, tint = Red500, modifier = Modifier.size(18.dp)) }
                         )
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
+                            DrawTaxiTextField(
                                 value = distanceKm,
                                 onValueChange = { distanceKm = it },
-                                label = { Text("Distance (km)") },
+                                label = "Distance (km)",
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                leadingIcon = { Icon(Icons.Default.Route, contentDescription = null) }
+                                leadingIcon = { DrawTaxiIcon(Icons.Default.Route, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp)) }
                             )
 
-                            OutlinedTextField(
+                            DrawTaxiTextField(
                                 value = price,
                                 onValueChange = { price = it },
-                                label = { Text("Prix (€)") },
+                                label = "Prix (€)",
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                leadingIcon = { Icon(Icons.Default.AttachMoney, contentDescription = null) }
+                                leadingIcon = { DrawTaxiIcon(Icons.Default.AttachMoney, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp)) }
                             )
                         }
 
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = durationMinutes,
                             onValueChange = { durationMinutes = it.filter { c -> c.isDigit() } },
-                            label = { Text("Durée (minutes)") },
+                            label = "Durée (minutes)",
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            leadingIcon = { Icon(Icons.Default.Timer, contentDescription = null) }
+                            leadingIcon = { DrawTaxiIcon(Icons.Default.Timer, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp)) }
                         )
                     }
                 }
@@ -156,7 +153,7 @@ fun RideCompletionScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Rentabilité", color = Slate500)
                             Text(
-                                text = "${String.format("%.0f", profitability)}%",
+                                text = "${String.format(Locale.getDefault(), "%.0f", profitability)}%",
                                 fontWeight = FontWeight.Bold,
                                 color = when {
                                     profitability >= 70 -> Green500
@@ -168,19 +165,19 @@ fun RideCompletionScreen(
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Distance domicile → départ", color = Slate500)
-                            Text(String.format("%.1f km", distanceDomicileKm), fontWeight = FontWeight.Medium)
+                            Text(String.format(Locale.getDefault(), "%.1f km", distanceDomicileKm), fontWeight = FontWeight.Medium)
                         }
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Coût déplacement", color = Slate500)
-                            Text(String.format("%.2f €", coutDeplacement), fontWeight = FontWeight.Medium)
+                            Text(String.format(Locale.getDefault(), "%.2f €", coutDeplacement), fontWeight = FontWeight.Medium)
                         }
                         
                         val netProfit = calculatedPrice - coutDeplacement
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Bénéfice net", fontWeight = FontWeight.Bold)
                             Text(
-                                text = String.format("%.2f €", netProfit),
+                                text = String.format(Locale.getDefault(), "%.2f €", netProfit),
                                 fontWeight = FontWeight.Bold,
                                 color = if (netProfit > 0) Green500 else Red500
                             )
@@ -196,39 +193,39 @@ fun RideCompletionScreen(
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Prix de base", color = Slate500)
-                            Text(String.format("%.2f €", priceBreakdown.basePrice), fontWeight = FontWeight.Medium)
+                            Text(String.format(Locale.getDefault(), "%.2f €", priceBreakdown.basePrice), fontWeight = FontWeight.Medium)
                         }
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Distance (${String.format("%.1f", distanceKm.toDoubleOrNull() ?: 0.0)} km)", color = Slate500)
-                            Text(String.format("%.2f €", priceBreakdown.distancePrice), fontWeight = FontWeight.Medium)
+                            Text("Distance (${String.format(Locale.getDefault(), "%.1f", distanceKm.toDoubleOrNull() ?: 0.0)} km)", color = Slate500)
+                            Text(String.format(Locale.getDefault(), "%.2f €", priceBreakdown.distancePrice), fontWeight = FontWeight.Medium)
                         }
                         
                         if (priceBreakdown.isNight) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Majoration nuit", color = Amber500)
-                                Text(String.format("%.2f €", priceBreakdown.nightSurcharge), fontWeight = FontWeight.Medium, color = Amber500)
+                                Text(String.format(Locale.getDefault(), "%.2f €", priceBreakdown.nightSurcharge), fontWeight = FontWeight.Medium, color = Amber500)
                             }
                         }
                         
                         if (priceBreakdown.isSunday) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Majoration dimanche", color = Amber500)
-                                Text(String.format("%.2f €", priceBreakdown.sundaySurcharge), fontWeight = FontWeight.Medium, color = Amber500)
+                                Text(String.format(Locale.getDefault(), "%.2f €", priceBreakdown.sundaySurcharge), fontWeight = FontWeight.Medium, color = Amber500)
                             }
                         }
                         
                         if (priceBreakdown.isHoliday) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Majoration férié", color = Amber500)
-                                Text(String.format("%.2f €", priceBreakdown.holidaySurcharge), fontWeight = FontWeight.Medium, color = Amber500)
+                                Text(String.format(Locale.getDefault(), "%.2f €", priceBreakdown.holidaySurcharge), fontWeight = FontWeight.Medium, color = Amber500)
                             }
                         }
                         
                         if (ride.waitMinutes > 0) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                 Text("Attente (${ride.waitMinutes} min)", color = Slate500)
-                                Text(String.format("%.2f €", priceBreakdown.waitTimePrice), fontWeight = FontWeight.Medium)
+                                Text(String.format(Locale.getDefault(), "%.2f €", priceBreakdown.waitTimePrice), fontWeight = FontWeight.Medium)
                             }
                         }
                         
@@ -236,18 +233,18 @@ fun RideCompletionScreen(
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Sous-total HT", color = Slate500)
-                            Text(String.format("%.2f €", priceBreakdown.subtotalHT), fontWeight = FontWeight.Bold)
+                            Text(String.format(Locale.getDefault(), "%.2f €", priceBreakdown.subtotalHT), fontWeight = FontWeight.Bold)
                         }
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("TVA (10%)", color = Slate500)
-                            Text(String.format("%.2f €", priceBreakdown.tvaAmount), fontWeight = FontWeight.Medium)
+                            Text(String.format(Locale.getDefault(), "%.2f €", priceBreakdown.tvaAmount), fontWeight = FontWeight.Medium)
                         }
                         
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("TOTAL TTC", fontWeight = FontWeight.Bold, color = settings.brandColor)
                             Text(
-                                text = String.format("%.2f €", priceBreakdown.totalTTC),
+                                text = String.format(Locale.getDefault(), "%.2f €", priceBreakdown.totalTTC),
                                 fontWeight = FontWeight.Bold,
                                 color = settings.brandColor
                             )
@@ -266,14 +263,12 @@ fun RideCompletionScreen(
                             Text(ride.sender, fontWeight = FontWeight.Medium)
                         }
 
-                        OutlinedTextField(
+                        DrawTaxiTextField(
                             value = clientEmail,
                             onValueChange = { clientEmail = it },
-                            label = {                     Text("Email client")
-                         },
+                            label = "Email client",
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) }
+                            leadingIcon = { DrawTaxiIcon(Icons.Default.Email, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp)) }
                         )
                     }
                 }
@@ -308,7 +303,7 @@ fun RideCompletionScreen(
                     Text("Distance: ${distanceKm} km")
                     Text("Prix: ${price} €")
                     Text("Durée: ${durationMinutes} min")
-                    Text("Rentabilité: ${String.format("%.0f", profitability)}%")
+                    Text("Rentabilité: ${String.format(Locale.getDefault(), "%.0f", profitability)}%")
                 }
             },
             confirmButton = {
@@ -317,7 +312,7 @@ fun RideCompletionScreen(
                         val dist = distanceKm.toDoubleOrNull() ?: ride.distanceKm
                         val prc = price.toDoubleOrNull() ?: priceBreakdown.totalTTC
                         val dur = durationMinutes.toIntOrNull() ?: 0
-                        val depDistKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: 5.0
+                        val depDistKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: (ride.distanceKm * 0.3)
                         val depCost = RideRequest.calculateCoutDeplacement(depDistKm, settings.coutParKmDeplacement)
                         val profit = RideRequest.calculateProfitability(prc, depCost)
                         

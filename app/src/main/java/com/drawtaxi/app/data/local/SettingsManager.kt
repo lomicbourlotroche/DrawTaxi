@@ -25,7 +25,6 @@ class SettingsManager(private val context: Context) {
         val BASE_PRICE = stringPreferencesKey("base_price")
         val MIN_DISTANCE_KM = stringPreferencesKey("min_distance_km")
         val BRAND_COLOR = longPreferencesKey("brand_color")
-        val THEME = stringPreferencesKey("theme")
         val DARK_MODE = booleanPreferencesKey("dark_mode")
         val SHOW_LOGO = booleanPreferencesKey("show_logo")
         val MONITOR_SMS = booleanPreferencesKey("monitor_sms")
@@ -100,7 +99,6 @@ class SettingsManager(private val context: Context) {
             basePrice = preferences[Keys.BASE_PRICE] ?: "9.00",
             minDistanceKm = preferences[Keys.MIN_DISTANCE_KM] ?: "3.6",
             brandColor = preferences[Keys.BRAND_COLOR]?.let { Color(it.toULong()) } ?: TaxiRed,
-            theme = preferences[Keys.THEME] ?: "modern",
             darkMode = preferences[Keys.DARK_MODE] ?: false,
             showLogo = preferences[Keys.SHOW_LOGO] ?: true,
             monitorSms = preferences[Keys.MONITOR_SMS] ?: true,
@@ -170,7 +168,6 @@ class SettingsManager(private val context: Context) {
             preferences[Keys.BASE_PRICE] = settings.basePrice
             preferences[Keys.MIN_DISTANCE_KM] = settings.minDistanceKm
             preferences[Keys.BRAND_COLOR] = settings.brandColor.value.toLong()
-            preferences[Keys.THEME] = settings.theme
             preferences[Keys.DARK_MODE] = settings.darkMode
             preferences[Keys.SHOW_LOGO] = settings.showLogo
             preferences[Keys.MONITOR_SMS] = settings.monitorSms

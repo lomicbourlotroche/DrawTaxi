@@ -1,5 +1,7 @@
 package com.drawtaxi.app.logic.ai
 
+import java.util.Locale
+
 import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
@@ -20,10 +22,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 object LlamaModelManager {
 
     private const val TAG = "LlamaModelManager"
-    private const val MODEL_FILENAME = "llama-3.2-3b-instruct-q4_k_m.gguf"
-    private const val MODEL_URL = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true"
-    private const val EXPECTED_SIZE_BYTES = 2_000_000_000L
-    private const val MIN_VALID_SIZE = 1_800_000_000L
+    private const val MODEL_FILENAME = "Qwen_Qwen3-4B-Q4_K_M.gguf"
+    private const val MODEL_URL = "https://huggingface.co/bartowski/Qwen_Qwen3-4B-GGUF/resolve/main/Qwen_Qwen3-4B-Q4_K_M.gguf?download=true"
+    private const val EXPECTED_SIZE_BYTES = 2_500_000_000L
+    private const val MIN_VALID_SIZE = 2_250_000_000L
     private const val CHUNK_SIZE = 8192
 
     enum class ModelStatus {
@@ -179,7 +181,7 @@ object LlamaModelManager {
 
             val request = DownloadManager.Request(Uri.parse(MODEL_URL)).apply {
                 setTitle("DrawTaxi AI Download")
-                setDescription("Llama 3.2 3B (2GB)")
+                setDescription("Qwen3 4B (2.5GB)")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 setDestinationUri(Uri.fromFile(outputFile))
                 setAllowedOverMetered(true)
@@ -374,8 +376,8 @@ object LlamaModelManager {
 
         val bytesPerSec = (_downloadedBytes * 1000L) / (elapsedMs + 1)
         return when {
-            bytesPerSec > 1_000_000 -> String.format("%.1f MB/s", bytesPerSec / 1_000_000.0)
-            bytesPerSec > 1_000 -> String.format("%.1f KB/s", bytesPerSec / 1_000.0)
+            bytesPerSec > 1_000_000 -> String.format(Locale.getDefault(), "%.1f MB/s", bytesPerSec / 1_000_000.0)
+            bytesPerSec > 1_000 -> String.format(Locale.getDefault(), "%.1f KB/s", bytesPerSec / 1_000.0)
             else -> "${bytesPerSec} B/s"
         }
     }
@@ -401,7 +403,7 @@ object LlamaModelManager {
             size == 0L -> "Non téléchargé"
             size < 1_000_000 -> "${size / 1024} Ko"
             size < 1_000_000_000 -> "${size / 1_000_000} Mo"
-            else -> String.format("%.2f Go", size / 1_000_000_000.0)
+            else -> String.format(Locale.getDefault(), "%.2f Go", size / 1_000_000_000.0)
         }
     }
 }

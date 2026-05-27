@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import com.drawtaxi.app.ui.components.core.DrawTaxiText
+import com.drawtaxi.app.ui.theme.DrawTaxiTheme
 
 @Composable
 fun DrawTaxiScaffold(
@@ -24,5 +27,20 @@ fun DrawTaxiScaffold(
         if (bottomBar != null) {
             Box { bottomBar() }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiScaffoldPreview() {
+    DrawTaxiTheme {
+        DrawTaxiScaffold(
+            topBar = {
+                DrawTaxiTopBar(title = { DrawTaxiTopBarTitle("Accueil") })
+            },
+            content = {
+                DrawTaxiText("Contenu principal")
+            }
+        )
     }
 }

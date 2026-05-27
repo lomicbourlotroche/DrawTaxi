@@ -69,7 +69,6 @@ class TaxiApplication : Application() {
     }
 
     private fun requestBatteryOptimizationExemption() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val powerManager = getSystemService(POWER_SERVICE) as PowerManager
             if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
                 try {
@@ -81,8 +80,7 @@ class TaxiApplication : Application() {
                     Log.d(TAG, "Demande exemption batterie envoyée")
                 } catch (e: Exception) {
                     Log.w(TAG, "Impossible de demander exemption batterie: ${e.message}")
-                }
-            }
+    }
         }
     }
 
@@ -127,7 +125,6 @@ class TaxiApplication : Application() {
     }
 
     private fun createNotificationChannels() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = getSystemService(NotificationManager::class.java)
             
             // Canal pour les alertes de nouvelles courses
@@ -165,7 +162,6 @@ class TaxiApplication : Application() {
                 enableVibration(false)
             }
             notificationManager.createNotificationChannel(imapServiceChannel)
-        }
     }
 
     fun startSmsServiceIfEnabled() {
@@ -201,12 +197,7 @@ class TaxiApplication : Application() {
         Log.d(TAG, "Démarrage du SmsForegroundService")
         
         val serviceIntent = Intent(this, SmsForegroundService::class.java)
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
+        startForegroundService(serviceIntent)
     }
 
     private fun stopSmsService() {
@@ -252,12 +243,7 @@ class TaxiApplication : Application() {
         Log.d(TAG, "Démarrage du OvhImapService")
         
         val serviceIntent = Intent(this, OvhImapService::class.java)
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
+        startForegroundService(serviceIntent)
         isImapServiceRunning = true
     }
 

@@ -1,5 +1,7 @@
 package com.drawtaxi.app.ui.components
 
+import java.util.Locale
+
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -56,11 +58,12 @@ fun RideCard(
                 }
             }
     ) {
+        val colors = drawTaxiColors()
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.White.copy(alpha = alpha))
+                    .background(colors.surface.copy(alpha = alpha))
             )
             Box(
                 modifier = Modifier
@@ -80,7 +83,7 @@ fun RideCard(
                         androidx.compose.material3.Text(text = ride.time.ifBlank { "\u2014:\u2014" }, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.Text(text = " km", style = drawTaxiType().labelMedium, color = Slate500)
+                        androidx.compose.material3.Text(text = " km", style = drawTaxiType().labelMedium, color = colors.onSurfaceVariant)
                         if (ride.date.isNotBlank()) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Box(modifier = Modifier.background(Slate100, RoundedCornerShape(6.dp))) {
@@ -96,20 +99,20 @@ fun RideCard(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(Emerald500))
                             Spacer(modifier = Modifier.width(8.dp))
-                            androidx.compose.material3.Text(text = ride.arrival.ifBlank { "\u2014" }, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            androidx.compose.material3.Text(text = ride.arrival.ifBlank { "\u2014" }, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurface)
                         }
                         if (ride.departure.isNotBlank()) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(Slate300))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                androidx.compose.material3.Text(text = ride.departure, style = drawTaxiType().bodyMedium, color = Slate600, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                androidx.compose.material3.Text(text = ride.departure, style = drawTaxiType().bodyMedium, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         androidx.compose.material3.Text(
-                            text = if (ride.price > 0) String.format("%.2f \u20ac", ride.price) else "\u2014",
+                            text = if (ride.price > 0) String.format(Locale.getDefault(), "%.2f \u20ac", ride.price) else "\u2014",
                             style = drawTaxiType().headlineSmall, fontWeight = FontWeight.Black,
                             color = if (ride.price > 0) brandColor else Slate400
                         )
@@ -118,7 +121,7 @@ fun RideCard(
                             val textColor = when { ride.profitabilityPercent >= 70 -> Green800; ride.profitabilityPercent >= 50 -> Amber700; else -> Rose700 }
                             Box(modifier = Modifier.padding(top = 4.dp).background(bgColor, RoundedCornerShape(6.dp))) {
                                 androidx.compose.material3.Text(
-                                    text = "%",
+                                    text = String.format(Locale.getDefault(), "%.0f%%", ride.profitabilityPercent),
                                     style = drawTaxiType().labelSmall, fontWeight = FontWeight.Bold,
                                     color = textColor, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
@@ -135,7 +138,7 @@ fun RideCard(
                             androidx.compose.material3.Text(text = ride.sender.take(2).uppercase(), style = drawTaxiType().labelSmall, fontWeight = FontWeight.Bold, color = Slate600)
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        androidx.compose.material3.Text(text = ride.sender.ifBlank { "Client" }, style = drawTaxiType().bodyMedium, color = Slate600)
+                        androidx.compose.material3.Text(text = ride.sender.ifBlank { "Client" }, style = drawTaxiType().bodyMedium, color = colors.onSurfaceVariant)
                     }
                     com.drawtaxi.app.ui.components.core.DrawTaxiChip(
                         containerColor = when (ride.status) { com.drawtaxi.app.data.RideStatus.DRAFT -> Amber100; com.drawtaxi.app.data.RideStatus.QUOTED -> Blue100; com.drawtaxi.app.data.RideStatus.CONFIRMED -> Emerald100; else -> Slate100 },
@@ -189,7 +192,7 @@ fun RideHistoryCard(
             .scale(scale)
             .shadow(2.dp, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = alpha))
+            .background(drawTaxiColors().surface.copy(alpha = alpha))
             .pointerInput(onClick) {
                 awaitPointerEventScope {
                     while (true) {
@@ -221,13 +224,13 @@ fun RideHistoryCard(
             }
             Column(horizontalAlignment = Alignment.End) {
                 androidx.compose.material3.Text(
-                    text = if (ride.price > 0) String.format("%.2f \u20ac", ride.price) else "\u2014",
+                    text = if (ride.price > 0) String.format(Locale.getDefault(), "%.2f \u20ac", ride.price) else "\u2014",
                     style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold,
                     color = if (ride.price > 0) Emerald600 else Slate400
                 )
                 if (ride.profitabilityPercent > 0) {
                     androidx.compose.material3.Text(
-                        text = "%",
+                        text = String.format(Locale.getDefault(), "%.0f%%", ride.profitabilityPercent),
                         style = drawTaxiType().labelSmall, fontWeight = FontWeight.Bold,
                         color = if (ride.profitabilityPercent >= 70) Emerald600 else Amber500
                     )

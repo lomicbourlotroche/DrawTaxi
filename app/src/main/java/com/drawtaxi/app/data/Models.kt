@@ -38,7 +38,6 @@ data class AppSettings(
     val basePrice: String = "9.00",
     val minDistanceKm: String = "3.6",
     val brandColor: Color = TaxiRed,
-    val theme: String = "modern",
     val darkMode: Boolean = false,
     val showLogo: Boolean = true,
     val monitorSms: Boolean = true,
@@ -75,6 +74,7 @@ data class AppSettings(
     val homeAddress: String = "",
     val smsScanIntervalMinutes: Int = 60,
     val aiEnabled: Boolean = true,
+    val smsAnalysisMode: com.drawtaxi.app.logic.sms.SmsScanner.SmsAnalysisMode = com.drawtaxi.app.logic.sms.SmsScanner.SmsAnalysisMode.AI_THEN_PARSING,
     
     // Configuration OVH SMTP (envoi mails)
     val ovhSmtpEnabled: Boolean = false,
@@ -154,7 +154,8 @@ data class RideRequest(
         }
 
         fun calculateProfitability(price: Double, coutDeplacement: Double): Double {
-            if (coutDeplacement == 0.0 || price == 0.0) return 0.0
+            if (price == 0.0) return 0.0
+            if (coutDeplacement <= 0.0) return 100.0
             return ((price - coutDeplacement) / price) * 100.0
         }
 

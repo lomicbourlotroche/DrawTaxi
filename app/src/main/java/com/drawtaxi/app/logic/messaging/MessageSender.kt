@@ -1,5 +1,7 @@
 package com.drawtaxi.app.logic.messaging
 
+import java.util.Locale
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -71,8 +73,8 @@ object MessageSender {
         val message = settings.quoteTemplate
             .replace("[DEPART]", quote.departure)
             .replace("[ARRIVEE]", quote.arrival)
-            .replace("[DISTANCE]", String.format("%.1f", quote.distanceKm))
-            .replace("[PRIX]", String.format("%.2f", quote.price))
+            .replace("[DISTANCE]", String.format(Locale.getDefault(), "%.1f", quote.distanceKm))
+            .replace("[PRIX]", String.format(Locale.getDefault(), "%.2f", quote.price))
 
         sendMessage(
             context = context,

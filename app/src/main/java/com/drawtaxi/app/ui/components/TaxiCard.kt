@@ -25,6 +25,7 @@ fun TaxiCard(
     titleIcon: ImageVector? = null,
     gradient: Boolean = false,
     brandColor: Color = Indigo500,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val backgroundBrush = if (gradient) {
@@ -35,15 +36,14 @@ fun TaxiCard(
 
     DrawTaxiCard(
         modifier = modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        backgroundColor = Color.Transparent
+        backgroundColor = if (gradient) Color.Transparent else drawTaxiColors().surface,
+        onClick = onClick
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (backgroundBrush != null) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            if (gradient && backgroundBrush != null) {
                 Box(modifier = Modifier.matchParentSize().background(backgroundBrush))
-            } else {
-                Box(modifier = Modifier.matchParentSize().background(drawTaxiColors().surface))
             }
-            Column(modifier = Modifier.matchParentSize().padding(16.dp)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 if (title != null) {
                     Row(
                         modifier = Modifier.padding(bottom = 12.dp),

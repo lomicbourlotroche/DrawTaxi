@@ -8,12 +8,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material.Text
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,43 +58,57 @@ fun DashboardScreen(
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(Slate50),
+        modifier = Modifier.fillMaxSize().background(drawTaxiColors().background),
         contentPadding = PaddingValues(bottom = 100.dp)
     ) {
         item {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Tableau de bord",
-                style = drawTaxiType().headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = Slate900,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            Text(
-                text = "${periodStats.totalRides} courses • ${String.format("%.2f €", periodStats.totalRevenue)}",
-                style = drawTaxiType().bodyMedium,
-                color = Slate500,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                DashboardPeriod.entries.forEach { period ->
-                    DrawTaxiFilterChip(
-                        selected = selectedPeriod == period,
-                        onClick = { selectedPeriod = period },
-                        label = { Text(text = period.label, fontSize = 12.sp) },
-                        colors = DrawTaxiFilterChipDefaults.colors(
-                            selectedContainerColor = brandColor.copy(alpha = 0.2f),
-                            selectedContentColor = brandColor
-                        ),
-                        modifier = Modifier.weight(1f)
+            // ── HERO HEADER ──
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(brandColor, brandColor.copy(alpha = 0.75f), drawTaxiColors().background)
+                        )
                     )
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+            ) {
+                Column {
+                    Text(
+                        text = "Tableau de bord",
+                        style = drawTaxiType().headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "${periodStats.totalRides} courses · ${String.format(Locale.getDefault(), "%.2f €", periodStats.totalRevenue)}",
+                        style = drawTaxiType().bodyMedium,
+                        color = Color.White.copy(alpha = 0.75f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // Filtres période
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        DashboardPeriod.entries.forEach { period ->
+                            val isSelected = selectedPeriod == period
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.15f))
+                                    .clickable { selectedPeriod = period }
+                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = period.label,
+                                    style = drawTaxiType().labelMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) brandColor else Color.White
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -207,7 +221,7 @@ private fun DashboardHeroCard(stats: PeriodStats, brandColor: Color) {
         ) {
             Column {
                 Text(
-                    text = String.format("%.2f €", stats.totalRevenue),
+                    text = String.format(Locale.getDefault(), "%.2f €", stats.totalRevenue),
                     style = drawTaxiType().displaySmall,
                     fontWeight = FontWeight.Black,
                     color = Color.White
@@ -222,13 +236,13 @@ private fun DashboardHeroCard(stats: PeriodStats, brandColor: Color) {
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     HeroStatItem(
-                        value = String.format("%.0f%%", stats.avgProfitability),
+                        value = String.format(Locale.getDefault(), "%.0f%%", stats.avgProfitability),
                         label = "Rentabilité",
                         icon = Icons.AutoMirrored.Filled.TrendingUp,
                         color = if (stats.avgProfitability >= 70) Color(0xFF86EFAC) else if (stats.avgProfitability >= 50) Color(0xFFFDE68A) else Color(0xFFFCA5A5)
                     )
                     HeroStatItem(
-                        value = String.format("%.2f €", stats.totalNetProfit),
+                        value = String.format(Locale.getDefault(), "%.2f €", stats.totalNetProfit),
                         label = "Bénéfice net",
                         icon = Icons.Default.AttachMoney,
                         color = if (stats.totalNetProfit > 0) Color(0xFF86EFAC) else Color(0xFFFCA5A5)
@@ -262,23 +276,23 @@ private fun QuickStatsRow(stats: PeriodStats, brandColor: Color) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         QuickStatCard(
-            value = String.format("%.2f €", stats.totalCoutDeplacement),
+            value = String.format(Locale.getDefault(), "%.0f km", stats.totalKm),
+            label = "Distance",
+            icon = Icons.Default.Route,
+            color = Slate500,
+            modifier = Modifier.weight(1f)
+        )
+        QuickStatCard(
+            value = String.format(Locale.getDefault(), "%.2f €", stats.totalCoutDeplacement),
             label = "Déplacement",
             icon = Icons.Default.LocalGasStation,
             color = Amber500,
             modifier = Modifier.weight(1f)
         )
         QuickStatCard(
-            value = String.format("%.2f €", stats.totalCoutDeplacement),
-            label = "Déplacement",
-            icon = Icons.Default.Route,
-            color = Slate500,
-            modifier = Modifier.weight(1f)
-        )
-        QuickStatCard(
-            value = String.format("%.2f €/km", stats.avgPerKm),
+            value = String.format(Locale.getDefault(), "%.2f €/km", stats.avgPerKm),
             label = "Revenu/km",
-            icon = Icons.Default.Route,
+            icon = Icons.Default.TrendingUp,
             color = brandColor,
             modifier = Modifier.weight(1f)
         )
@@ -320,12 +334,12 @@ private fun TodayMiniCard(stats: PeriodStats, brandColor: Color) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(text = "Aujourd'hui", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
-                    Text(text = "${stats.totalRides} courses • ${String.format("%.0f km", stats.totalKm)}", style = drawTaxiType().bodySmall, color = Slate500)
+                    Text(text = "${stats.totalRides} courses • ${String.format(Locale.getDefault(), "%.0f km", stats.totalKm)}", style = drawTaxiType().bodySmall, color = Slate500)
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(text = String.format("%.2f €", stats.totalRevenue), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = Slate900)
-                Text(text = String.format("%.0f%%", stats.avgProfitability), style = drawTaxiType().labelSmall, color = if (stats.avgProfitability >= 70) Green500 else if (stats.avgProfitability >= 50) Amber500 else Red500)
+                Text(text = String.format(Locale.getDefault(), "%.2f €", stats.totalRevenue), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = Slate900)
+                Text(text = String.format(Locale.getDefault(), "%.0f%%", stats.avgProfitability), style = drawTaxiType().labelSmall, color = if (stats.avgProfitability >= 70) Green500 else if (stats.avgProfitability >= 50) Amber500 else Red500)
             }
         }
     }
@@ -343,11 +357,11 @@ private fun DailyRow(breakdown: DailyBreakdown, brandColor: Color, onClick: () -
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(text = breakdown.date, style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Medium)
-                Text(text = "${breakdown.rideCount} courses • ${String.format("%.0f km", breakdown.totalKm)}", style = drawTaxiType().labelSmall, color = Slate500)
+                Text(text = "${breakdown.rideCount} courses • ${String.format(Locale.getDefault(), "%.0f km", breakdown.totalKm)}", style = drawTaxiType().labelSmall, color = Slate500)
             }
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text(text = String.format("%.2f €", breakdown.totalRevenue), style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Bold, color = Slate900)
+            Text(text = String.format(Locale.getDefault(), "%.2f €", breakdown.totalRevenue), style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Bold, color = Slate900)
             DrawTaxiSurface(
                 shape = RoundedCornerShape(6.dp),
                 color = when {
@@ -358,7 +372,7 @@ private fun DailyRow(breakdown: DailyBreakdown, brandColor: Color, onClick: () -
                 modifier = Modifier.padding(top = 2.dp)
             ) {
                 Text(
-                    text = "${String.format("%.0f", breakdown.profitability)}%",
+                    text = "${String.format(Locale.getDefault(), "%.0f", breakdown.profitability)}%",
                     style = drawTaxiType().labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = when {

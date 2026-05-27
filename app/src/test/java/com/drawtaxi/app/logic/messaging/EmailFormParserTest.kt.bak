@@ -1,0 +1,79 @@
+package com.drawtaxi.app.logic.messaging
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class EmailFormParserTest {
+
+    @Test
+    fun testParseEmailBodyStandard() {
+        // Note: extractField uses lookahead \n[A-Z] to stop each field's value.
+        // Every field label must be followed by a line starting with an uppercase letter.
+        // The "Détails" field is placed before a dummy "Notes:" line to satisfy this.
+        val body = """
+            Nom complet : John Doe
+            Téléphone : 0612345678
+            Email : john.doe@example.com
+            Prestation : Trajet simple
+            Date : 26/05/2026
+            Adresse de départ : Gare de Lyon, Paris
+            Adresse de destination : Aéroport CDG, Roissy
+            Heure : 14h30
+            Détails du trajet : Vol AF123, 2 passagers
+            Notes : RAS
+        """.trimIndent()
+
+        val parsed = EmailFormParser.parseEmailBody(body)
+
+        assertEquals("John Doe", parsed.name)
+        assertEquals("0612345678", parsed.phone)
+        assertEquals("john.doe@example.com", parsed.email)
+        assertEquals("Trajet simple", parsed.service)
+        assertEquals("26/05/2026", parsed.date)
+        assertEquals("Gare de Lyon, Paris", parsed.departure)
+        assertEquals("Aéroport CDG, Roissy", parsed.destination)
+        assertEquals("14h30", parsed.time)
+        // "Détails du trajet" is followed by "Notes :" — the \n[A-Z] lookahead fires on 'N'
+        assertEquals("Vol AF123, 2 passagers", parsed.message)
+        // passengerCount uses a standalone regex "(\\d+)\\s*passager" — independent of field extraction
+        assertEquals(2, parsed.passengerCount)
+    }
+
+    @Test
+    fun testIsAirportArrivalAndDeparture() {
+        assertTrue(EmailFormParser.isAirportArrival("Arrivée Aéroport"))
+        assertTrue(EmailFormParser.isAirportArrival("Prestation depuis l'aéroport"))
+        assertFalse(EmailFormParser.isAirportArrival("Départ Aéroport"))
+
+        assertTrue(EmailFormParser.isAirportDeparture("Départ pour l'aéroport"))
+        assertTrue(EmailFormParser.isAirportDeparture("Vers aéroport"))
+        assertFalse(EmailFormParser.isAirportDeparture("Arrivée depuis aéroport"))
+    }
+
+    @Test
+    fun testToAiParsedResult() {
+        val formData = EmailFormParser.ParsedFormData(
+            name = "Jane Smith",
+            phone = "0711223344",
+            email = "jane.smith@example.com",
+            service = "Arrivée Aéroport",
+            date = "27/05/2026",
+            departure = "Aéroport CDG",
+            destination = "10 Rue de Rivoli, Paris",
+            time = "10h15",
+            passengerCount = 1
+        )
+
+        val aiResult = EmailFormParser.toAiParsedResult(formData)
+
+        assertEquals("Aéroport", aiResult.departure) // Replaced with custom Gare/Aéroport mapping logic
+        assertEquals("10 Rue de Rivoli, Paris", aiResult.arrival)
+        assertEquals("10h15", aiResult.time)
+        assertEquals("27/05/2026", aiResult.date)
+        assertEquals("Jane Smith", aiResult.clientName)
+        assertEquals("Jane", aiResult.clientFirstName)
+        assertEquals("0711223344", aiResult.phone)
+        assertEquals("jane.smith@example.com", aiResult.email)
+        assertEquals(1, aiResult.nbPassengers)
+    }
+}

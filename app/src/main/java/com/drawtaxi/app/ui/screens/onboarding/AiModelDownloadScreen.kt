@@ -82,25 +82,38 @@ fun AiModelDownloadScreen(
             Spacer(modifier = Modifier.height(40.dp))
 
             DrawTaxiSurface(
-                modifier = Modifier.size(80.dp),
-                shape = RoundedCornerShape(20.dp),
-                color = if (isComplete) Emerald500.copy(0.1f) else brandColor.copy(0.1f)
+                modifier = Modifier.size(100.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = if (isComplete) Emerald500.copy(0.1f) else brandColor.copy(0.1f),
+                shadowElevation = 8.dp
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = if (isComplete)
+                                    listOf(Emerald500.copy(0.05f), Emerald500.copy(0.15f))
+                                else
+                                    listOf(brandColor.copy(0.05f), brandColor.copy(0.15f))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         imageVector = if (isComplete) Icons.Default.CheckCircle else Icons.Default.Memory,
                         contentDescription = null,
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier.size(48.dp),
                         tint = if (isComplete) Emerald500 else brandColor
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = if (isComplete) "Modèle prêt !" else "Intelligence Artificielle",
-                style = drawTaxiType().headlineMedium,
+                style = drawTaxiType().displaySmall,
                 fontWeight = FontWeight.Black,
                 color = Slate900,
                 textAlign = TextAlign.Center
@@ -108,39 +121,42 @@ fun AiModelDownloadScreen(
 
             Text(
                 text = if (isComplete)
-                    "Llama 3.2 3B est installé. Le parsing SMS sera plus précis."
+                    "Le modèle Qwen3 4B est installé avec succès."
                 else
-                    "Téléchargez le modèle Llama 3.2 pour un parsing SMS intelligent hors ligne.",
+                    "Améliorez la précision du parsing SMS avec le modèle Qwen3 4B.",
                 style = drawTaxiType().bodyMedium,
-                color = Slate400,
+                color = Slate500,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = 12.dp, start = 16.dp, end = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 FeatureItem(
                     icon = Icons.Default.Shield,
                     title = "100% hors ligne",
-                    description = "Vos SMS ne quittent jamais votre téléphone"
+                    description = "Vos données ne quittent jamais l'appareil",
+                    brandColor = brandColor
                 )
                 FeatureItem(
                     icon = Icons.Default.Speed,
-                    title = "Plus précis",
-                    description = "Comprend les formulations complexes et le contexte"
+                    title = "Parsing Précis",
+                    description = "Compréhension avancée des messages",
+                    brandColor = brandColor
                 )
                 FeatureItem(
                     icon = Icons.Default.Storage,
-                    title = "Taille du modèle",
-                    description = expectedSizeText
+                    title = "Optimisé",
+                    description = "Modèle compressé de $expectedSizeText",
+                    brandColor = brandColor
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
             AnimatedVisibility(
                 visible = isDownloading || isComplete,
@@ -154,18 +170,18 @@ fun AiModelDownloadScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Slate200)
+                            .height(10.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(Slate100)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(animatedProgress)
-                                .height(12.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(5.dp))
                                 .background(
                                     Brush.horizontalGradient(
-                                        colors = listOf(brandColor, Violet500)
+                                        colors = listOf(brandColor, brandColor.copy(0.8f))
                                     )
                                 )
                         )
@@ -209,11 +225,11 @@ fun AiModelDownloadScreen(
                         }
                     }
 
-                    val downloadedMb = LlamaModelManager.getDownloadedSize(context) / 1_000_000
+                    val downloadedMb = LlamaModelManager.getDownloadedSize(context).toFloat() / 1_000_000
                     if (downloadedMb > 0 && !isComplete) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${downloadedMb} Mo / 2 000 Mo",
+                            text = "%.1f Mo / 2 000 Mo".format(downloadedMb),
                             style = drawTaxiType().labelSmall,
                             color = Slate400
                         )
@@ -227,24 +243,26 @@ fun AiModelDownloadScreen(
                 val connectionType = remember { LlamaModelManager.getConnectionType(context) }
                 if (connectionType != "WiFi") {
                     DrawTaxiSurface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Amber100,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        color = Amber50,
+                        modifier = Modifier.padding(bottom = 20.dp),
+                        borderWidth = 1.dp,
+                        borderColor = Amber100
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.Warning,
+                                Icons.Default.WifiOff,
                                 contentDescription = null,
                                 tint = Amber600,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = "Connexion $connectionType - ~2 Go à télécharger",
-                                style = drawTaxiType().labelSmall,
+                                text = "Connexion $connectionType - WiFi recommandé (~2 Go)",
+                                style = drawTaxiType().labelMedium,
                                 color = Amber700
                             )
                         }
@@ -371,14 +389,16 @@ fun AiModelDownloadScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                DrawTaxiSolidButton(
+                DrawTaxiOutlinedButton(
                     onClick = onSkip,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    contentColor = Slate500,
+                    borderColor = Slate200
                 ) {
                     Text(
-                        text = "Passer pour l'instant (parsing basique activé)",
-                        color = Slate500,
-                        fontSize = 13.sp
+                        text = "Passer pour l'instant (parsing basique)",
+                        style = drawTaxiType().labelLarge,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             } else {
@@ -405,39 +425,48 @@ fun AiModelDownloadScreen(
 private fun FeatureItem(
     icon: ImageVector,
     title: String,
-    description: String
+    description: String,
+    brandColor: Color
 ) {
-    Row(
+    DrawTaxiSurface(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White,
+        borderWidth = 1.dp,
+        borderColor = Slate100
     ) {
-        DrawTaxiSurface(
-            modifier = Modifier.size(40.dp),
-            shape = RoundedCornerShape(10.dp),
-            color = Indigo500.copy(0.1f)
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = Indigo500
+            DrawTaxiSurface(
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = brandColor.copy(0.1f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = brandColor
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = drawTaxiType().titleSmall,
+                    color = Slate900,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = description,
+                    style = drawTaxiType().bodySmall,
+                    color = Slate500
                 )
             }
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
-            Text(
-                text = title,
-                fontWeight = FontWeight.Bold,
-                color = Slate900,
-                fontSize = 14.sp
-            )
-            Text(
-                text = description,
-                color = Slate500,
-                fontSize = 12.sp
-            )
         }
     }
 }

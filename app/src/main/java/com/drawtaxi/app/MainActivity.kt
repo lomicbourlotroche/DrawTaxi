@@ -1,5 +1,7 @@
 package com.drawtaxi.app
 
+import java.util.Locale
+
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -12,6 +14,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -19,10 +24,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.drawtaxi.app.ui.components.core.*
+import com.drawtaxi.app.ui.components.core.DrawTaxiScaffold
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
 import com.drawtaxi.app.data.RideStatus
@@ -39,6 +48,10 @@ import com.drawtaxi.app.ui.screens.navigation.RideNavigationScreen
 import com.drawtaxi.app.ui.screens.onboarding.AiModelDownloadScreen
 import com.drawtaxi.app.ui.screens.onboarding.OnboardingScreen
 import com.drawtaxi.app.ui.screens.rides.PendingRideItem
+import com.drawtaxi.app.util.PermissionHelper
+import com.drawtaxi.app.util.hasLocationPermissions
+import com.drawtaxi.app.util.hasNotificationPermission
+import com.drawtaxi.app.util.hasSmsPermissions
 import com.drawtaxi.app.ui.screens.rides.RideCompletionScreen
 import com.drawtaxi.app.ui.screens.rides.RideCreateScreen
 import com.drawtaxi.app.ui.screens.rides.RideDetailScreen
@@ -58,7 +71,6 @@ import com.drawtaxi.app.ui.screens.settings.SettingsMain
 import com.drawtaxi.app.ui.screens.settings.SettingsMenuItem
 import com.drawtaxi.app.ui.screens.settings.StatsScreen
 import com.drawtaxi.app.ui.screens.settings.TaxiToggleRow
-import com.drawtaxi.app.ui.screens.settings.ThemeToggleButton
 import com.drawtaxi.app.ui.theme.DrawTaxiTheme
 class MainActivity : ComponentActivity() {
 
@@ -109,26 +121,26 @@ class MainActivity : ComponentActivity() {
     }
 
     fun requestSmsPermission() {
-        if (com.drawtaxi.app.util.PermissionHelper.hasSmsPermissions(this)) {
+        if (hasSmsPermissions()) {
             pendingSettingsUpdate(currentSettings().copy(monitorSms = true))
         } else {
-            com.drawtaxi.app.util.PermissionHelper.requestSmsPermissions(smsPermissionLauncher)
+            PermissionHelper.requestSmsPermissions(smsPermissionLauncher)
         }
     }
 
     fun requestNotificationPermission() {
-        if (com.drawtaxi.app.util.PermissionHelper.hasNotificationPermission(this)) {
+        if (hasNotificationPermission()) {
             pendingSettingsUpdate(currentSettings().copy(enableNotifications = true))
         } else {
-            com.drawtaxi.app.util.PermissionHelper.requestNotificationPermission(notificationPermissionLauncher)
+            PermissionHelper.requestNotificationPermission(notificationPermissionLauncher)
         }
     }
 
     fun requestLocationPermission() {
-        if (com.drawtaxi.app.util.PermissionHelper.hasLocationPermissions(this)) {
+        if (hasLocationPermissions()) {
             pendingSettingsUpdate(currentSettings().copy(trackLocation = true))
         } else {
-            com.drawtaxi.app.util.PermissionHelper.requestLocationPermissions(locationPermissionLauncher)
+            PermissionHelper.requestLocationPermissions(locationPermissionLauncher)
         }
     }
 
@@ -154,7 +166,7 @@ class MainActivity : ComponentActivity() {
         val factory = TaxiViewModelFactory(repository)
 
         // Démarrage automatique des services de surveillance
-        if (com.drawtaxi.app.util.PermissionHelper.hasSmsPermissions(this)) {
+        if (hasSmsPermissions()) {
             (application as? TaxiApplication)?.startSmsServiceIfEnabled()
         }
         (application as? TaxiApplication)?.startImapServiceIfEnabled()
@@ -219,7 +231,7 @@ class MainActivity : ComponentActivity() {
 
             // Redémarrer les services quand les paramètres changent
             LaunchedEffect(settings.monitorSms, settings.ovhImapEnabled) {
-                if (settings.monitorSms && com.drawtaxi.app.util.PermissionHelper.hasSmsPermissions(this@MainActivity)) {
+                if (settings.monitorSms && hasSmsPermissions()) {
                     (application as? TaxiApplication)?.startSmsServiceIfEnabled()
                 }
                 if (settings.ovhImapEnabled) {
@@ -227,7 +239,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            DrawTaxiTheme(brandColor = settings.brandColor, darkTheme = false) {
+             DrawTaxiTheme(brandColor = settings.brandColor, darkTheme = isSystemInDarkTheme()) {
                 var onboardingStep by remember { mutableStateOf(0) }
 
                 if (settings.isFirstLaunch) {
@@ -307,26 +319,26 @@ class MainActivity : ComponentActivity() {
                         },
                         settings = settings
                     )
-                } else {
-                    Scaffold(
-                        bottomBar = {
-                            BottomNavigationBar(
-                                activeTab = activeTab,
-                                onTabSelected = {
-                                    activeTab = it
-                                    settingsView = "main"
-                                    selectedRide = null
-                                    activeRide = null
-                                    isCreatingRide = false
-                                    editingRide = null
-                                },
-                                brandColor = settings.brandColor,
-                                hasPending = pendingRides.any { it.status == RideStatus.DRAFT || it.status == RideStatus.QUOTED }
-                            )
-                        }
-                    ) { innerPadding ->
-                        Box(modifier = Modifier.padding(innerPadding)) {
-                            if (activeRide != null) {
+                 } else {
+                     DrawTaxiScaffold(
+                         bottomBar = {
+                             BottomNavigationBar(
+                                 activeTab = activeTab,
+                                 onTabSelected = {
+                                     activeTab = it
+                                     settingsView = "main"
+                                     selectedRide = null
+                                     activeRide = null
+                                     isCreatingRide = false
+                                     editingRide = null
+                                 },
+                                 brandColor = settings.brandColor,
+                                 hasPending = pendingRides.any { it.status == RideStatus.DRAFT || it.status == RideStatus.QUOTED }
+                             )
+                         }
+                     ) { innerPadding ->
+                         Box(modifier = Modifier.padding(innerPadding)) {
+                             if (activeRide != null) {
                                 RideNavigationScreen(
                                     ride = activeRide!!,
                                     settings = settings,
@@ -437,8 +449,8 @@ class MainActivity : ComponentActivity() {
                                                 val quoteMessage = settings.quoteTemplate
                                                     .replace("[DEPART]", ride.departure.ifBlank { "—" })
                                                     .replace("[ARRIVEE]", ride.arrival.ifBlank { "—" })
-                                                    .replace("[DISTANCE]", String.format("%.1f", ride.distanceKm))
-                                                    .replace("[PRIX]", String.format("%.2f", priceBreakdown.totalTTC))
+                                                    .replace("[DISTANCE]", String.format(Locale.getDefault(), "%.1f", ride.distanceKm))
+                                                    .replace("[PRIX]", String.format(Locale.getDefault(), "%.2f", priceBreakdown.totalTTC))
                                                 com.drawtaxi.app.logic.messaging.MessageSender.sendMessage(
                                                     this@MainActivity,
                                                     ride.messageChannel,
@@ -511,7 +523,8 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onBack = {
                                                 activeTab = "dashboard"
-                                            }
+                                            },
+                                            coutParKmDeplacement = settings.coutParKmDeplacement
                                         )
                                     }
                                     "settings" -> {

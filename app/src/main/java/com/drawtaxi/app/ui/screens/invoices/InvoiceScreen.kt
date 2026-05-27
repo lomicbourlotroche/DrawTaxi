@@ -81,7 +81,9 @@ fun InvoiceScreen(
 
     onRideSelected: (RideRequest) -> Unit,
 
-    onBack: () -> Unit
+    onBack: () -> Unit,
+
+    coutParKmDeplacement: Double = 0.10
 
 ) {
 
@@ -193,7 +195,9 @@ fun InvoiceScreen(
 
             onBack = { selectedRide = null },
 
-            brandColor = brandColor
+            brandColor = brandColor,
+
+            coutParKmDeplacement = coutParKmDeplacement
 
         )
 
@@ -209,7 +213,7 @@ fun InvoiceScreen(
 
                         Text("Factures", fontWeight = FontWeight.Bold)
 
-                        Text("$totalRides courses • ${String.format("%.2f €", totalRevenue)}", style = drawTaxiType().bodySmall, color = Slate500)
+                        Text("$totalRides courses • ${String.format(Locale.getDefault(), "%.2f €", totalRevenue)}", style = drawTaxiType().bodySmall, color = Slate500)
 
                     }
 
@@ -233,22 +237,14 @@ fun InvoiceScreen(
 
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
 
-                OutlinedTextField(
-
+                DrawTaxiTextField(
                     value = searchQuery,
-
                     onValueChange = { searchQuery = it },
-
                     modifier = Modifier.fillMaxWidth(),
-
-                    placeholder = { Text("Rechercher par client, lieu...") },
-
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Slate400) },
-
-                    shape = RoundedCornerShape(12.dp),
-
-                    singleLine = true
-
+                    placeholder = "Rechercher par client, lieu...",
+                    leadingIcon = {
+                        DrawTaxiIcon(Icons.Default.Search, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp))
+                    }
                 )
 
 
@@ -261,25 +257,17 @@ fun InvoiceScreen(
 
                     InvoiceFilter.entries.forEach { filter ->
 
-                        FilterChip(
-
-                            selected = selectedFilter == filter,
-
-                            onClick = { selectedFilter = filter },
-
-                            label = { Text(filter.label, fontSize = 12.sp) },
-
-                            colors = FilterChipDefaults.filterChipColors(
-
-                                selectedContainerColor = brandColor,
-
-                                selectedLabelColor = Color.White
-
-                            ),
-
-                            modifier = Modifier.weight(1f)
-
-                        )
+                        DrawTaxiFilterChip(
+                        selected = selectedFilter == filter,
+                        onClick = { selectedFilter = filter },
+                        label = { Text(filter.label, style = drawTaxiType().labelMedium) },
+                        colors = DrawTaxiFilterChipDefaults.colors(
+                            selectedContainerColor = brandColor.copy(alpha = 0.15f),
+                            selectedContentColor = brandColor,
+                            selectedBorderColor = brandColor
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
 
                     }
 
@@ -369,7 +357,9 @@ private fun InvoiceRideCard(
 
     Card(
 
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = onClick),
+        onClick = onClick,
+
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
 
         shape = RoundedCornerShape(16.dp),
 
@@ -433,7 +423,7 @@ private fun InvoiceRideCard(
 
                 Text(
 
-                    text = String.format("%.2f €", ride.price),
+                    text = String.format(Locale.getDefault(), "%.2f €", ride.price),
 
                     style = drawTaxiType().titleMedium,
 
@@ -479,7 +469,9 @@ fun InvoiceDetailScreen(
 
     onBack: () -> Unit,
 
-    brandColor: Color
+    brandColor: Color,
+
+    coutParKmDeplacement: Double = 0.10
 
 ) {
 
@@ -499,7 +491,7 @@ fun InvoiceDetailScreen(
 
     val profitability = if (ride.price > 0) {
 
-        RideRequest.calculateProfitability(ride.price, ride.fuelCost.takeIf { it > 0 } ?: ride.distanceKm * 0.3 * 0.15)
+        RideRequest.calculateProfitability(ride.price, ride.fuelCost.takeIf { it > 0 } ?: ride.distanceKm * 0.3 * coutParKmDeplacement)
 
     } else 0.0
 
@@ -557,7 +549,7 @@ fun InvoiceDetailScreen(
 
                         InfoRow(label = "Heure", value = ride.time)
 
-                        InfoRow(label = "Distance", value = String.format("%.1f km", ride.distanceKm))
+                        InfoRow(label = "Distance", value = String.format(Locale.getDefault(), "%.1f km", ride.distanceKm))
 
                         InfoRow(label = "Durée", value = if (ride.durationMinutes > 0) "${ride.durationMinutes} min" else "—")
 
@@ -567,11 +559,11 @@ fun InvoiceDetailScreen(
 
                         
 
-                        InfoRow(label = "Prix", value = String.format("%.2f €", ride.price), bold = true)
+                        InfoRow(label = "Prix", value = String.format(Locale.getDefault(), "%.2f €", ride.price), bold = true)
 
-                        InfoRow(label = "Déplacement", value = String.format("%.2f €", ride.fuelCost.takeIf { it > 0 } ?: ride.distanceKm * 0.3 * 0.15))
+                        InfoRow(label = "Déplacement", value = String.format(Locale.getDefault(), "%.2f €", ride.fuelCost.takeIf { it > 0 } ?: ride.distanceKm * 0.3 * 0.15))
 
-                        InfoRow(label = "Rentabilité", value = String.format("%.0f%%", profitability), bold = true)
+                        InfoRow(label = "Rentabilité", value = String.format(Locale.getDefault(), "%.0f%%", profitability), bold = true)
                     }
 
                 }
@@ -590,56 +582,32 @@ fun InvoiceDetailScreen(
 
                         
 
-                        OutlinedTextField(
-
+                        DrawTaxiTextField(
                             value = clientName,
-
                             onValueChange = { clientName = it },
-
-                            label = { Text("Nom du client") },
-
+                            label = "Nom du client",
                             modifier = Modifier.fillMaxWidth(),
-
-                            shape = RoundedCornerShape(12.dp),
-
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
-
+                            leadingIcon = { DrawTaxiIcon(Icons.Default.Person, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp)) }
                         )
 
 
 
-                        OutlinedTextField(
-
+                        DrawTaxiTextField(
                             value = clientEmail,
-
                             onValueChange = { clientEmail = it },
-
-                            label = { Text("Email client") },
-
+                            label = "Email client",
                             modifier = Modifier.fillMaxWidth(),
-
-                            shape = RoundedCornerShape(12.dp),
-
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) }
-
+                            leadingIcon = { DrawTaxiIcon(Icons.Default.Email, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp)) }
                         )
 
 
 
-                        OutlinedTextField(
-
+                        DrawTaxiTextField(
                             value = clientAddress,
-
                             onValueChange = { clientAddress = it },
-
-                            label = { Text("Adresse client (optionnel)") },
-
+                            label = "Adresse client (optionnel)",
                             modifier = Modifier.fillMaxWidth(),
-
-                            shape = RoundedCornerShape(12.dp),
-
-                            leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) }
-
+                            leadingIcon = { DrawTaxiIcon(Icons.Default.Home, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp)) }
                         )
 
 
@@ -664,20 +632,13 @@ fun InvoiceDetailScreen(
 
                         
 
-                        OutlinedTextField(
-
+                        DrawTaxiTextField(
                             value = invoiceNumber,
-
                             onValueChange = { invoiceNumber = it },
-
-                            label = { Text("N° facture (ex: F-2024-001)") },
-
+                            label = "N° facture",
+                            placeholder = "F-2024-001",
                             modifier = Modifier.fillMaxWidth(),
-
-                            shape = RoundedCornerShape(12.dp),
-
-                            leadingIcon = { Icon(Icons.Default.Tag, contentDescription = null) }
-
+                            leadingIcon = { DrawTaxiIcon(Icons.Default.Tag, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp)) }
                         )
 
                     }
@@ -698,18 +659,13 @@ fun InvoiceDetailScreen(
 
                         
 
-                        OutlinedTextField(
-
+                        DrawTaxiTextField(
                             value = notes,
-
                             onValueChange = { notes = it },
-
-                            label = { Text("Notes pour la facture") },
-
+                            label = "Notes pour la facture",
                             modifier = Modifier.fillMaxWidth().height(100.dp),
-
-                            shape = RoundedCornerShape(12.dp)
-
+                            singleLine = false,
+                            maxLines = 4
                         )
 
                     }
@@ -748,13 +704,13 @@ fun InvoiceDetailScreen(
 
                         KolectoDataItem(label = "Trajet", value = "${ride.departure} → ${ride.arrival}")
 
-                        KolectoDataItem(label = "Montant HT", value = String.format("%.2f €", ride.price / 1.10))
+                        KolectoDataItem(label = "Montant HT", value = String.format(Locale.getDefault(), "%.2f €", ride.price / 1.10))
 
-                        KolectoDataItem(label = "TVA (10%)", value = String.format("%.2f €", ride.price - (ride.price / 1.10)))
+                        KolectoDataItem(label = "TVA (10%)", value = String.format(Locale.getDefault(), "%.2f €", ride.price - (ride.price / 1.10)))
 
-                        KolectoDataItem(label = "Montant TTC", value = String.format("%.2f €", ride.price), bold = true)
+                        KolectoDataItem(label = "Montant TTC", value = String.format(Locale.getDefault(), "%.2f €", ride.price), bold = true)
 
-                        KolectoDataItem(label = "Distance", value = String.format("%.1f km", ride.distanceKm))
+                        KolectoDataItem(label = "Distance", value = String.format(Locale.getDefault(), "%.1f km", ride.distanceKm))
 
                     }
 

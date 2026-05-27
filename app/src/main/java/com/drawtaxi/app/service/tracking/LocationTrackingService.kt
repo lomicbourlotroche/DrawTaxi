@@ -10,31 +10,41 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.location.Location
-import android.location.LocationManager
 import android.os.Binder
-import android.os.Build
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.MainActivity
 import com.drawtaxi.app.logic.messaging.NotificationHelper
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import org.maplibre.navigation.core.location.engine.LocationEngine
+import org.maplibre.navigation.core.location.engine.LocationEngineProvider
+import org.maplibre.navigation.core.location.toAndroidLocation
+import java.util.Locale
 
+/**
+ * Service de suivi GPS en arrière-plan pour calculer la distance d'une course.
+ * Utilise MapLibre LocationEngine pour une meilleure précision et cohérence avec la navigation.
+ */
 class LocationTrackingService : Service() {
 
     private val binder = LocalBinder()
-    private lateinit var locationManager: LocationManager
-    private var locationListener: android.location.LocationListener? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    
+    private lateinit var locationEngine: LocationEngine
+    private var locationJob: Job? = null
 
     private val _currentLocation = MutableStateFlow<Location?>(null)
-    val currentLocation: StateFlow<Location?> = _currentLocation
+    val currentLocation: StateFlow<Location?> = _currentLocation.asStateFlow()
 
     private val _locationHistory = MutableStateFlow<List<Location>>(emptyList())
-    val locationHistory: StateFlow<List<Location>> = _locationHistory
+    val locationHistory: StateFlow<List<Location>> = _locationHistory.asStateFlow()
+
+    private val _totalDistanceMeters = MutableStateFlow(0f)
+    val totalDistanceMeters: StateFlow<Float> = _totalDistanceMeters.asStateFlow()
 
     private var isTracking = false
     private var currentRideId: String? = null
@@ -45,9 +55,9 @@ class LocationTrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        locationEngine = LocationEngineProvider.getBestLocationEngine(this)
         createNotificationChannel()
-        Log.d(TAG, "Service créé")
+        Log.d(TAG, "Service de suivi créé")
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -68,34 +78,25 @@ class LocationTrackingService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopTracking()
-        Log.d(TAG, "Service détruit")
+        serviceScope.cancel()
+        Log.d(TAG, "Service de suivi détruit")
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NotificationHelper.CHANNEL_ID_LOCATION,
-                "Suivi GPS",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Suivi GPS actif pour la course en cours"
-                setShowBadge(false)
-            }
-
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            NotificationHelper.CHANNEL_ID_LOCATION,
+            "Suivi GPS",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Suivi GPS actif pour la course en cours"
+            setShowBadge(false)
         }
+
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.createNotificationChannel(channel)
     }
 
-    companion object {
-        private const val TAG = "LocationService"
-        private const val NOTIFICATION_ID = 1004
-        const val ACTION_START = "ACTION_START"
-        const val ACTION_STOP = "ACTION_STOP"
-        const val EXTRA_RIDE_ID = "EXTRA_RIDE_ID"
-    }
-
-    private fun createNotification(): Notification {
+    private fun createNotification(distanceMeters: Float = 0f): Notification {
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
@@ -113,31 +114,32 @@ class LocationTrackingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val distanceText = if (distanceMeters > 0) {
+            val km = distanceMeters / 1000f
+            String.format(Locale.getDefault(), " - %.2f km", km)
+        } else ""
+
         return NotificationCompat.Builder(this, NotificationHelper.CHANNEL_ID_LOCATION)
             .setContentTitle("Course en cours")
-            .setContentText("Suivi GPS actif")
+            .setContentText("Suivi GPS actif$distanceText")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Arrêter",
+                "Arrêter la course",
                 stopPendingIntent
             )
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
     private fun startTracking() {
         if (isTracking) return
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                Log.w(TAG, "Permission POST_NOTIFICATIONS non accordée")
-            }
-        }
-
+        // Vérification des permissions
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Permission ACCESS_FINE_LOCATION non accordée")
@@ -147,63 +149,82 @@ class LocationTrackingService : Service() {
 
         isTracking = true
         _locationHistory.value = emptyList()
-
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            createNotification(),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-        )
-
-        locationListener = android.location.LocationListener { location ->
-            _currentLocation.value = location
-            _locationHistory.value = _locationHistory.value + location
-            Log.d(TAG, "Location: ${location.latitude}, ${location.longitude}")
-        }
+        _totalDistanceMeters.value = 0f
 
         try {
-            locationManager.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                5000L,
-                0f,
-                locationListener!!,
-                Looper.getMainLooper()
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                createNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
             )
-            locationManager.requestLocationUpdates(
-                LocationManager.NETWORK_PROVIDER,
-                5000L,
-                0f,
-                locationListener!!,
-                Looper.getMainLooper()
-            )
-            Log.d(TAG, "Suivi GPS démarré")
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Erreur permission: ${e.message}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erreur startForeground: ${e.message}")
+            // Sur Android 14+, peut échouer si démarré depuis l'arrière-plan sans privilèges
         }
+
+        locationJob?.cancel()
+        locationJob = serviceScope.launch {
+            locationEngine.listenToLocation(
+                LocationEngine.Request(
+                    minIntervalMilliseconds = 3000,
+                    maxIntervalMilliseconds = 8000,
+                    accuracy = LocationEngine.Request.Accuracy.HIGH
+                )
+            ).collect { navLocation ->
+                handleNewLocation(navLocation.toAndroidLocation())
+            }
+        }
+        
+        Log.d(TAG, "Suivi GPS démarré")
+    }
+
+    private fun handleNewLocation(location: Location) {
+        // Filtrage de base pour éviter le "jitter" GPS
+        if (location.accuracy > 30) return // On ignore les points trop imprécis
+
+        val lastLocation = _currentLocation.value
+        
+        if (lastLocation != null) {
+            val distance = lastLocation.distanceTo(location)
+            
+            // On ignore les micro-mouvements (souvent du bruit GPS à l'arrêt)
+            if (distance < 2.0) return 
+            
+            _totalDistanceMeters.update { it + distance }
+        }
+
+        _currentLocation.value = location
+        _locationHistory.update { it + location }
+        
+        // Mise à jour de la notification avec la distance actuelle
+        updateNotification(_totalDistanceMeters.value)
+        
+        Log.d(TAG, "Location: ${location.latitude}, ${location.longitude} - Distance Totale: ${_totalDistanceMeters.value}m")
+    }
+
+    private fun updateNotification(distanceMeters: Float) {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.notify(NOTIFICATION_ID, createNotification(distanceMeters))
     }
 
     private fun stopTracking() {
         if (!isTracking) return
         isTracking = false
 
-        locationListener?.let { listener ->
-            locationManager.removeUpdates(listener)
-        }
-        locationListener = null
+        locationJob?.cancel()
+        locationJob = null
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         Log.d(TAG, "Suivi GPS arrêté")
     }
 
-    fun getTotalDistance(): Float {
-        val locations = _locationHistory.value
-        if (locations.size < 2) return 0f
-
-        var totalDistance = 0f
-        for (i in 1 until locations.size) {
-            totalDistance += locations[i - 1].distanceTo(locations[i])
-        }
-        return totalDistance
+    companion object {
+        private const val TAG = "LocationService"
+        private const val NOTIFICATION_ID = 1004
+        const val ACTION_START = "ACTION_START"
+        const val ACTION_STOP = "ACTION_STOP"
+        const val EXTRA_RIDE_ID = "EXTRA_RIDE_ID"
     }
 }

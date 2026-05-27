@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,9 +22,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
-
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.drawtaxi.app.ui.components.core.DrawTaxiText
 import com.drawtaxi.app.ui.theme.*
 
 @Composable
@@ -80,4 +82,24 @@ fun DrawTaxiCard(
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRect(color: Color) {
     drawRect(color = color, size = size)
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiCardPreview() {
+    DrawTaxiTheme {
+        DrawTaxiCard {
+            DrawTaxiText(text = "Contenu de la carte")
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiCardClickablePreview() {
+    DrawTaxiTheme {
+        DrawTaxiCard(onClick = {}) {
+            DrawTaxiText(text = "Carte cliquable")
+        }
+    }
 }

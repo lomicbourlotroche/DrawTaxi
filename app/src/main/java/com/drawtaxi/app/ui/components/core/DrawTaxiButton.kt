@@ -28,6 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
+import com.drawtaxi.app.ui.components.core.DrawTaxiText
 import com.drawtaxi.app.ui.theme.*
 
 @Composable
@@ -163,5 +165,44 @@ fun DrawTaxiOutlinedButton(
             verticalAlignment = Alignment.CenterVertically,
             content = content
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiButtonPreview() {
+    DrawTaxiTheme {
+        DrawTaxiButton(
+            onClick = { /* Do nothing */ },
+            enabled = true
+        ) {
+            DrawTaxiText("Button")
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiSolidButtonPreview() {
+    DrawTaxiTheme {
+        DrawTaxiSolidButton(
+            onClick = { /* Do nothing */ },
+            enabled = true
+        ) {
+            DrawTaxiText("Solid Button")
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiOutlinedButtonPreview() {
+    DrawTaxiTheme {
+        DrawTaxiOutlinedButton(
+            onClick = { /* Do nothing */ },
+            enabled = true
+        ) {
+            DrawTaxiText("Outlined Button")
+        }
     }
 }

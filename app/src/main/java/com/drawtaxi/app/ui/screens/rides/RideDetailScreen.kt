@@ -1,10 +1,13 @@
 package com.drawtaxi.app.ui.screens.rides
 
+import java.util.Locale
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,7 +46,6 @@ fun RideDetailScreen(
 ) {
     val context = LocalContext.current
     val brandColor = settings.brandColor
-    var showTemplateDialog by remember { mutableStateOf(false) }
 
     // Calcul de rentabilité basé sur le prix réel de la course
     val actualPrice = ride.price.takeIf { it > 0 } ?: run {
@@ -80,26 +83,34 @@ fun RideDetailScreen(
         topBar = {
             DrawTaxiTopBar(
                 title = {
-                    Column {
-                        Text("Course", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text(ride.date.ifBlank { "" }, style = drawTaxiType().labelSmall, color = Slate500)
-                    }
+                    DrawTaxiTopBarTitle(
+                        text = "Course",
+                        subtitle = ride.date.ifBlank { null }
+                    )
                 },
                 navigationIcon = {
                     DrawTaxiIconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Retour",
+                            tint = drawTaxiColors().onSurface
+                        )
                     }
                 },
                 actions = {
                     if (isPending) {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text("En attente") },
-                            colors = AssistChipDefaults.assistChipColors(
-                                containerColor = drawTaxiColors().tertiaryContainer,
-                                labelColor = drawTaxiColors().onTertiaryContainer
+                        Surface(
+                            color = Green500.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                "En attente",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = drawTaxiType().labelSmall,
+                                color = Green500,
+                                fontWeight = FontWeight.Bold
                             )
-                        )
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                 },
@@ -107,59 +118,53 @@ fun RideDetailScreen(
             )
         },
         bottomBar = {
-            DrawTaxiSurface(shadowElevation = 8.dp, color = drawTaxiColors().surface) {
+            DrawTaxiSurface(
+                modifier = Modifier.fillMaxWidth(),
+                color = drawTaxiColors().surface,
+                shadowElevation = 16.dp,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                        .navigationBarsPadding(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    FilledIconButton(
+                    DrawTaxiIconButton(
                         onClick = { onDelete(ride); onBack() },
-                        modifier = Modifier.size(48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = drawTaxiColors().errorContainer,
-                            contentColor = drawTaxiColors().error
-                        )
+                        modifier = Modifier.background(Red500.copy(alpha = 0.1f), RoundedCornerShape(14.dp)),
+                        shape = RoundedCornerShape(14.dp)
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Supprimer")
+                        Icon(Icons.Default.Delete, contentDescription = "Supprimer", tint = Red500)
                     }
 
-                    FilledIconButton(
+                    DrawTaxiIconButton(
                         onClick = { onEdit(ride) },
-                        modifier = Modifier.size(48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = brandColor.copy(alpha = 0.1f),
-                            contentColor = brandColor
-                        )
+                        modifier = Modifier.background(brandColor.copy(alpha = 0.1f), RoundedCornerShape(14.dp)),
+                        shape = RoundedCornerShape(14.dp)
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = "Modifier")
+                        Icon(Icons.Default.Edit, contentDescription = "Modifier", tint = brandColor)
                     }
 
-                    if (isPending) {
+                    if (isPending || ride.status == com.drawtaxi.app.data.RideStatus.CONFIRMED || 
+                        ride.status == com.drawtaxi.app.data.RideStatus.IN_PROGRESS) {
                         DrawTaxiSolidButton(
                             onClick = { onStartRide(ride) },
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            containerColor = Color(0xFF4CAF50)
+                            modifier = Modifier.weight(1f),
+                            containerColor = if (ride.status == com.drawtaxi.app.data.RideStatus.IN_PROGRESS) brandColor else Green500
                         ) {
-                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(
+                                if (ride.status == com.drawtaxi.app.data.RideStatus.IN_PROGRESS) Icons.Default.Check else Icons.Default.Navigation,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Commencer", fontWeight = FontWeight.Bold)
-                        }
-                    } else if (ride.status == com.drawtaxi.app.data.RideStatus.CONFIRMED || 
-                               ride.status == com.drawtaxi.app.data.RideStatus.IN_PROGRESS) {
-                        // Course confirmée → Démarrer la navigation
-                        DrawTaxiSolidButton(
-                            onClick = { onStartRide(ride) },
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            containerColor = Color(0xFF4CAF50)
-                        ) {
-                            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Démarrer", fontWeight = FontWeight.Bold)
+                            Text(
+                                if (ride.status == com.drawtaxi.app.data.RideStatus.IN_PROGRESS) "Terminer" else "Commencer",
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -167,47 +172,72 @@ fun RideDetailScreen(
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())
-                .background(drawTaxiColors().background).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .background(drawTaxiColors().background)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (isPending && ride.departure.isNotBlank()) {
-                RouteToClientMap(pickupAddress = ride.departure, brandColor = brandColor)
+            val isPreview = LocalInspectionMode.current
+            
+            // Une seule section de carte qui s'adapte au statut
+            if (isPreview) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(Slate100, RoundedCornerShape(24.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Aperçu de la carte", color = Slate400, style = drawTaxiType().bodyMedium)
+                }
+            } else {
+                if (isPending && ride.departure.isNotBlank()) {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        RouteToClientMap(pickupAddress = ride.departure, brandColor = brandColor)
+                    }
+                } else {
+                    RideDetailMapSection(departure = ride.departure, arrival = ride.arrival, brandColor = brandColor)
+                }
             }
 
-            RideDetailMapSection(departure = ride.departure, arrival = ride.arrival, brandColor = brandColor)
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                RideDetailClientCard(
+                    ride = ride,
+                    brandColor = brandColor,
+                    onCall = {
+                        val intent = Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:${ride.sender}") }
+                        context.startActivity(intent)
+                    },
+                    onMessage = { message ->
+                        com.drawtaxi.app.logic.sms.SmsUtils.sendSms(context, ride.sender, message)
+                    },
+                    onShareLocation = onShareLocation,
+                    messageTemplates = settings.messageTemplates
+                )
 
-            RideDetailClientCard(
-                ride = ride,
-                brandColor = brandColor,
-                onCall = {
-                    val intent = Intent(Intent.ACTION_DIAL).apply { data = Uri.parse("tel:${ride.sender}") }
-                    context.startActivity(intent)
-                },
-                onMessage = { message ->
-                    com.drawtaxi.app.logic.sms.SmsUtils.sendSms(context, ride.sender, message)
-                },
-                onShareLocation = onShareLocation,
-                messageTemplates = settings.messageTemplates,
-                showTemplates = { showTemplateDialog = true }
-            )
+                RideDetailTripCard(ride = ride, brandColor = brandColor)
 
-            RideDetailTripCard(ride = ride, brandColor = brandColor)
+                RideDetailPriceCard(ride = ride, settings = settings, brandColor = brandColor)
 
-            RideDetailPriceCard(ride = ride, settings = settings, brandColor = brandColor)
+                RideDetailProfitabilityCard(
+                    ride = ride,
+                    profitability = profitability,
+                    netProfit = netProfit,
+                    coutDeplacement = coutDeplacement,
+                    distanceDomicileKm = distanceDomicileKm,
+                    totalPrice = actualPrice,
+                    brandColor = brandColor
+                )
+            }
 
-            // Afficher la rentabilité calculée avec le prix réel de la course
-            RideDetailProfitabilityCard(
-                ride = ride,
-                profitability = profitability,
-                netProfit = netProfit,
-                coutDeplacement = coutDeplacement,
-                distanceDomicileKm = distanceDomicileKm,
-                totalPrice = actualPrice,
-                brandColor = brandColor
-            )
-
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -230,56 +260,72 @@ fun RideDetailProfitabilityCard(
 
     DrawTaxiSurface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         color = drawTaxiColors().surface,
         shadowElevation = 2.dp
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Analytics, contentDescription = null, tint = brandColor, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = brandColor.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Analytics, contentDescription = null, tint = brandColor, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text("Rentabilité", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                 }
                 Text(
-                    text = "${String.format("%.0f", profitability)}%",
-                    style = drawTaxiType().headlineMedium,
+                    text = "${String.format(Locale.getDefault(), "%.0f", profitability)}%",
+                    style = drawTaxiType().headlineSmall,
                     fontWeight = FontWeight.Black,
                     color = profitColor
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ProfitabilityStatItem(label = "Prix TTC", value = String.format("%.2f €", totalPrice), modifier = Modifier.weight(1f))
-                ProfitabilityStatItem(label = "Déplacement", value = String.format("%.2f €", coutDeplacement), modifier = Modifier.weight(1f))
-                ProfitabilityStatItem(label = "Distance domicile", value = String.format("%.1f km", distanceDomicileKm), modifier = Modifier.weight(1f))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ProfitabilityStatItem(label = "Prix TTC", value = String.format(Locale.getDefault(), "%.2f €", totalPrice), modifier = Modifier.weight(1f))
+                ProfitabilityStatItem(label = "Coûts", value = String.format(Locale.getDefault(), "%.2f €", coutDeplacement), modifier = Modifier.weight(1f))
+                ProfitabilityStatItem(label = "Distance", value = String.format(Locale.getDefault(), "%.1f km", distanceDomicileKm), modifier = Modifier.weight(1f))
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+            DrawTaxiDivider(color = drawTaxiColors().outlineVariant.copy(alpha = 0.5f))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Bénéfice net", style = drawTaxiType().bodyMedium, color = Slate500)
-                Text(
-                    text = String.format("%.2f €", netProfit),
-                    style = drawTaxiType().titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (netProfit > 0) Green500 else Red500
-                )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Bénéfice net", style = drawTaxiType().bodyMedium, color = Slate500, fontWeight = FontWeight.Medium)
+                Surface(
+                    color = (if (netProfit > 0) Green500 else Red500).copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = String.format(Locale.getDefault(), "%.2f €", netProfit),
+                        style = drawTaxiType().titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (netProfit > 0) Green500 else Red500,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
 
             if (ride.durationMinutes > 0) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Revenu/heure", style = drawTaxiType().bodyMedium, color = Slate500)
+                    Text("Revenu / heure", style = drawTaxiType().bodyMedium, color = Slate500, fontWeight = FontWeight.Medium)
                     Text(
-                        text = String.format("%.2f €/h", (ride.price / ride.durationMinutes) * 60),
-                        style = drawTaxiType().titleMedium,
+                        text = String.format(Locale.getDefault(), "%.2f €/h", (ride.price / ride.durationMinutes) * 60),
+                        style = drawTaxiType().bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = brandColor
                     )
@@ -291,9 +337,20 @@ fun RideDetailProfitabilityCard(
 
 @Composable
 private fun ProfitabilityStatItem(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = value, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = Slate800)
-        Text(text = label, style = drawTaxiType().labelSmall, color = Slate500)
+    Surface(
+        modifier = modifier,
+        color = Slate50,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(text = value, style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Bold, color = Slate800)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = label, style = drawTaxiType().labelSmall, color = Slate500, fontSize = 10.sp)
+        }
     }
 }
 
@@ -305,52 +362,85 @@ fun RideDetailClientCard(
     onCall: () -> Unit,
     onMessage: (String) -> Unit,
     onShareLocation: (() -> Unit)? = null,
-    messageTemplates: List<String> = emptyList(),
-    showTemplates: () -> Unit = {}
+    messageTemplates: List<String> = emptyList()
 ) {
     var showTemplateSheet by remember { mutableStateOf(false) }
     
-    DrawTaxiSurface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = drawTaxiColors().surface, shadowElevation = 2.dp) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    DrawTaxiSurface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = drawTaxiColors().surface,
+        shadowElevation = 2.dp
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    DrawTaxiSurface(shape = RoundedCornerShape(12.dp), color = brandColor.copy(alpha = 0.1f), modifier = Modifier.size(48.dp)) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Text(text = (ride.clientName.ifBlank { ride.sender }).take(2).uppercase(), fontWeight = FontWeight.Bold, color = brandColor)
+                    Surface(
+                        shape = CircleShape,
+                        color = brandColor.copy(alpha = 0.1f),
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = (ride.clientName.ifBlank { ride.sender }).take(2).uppercase(),
+                                fontWeight = FontWeight.Black,
+                                color = brandColor,
+                                style = drawTaxiType().titleLarge
+                            )
                         }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text(text = ride.clientName.ifBlank { "Client" }, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
-                        Text(text = ride.sender, style = drawTaxiType().bodySmall, color = drawTaxiColors().onSurfaceVariant)
+                        Text(
+                            text = ride.clientName.ifBlank { "Client" },
+                            style = drawTaxiType().titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Slate900
+                        )
+                        Text(
+                            text = ride.sender,
+                            style = drawTaxiType().bodyMedium,
+                            color = Slate500
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DrawTaxiSolidButton(onClick = onCall, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                    Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Appeler", fontSize = drawTaxiType().labelMedium.fontSize)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                DrawTaxiSolidButton(
+                    onClick = onCall,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = brandColor
+                ) {
+                    Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Appeler", fontWeight = FontWeight.Bold)
                 }
-                DrawTaxiSolidButton(onClick = { showTemplateSheet = true }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Message", fontSize = drawTaxiType().labelMedium.fontSize)
+                DrawTaxiOutlinedButton(
+                    onClick = { showTemplateSheet = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    contentColor = brandColor,
+                    borderColor = brandColor.copy(alpha = 0.2f)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Message", fontWeight = FontWeight.Bold)
                 }
                 if (onShareLocation != null) {
-                    DrawTaxiSolidButton(
+                    DrawTaxiIconButton(
                         onClick = onShareLocation,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        containerColor = drawTaxiColors().tertiaryContainer,
-                        contentColor = drawTaxiColors().onTertiaryContainer
+                        modifier = Modifier.background(brandColor.copy(alpha = 0.1f), RoundedCornerShape(16.dp)),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("GPS", fontSize = drawTaxiType().labelMedium.fontSize)
+                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = brandColor)
                     }
                 }
             }
@@ -396,56 +486,82 @@ fun RideDetailClientCard(
 
 @Composable
 fun RideDetailTripCard(ride: RideRequest, brandColor: Color) {
-    DrawTaxiSurface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = drawTaxiColors().surface, shadowElevation = 2.dp) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    DrawTaxiSurface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = drawTaxiColors().surface,
+        shadowElevation = 2.dp
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Schedule, contentDescription = null, tint = brandColor, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = brandColor.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Schedule, contentDescription = null, tint = brandColor, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(text = ride.time.ifBlank { "—" }, style = drawTaxiType().headlineSmall, fontWeight = FontWeight.Bold, color = brandColor)
                 }
                 if (ride.date.isNotBlank()) {
-                    DrawTaxiSurface(shape = RoundedCornerShape(8.dp), color = drawTaxiColors().surfaceVariant) {
-                        Text(text = ride.date, style = drawTaxiType().labelMedium, color = drawTaxiColors().onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                    Surface(
+                        color = Slate100,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = ride.date,
+                            style = drawTaxiType().labelSmall,
+                            color = Slate600,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    DrawTaxiSurface(modifier = Modifier.size(12.dp), shape = RoundedCornerShape(6.dp), color = Green500) {}
-                    DrawTaxiSurface(modifier = Modifier.width(2.dp).height(40.dp), color = drawTaxiColors().outlineVariant) {}
-                    DrawTaxiSurface(modifier = Modifier.size(12.dp), shape = RoundedCornerShape(6.dp), color = brandColor) {}
+            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 4.dp).fillMaxHeight()) {
+                    Surface(modifier = Modifier.size(10.dp), shape = CircleShape, color = Green500) {}
+                    Box(modifier = Modifier.width(2.dp).weight(1f).background(Slate100))
+                    Surface(modifier = Modifier.size(10.dp), shape = CircleShape, color = brandColor) {}
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Column(modifier = Modifier.padding(bottom = 32.dp)) {
-                        Text(text = "DÉPART", style = drawTaxiType().labelSmall, color = drawTaxiColors().onSurfaceVariant, fontWeight = FontWeight.Medium)
-                        Text(text = ride.departure.ifBlank { "—" }, style = drawTaxiType().bodyLarge, fontWeight = FontWeight.Medium)
+                Column(verticalArrangement = Arrangement.spacedBy(28.dp)) {
+                    Column {
+                        Text(text = "DÉPART", style = drawTaxiType().labelSmall, color = Slate400, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                        Text(text = ride.departure.ifBlank { "—" }, style = drawTaxiType().bodyLarge, fontWeight = FontWeight.SemiBold, color = Slate900)
                     }
                     Column {
-                        Text(text = "ARRIVÉE", style = drawTaxiType().labelSmall, color = drawTaxiColors().onSurfaceVariant, fontWeight = FontWeight.Medium)
-                        Text(text = ride.arrival.ifBlank { "—" }, style = drawTaxiType().bodyLarge, fontWeight = FontWeight.Medium)
+                        Text(text = "ARRIVÉE", style = drawTaxiType().labelSmall, color = Slate400, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                        Text(text = ride.arrival.ifBlank { "—" }, style = drawTaxiType().bodyLarge, fontWeight = FontWeight.SemiBold, color = brandColor)
                     }
                 }
             }
 
             if (ride.distanceKm > 0) {
-                Spacer(modifier = Modifier.height(16.dp))
-                DrawTaxiDivider(color = drawTaxiColors().outlineVariant)
+                Spacer(modifier = Modifier.height(24.dp))
+                DrawTaxiDivider(color = drawTaxiColors().outlineVariant.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Route, contentDescription = null, tint = drawTaxiColors().onSurfaceVariant, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "${String.format("%.1f", ride.distanceKm)} km", style = drawTaxiType().bodyMedium, color = drawTaxiColors().onSurfaceVariant)
+                        Icon(Icons.Default.Route, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "${String.format(Locale.getDefault(), "%.1f", ride.distanceKm)} km", style = drawTaxiType().bodyMedium, color = Slate700, fontWeight = FontWeight.Medium)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Place, contentDescription = null, tint = drawTaxiColors().onSurfaceVariant, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "~${((ride.distanceKm * 2).toInt())} min", style = drawTaxiType().bodyMedium, color = Slate600)
+                        Icon(Icons.Default.Place, contentDescription = null, tint = Slate500, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "~${((ride.distanceKm * 2).toInt())} min", style = drawTaxiType().bodyMedium, color = Slate700, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -460,44 +576,70 @@ fun RideDetailPriceCard(ride: RideRequest, settings: AppSettings, brandColor: Co
     val calculatedPrice = basePrice + (ride.distanceKm * perKm)
     val displayedPrice = if (ride.price > 0) ride.price else calculatedPrice
 
-    DrawTaxiSurface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = drawTaxiColors().surface, shadowElevation = 2.dp) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    DrawTaxiSurface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = drawTaxiColors().surface,
+        shadowElevation = 2.dp
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = brandColor, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = brandColor.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Payments, contentDescription = null, tint = brandColor, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "Prix", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
                 }
                 Text(
-                    text = if (displayedPrice > 0) String.format("%.2f €", displayedPrice) else "—",
+                    text = if (displayedPrice > 0) String.format(Locale.getDefault(), "%.2f €", displayedPrice) else "—",
                     style = drawTaxiType().headlineMedium,
                     fontWeight = FontWeight.Black,
-                    color = if (displayedPrice > 0) brandColor else drawTaxiColors().onSurfaceVariant
+                    color = if (displayedPrice > 0) brandColor else Slate400
                 )
             }
 
             if (ride.price == 0.0 && ride.distanceKm > 0) {
-                Spacer(modifier = Modifier.height(16.dp))
-                DrawTaxiDivider(color = drawTaxiColors().outlineVariant)
+                Spacer(modifier = Modifier.height(20.dp))
+                DrawTaxiDivider(color = drawTaxiColors().outlineVariant.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(16.dp))
 
-                PriceRow("Prise en charge", String.format("%.2f €", basePrice))
-                PriceRow("${String.format("%.1f", ride.distanceKm)} km × ${String.format("%.2f", perKm)} €/km", String.format("%.2f €", ride.distanceKm * perKm))
+                PriceRow("Prise en charge", String.format(Locale.getDefault(), "%.2f €", basePrice))
+                PriceRow("${String.format(Locale.getDefault(), "%.1f", ride.distanceKm)} km × ${String.format(Locale.getDefault(), "%.2f", perKm)} €/km", String.format(Locale.getDefault(), "%.2f €", ride.distanceKm * perKm))
                 
-                Spacer(modifier = Modifier.height(8.dp))
-                DrawTaxiDivider(color = drawTaxiColors().outlineVariant)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                DrawTaxiDivider(color = drawTaxiColors().outlineVariant.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(12.dp))
                 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(text = "TOTAL ESTIMÉ", style = drawTaxiType().labelMedium, fontWeight = FontWeight.Bold, color = drawTaxiColors().onSurfaceVariant)
-                    Text(text = String.format("%.2f €", displayedPrice), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
+                    Text(text = "TOTAL ESTIMÉ", style = drawTaxiType().labelSmall, fontWeight = FontWeight.Bold, color = Slate500)
+                    Text(text = String.format(Locale.getDefault(), "%.2f €", displayedPrice), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = brandColor)
                 }
             }
 
             if (ride.price > 0) {
-                Spacer(modifier = Modifier.height(12.dp))
-                DrawTaxiSurface(shape = RoundedCornerShape(8.dp), color = drawTaxiColors().tertiaryContainer) {
-                    Text(text = "Prix confirmé", style = drawTaxiType().labelSmall, color = drawTaxiColors().onTertiaryContainer, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    color = Green500.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "Prix confirmé",
+                        style = drawTaxiType().labelSmall,
+                        color = Green500,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -515,7 +657,6 @@ private fun PriceRow(label: String, value: String) {
 @Preview(showBackground = true)
 @Composable
 fun RideDetailScreenPreview() {
-    val sampleSettings = AppSettings()
     val sampleRide = RideRequest(
         id = "1",
         sender = "0612345678",
@@ -526,12 +667,14 @@ fun RideDetailScreenPreview() {
         price = 45.0,
         distanceKm = 18.5
     )
-    DrawTaxiTheme {
+    DrawTaxiTheme(brandColor = Indigo500) {
         RideDetailScreen(
             ride = sampleRide,
             onBack = {},
             onDelete = {},
-            settings = sampleSettings
+            settings = AppSettings(brandColor = Indigo500),
+            onShareLocation = {},
+            isPending = true
         )
     }
 }

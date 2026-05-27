@@ -1,5 +1,7 @@
 package com.drawtaxi.app.ui.screens.settings
 
+import androidx.core.net.toUri
+
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -141,13 +143,13 @@ fun ClientDirectoryScreen(
                         brandColor = brandColor,
                         onCall = {
                             val intent = Intent(Intent.ACTION_DIAL).apply {
-                                data = Uri.parse("tel:${client.phone}")
+                                data = "tel:${client.phone}".toUri()
                             }
                             context.startActivity(intent)
                         },
                         onSms = {
                             val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                data = Uri.parse("sms:${client.phone}")
+                                data = "sms:${client.phone}".toUri()
                             }
                             context.startActivity(intent)
                         },
@@ -236,7 +238,7 @@ private fun ClientCard(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = String.format("%.2f €", client.totalAmount),
+                        text = String.format(Locale.getDefault(), "%.2f €", client.totalAmount),
                         style = drawTaxiType().labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Green600
@@ -312,7 +314,7 @@ private fun ClientDetailBottomSheet(
                 DrawTaxiOutlinedButton(
                     onClick = {
                         val intent = Intent(Intent.ACTION_DIAL).apply {
-                            data = Uri.parse("tel:${client.phone}")
+                            data = "tel:${client.phone}".toUri()
                         }
                         context.startActivity(intent)
                     },
@@ -325,7 +327,7 @@ private fun ClientDetailBottomSheet(
                 DrawTaxiOutlinedButton(
                     onClick = {
                         val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("sms:${client.phone}")
+                            data = "sms:${client.phone}".toUri()
                         }
                         context.startActivity(intent)
                     },
@@ -360,7 +362,7 @@ private fun ClientDetailBottomSheet(
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = String.format("%.2f €", client.totalAmount),
+                            text = String.format(Locale.getDefault(), "%.2f €", client.totalAmount),
                             style = drawTaxiType().headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = Green600
@@ -414,7 +416,7 @@ private fun ClientDetailBottomSheet(
                                 )
                             }
                             Text(
-                                text = if (ride.price > 0) String.format("%.2f €", ride.price) else "—",
+                                text = if (ride.price > 0) String.format(Locale.getDefault(), "%.2f €", ride.price) else "—",
                                 style = drawTaxiType().titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = if (ride.price > 0) brandColor else Slate400

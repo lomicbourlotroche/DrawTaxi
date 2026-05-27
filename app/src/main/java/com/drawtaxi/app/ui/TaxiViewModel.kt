@@ -102,7 +102,12 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
 
     fun refreshRides(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
-            val scannedRides = com.drawtaxi.app.logic.sms.SmsScanner.scanLastHourSms(context)
+            val settings = repository.getSettingsSync()
+            val scannedRides = com.drawtaxi.app.logic.sms.SmsScanner.scanLastHourSmsWithAI(
+                context,
+                aiEnabled = settings.aiEnabled,
+                mode = settings.smsAnalysisMode
+            )
             scannedRides.forEach { ride ->
                 repository.saveRide(ride)
             }
@@ -114,7 +119,12 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
             try {
                 com.drawtaxi.app.service.foreground.SmsForegroundService.triggerScan()
 
-                val scannedRides = com.drawtaxi.app.logic.sms.SmsScanner.scanLastHourSms(context)
+                val settings = repository.getSettingsSync()
+                val scannedRides = com.drawtaxi.app.logic.sms.SmsScanner.scanLastHourSmsWithAI(
+                    context,
+                    aiEnabled = settings.aiEnabled,
+                    mode = settings.smsAnalysisMode
+                )
                 scannedRides.forEach { ride ->
                     repository.saveRide(ride)
                 }
@@ -125,11 +135,11 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
         }
     }
 
-    fun parseSmsWithAI(context: Context, sender: String, body: String, timestamp: Long = System.currentTimeMillis()) {
+    fun parseSmsWithAI(context: Context, sender: String, body: String, timestamp: Long = System.currentTimeMillis(), mode: com.drawtaxi.app.logic.sms.SmsScanner.SmsAnalysisMode = com.drawtaxi.app.logic.sms.SmsScanner.SmsAnalysisMode.AI_THEN_PARSING) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val settings = repository.getSettingsSync()
-                val ride = com.drawtaxi.app.logic.sms.SmsScanner.parseSmsWithAI(context, sender, body, timestamp, settings.aiEnabled)
+                val ride = com.drawtaxi.app.logic.sms.SmsScanner.parseSmsWithAI(context, sender, body, timestamp, mode, settings.aiEnabled)
                 ride?.let {
                     repository.saveRide(it)
                     Log.d("TaxiViewModel", "Course AI ajoutée: ${it.departure} → ${it.arrival}")
@@ -138,6 +148,33 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
                 Log.e("TaxiViewModel", "Erreur parsing AI: ${e.message}")
                 val fallbackRide = parseSms(sender, body, timestamp)
                 fallbackRide?.let { repository.saveRide(it) }
+            }
+        }
+    }
+
+    /**
+     * Allows user to correct an SMS parsing result and stores the feedback for future improvements.
+     * 
+     * @param context Android context
+     * @param originalSmsBody The original SMS body that was parsed
+     * @param correctedRide The corrected RideRequest as provided by user
+     */
+    fun correctSmsParsing(context: Context, originalSmsBody: String, correctedRide: RideRequest) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Save the corrected ride (updating any existing draft)
+                repository.saveRide(correctedRide)
+                
+                // Store the feedback for AI learning
+                com.drawtaxi.app.logic.sms.SmsFeedbackManager.storeFeedback(
+                    context, 
+                    originalSmsBody, 
+                    correctedRide
+                )
+                
+                Log.d("TaxiViewModel", "SMS parsing feedback stored for: ${correctedRide.departure} → ${correctedRide.arrival}")
+            } catch (e: Exception) {
+                Log.e("TaxiViewModel", "Error storing SMS parsing feedback: ${e.message}")
             }
         }
     }

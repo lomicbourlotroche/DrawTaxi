@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.*
 
 import androidx.compose.foundation.lazy.LazyColumn
 
-import androidx.compose.foundation.lazy.items
-
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 import androidx.compose.material.icons.Icons
@@ -20,7 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 
 import androidx.compose.material.icons.filled.*
 
-import androidx.compose.material3.*
+import androidx.compose.material.Text
 import com.drawtaxi.app.ui.components.core.*
 
 import androidx.compose.runtime.*
@@ -174,8 +172,6 @@ fun AccountingScreen(
     val totalNetProfit = totalRevenue - totalCoutDeplacement
     val avgProfitability = if (totalRevenue > 0) (totalNetProfit / totalRevenue) * 100.0 else 0.0
 
-    val averagePerRide = if (totalRides > 0) totalRevenue / totalRides else 0.0
-
     val averagePerKm = if (totalKm > 0) totalRevenue / totalKm else 0.0
 
     
@@ -195,10 +191,8 @@ fun AccountingScreen(
                 val calendar = Calendar.getInstance()
 
                 val parsed = try {
-
                     sdf.parse(date)
-
-                } catch (e: Exception) { null }
+                } catch (_: Exception) { null }
 
                 
 
@@ -244,263 +238,163 @@ fun AccountingScreen(
 
 
     LazyColumn(modifier = Modifier.fillMaxSize().background(Slate50)) {
-
         item {
-
-            Spacer(modifier = Modifier.height(16.dp))
-
+            Spacer(modifier = Modifier.height(24.dp))
             
-
             Text(
-
                 text = "Comptabilité & Rentabilité",
-
                 style = drawTaxiType().headlineMedium,
-
                 fontWeight = FontWeight.Bold,
-
                 color = Slate900,
-
-                modifier = Modifier.padding(horizontal = 16.dp)
-
+                modifier = Modifier.padding(horizontal = 20.dp)
             )
-
             
-
             Spacer(modifier = Modifier.height(16.dp))
-
         }
 
-
-
         item {
-
             Row(
-
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
-
             ) {
-
                 AccountingPeriod.entries.forEach { period ->
-
-                    FilterChip(
-
+                    DrawTaxiFilterChip(
                         selected = selectedPeriod == period,
-
                         onClick = { selectedPeriod = period },
-
                         label = { Text(period.label) },
-
-                        colors = FilterChipDefaults.filterChipColors(
-
-                            selectedContainerColor = brandColor,
-
-                            selectedLabelColor = Color.White
-
+                        colors = DrawTaxiFilterChipDefaults.colors(
+                            selectedContainerColor = brandColor.copy(alpha = 0.1f),
+                            selectedContentColor = brandColor,
+                            selectedBorderColor = brandColor
                         ),
-
                         modifier = Modifier.weight(1f)
-
                     )
-
                 }
-
             }
-
         }
-
-
 
         item {
-
-            Spacer(modifier = Modifier.height(16.dp))
-
+            Spacer(modifier = Modifier.height(20.dp))
             
-
-            Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(16.dp)) {
-
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-
+            DrawTaxiCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(24.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-
-                        text = String.format("%.2f €", totalRevenue),
-
-                        style = drawTaxiType().displaySmall,
-
-                        fontWeight = FontWeight.Black,
-
-                        color = Slate900
-
+                        text = "Revenus totaux",
+                        style = drawTaxiType().labelLarge,
+                        color = Slate500,
+                        fontWeight = FontWeight.Medium
                     )
-
-                    Text(text = "Revenus totaux", style = drawTaxiType().bodyMedium, color = Slate500)
-
+                    Text(
+                        text = String.format(Locale.getDefault(), "%.2f €", totalRevenue),
+                        style = drawTaxiType().displaySmall,
+                        fontWeight = FontWeight.Black,
+                        color = Slate900
+                    )
                     
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
+                    Spacer(modifier = Modifier.height(24.dp))
                     
-
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-
-                        ProfitStatColumn(value = String.format("%.0f%%", avgProfitability), label = "rentabilité", icon = Icons.Default.Analytics, color = if (avgProfitability >= 70) Green500 else if (avgProfitability >= 50) Color(0xFFFFA500) else Red500)
-
-                        ProfitStatColumn(value = String.format("%.2f €", totalNetProfit), label = "bénéfice net", icon = Icons.AutoMirrored.Filled.TrendingUp, color = if (totalNetProfit > 0) Green500 else Red500)
-
+                        ProfitStatColumn(value = String.format(Locale.getDefault(), "%.0f%%", avgProfitability), label = "rentabilité", icon = Icons.Default.Analytics, color = if (avgProfitability >= 70) Green600 else if (avgProfitability >= 50) Color(0xFFD97706) else Red600)
+                        ProfitStatColumn(value = String.format(Locale.getDefault(), "%.2f €", totalNetProfit), label = "bénéfice net", icon = Icons.AutoMirrored.Filled.TrendingUp, color = if (totalNetProfit > 0) Green600 else Red600)
                         ProfitStatColumn(value = totalRides.toString(), label = "courses", icon = Icons.Default.LocalTaxi)
-
                     }
-
                     
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    DrawTaxiDivider(color = Slate100)
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
+                    Spacer(modifier = Modifier.height(20.dp))
+                    DrawTaxiDivider(color = Slate100.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(20.dp))
                     
-
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-
-                                                ProfitStatColumn(value = String.format("%.2f €", totalCoutDeplacement), label = "déplacement", icon = Icons.Default.Route)
-
-
-                        ProfitStatColumn(value = String.format("%.2f €/km", averagePerKm), label = "revenu/km", icon = Icons.Default.Route)
-
+                        ProfitStatColumn(value = String.format(Locale.getDefault(), "%.2f €", totalCoutDeplacement), label = "déplacement", icon = Icons.Default.Route)
+                        ProfitStatColumn(value = String.format(Locale.getDefault(), "%.2f €/km", averagePerKm), label = "revenu/km", icon = Icons.Default.Route)
                     }
-
                 }
-
             }
-
         }
-
-
 
         if (dailyStats.isNotEmpty()) {
-
             item {
-
-                Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(16.dp)) {
-
-                    Column(modifier = Modifier.padding(16.dp)) {
-
-                        Text("Détail par jour", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
+                DrawTaxiCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), shape = RoundedCornerShape(24.dp)) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("Détail par jour", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = Slate900)
+                        Spacer(modifier = Modifier.height(16.dp))
                         dailyStats.take(7).forEach { stats ->
-
-                            DailyStatRowWithProfit(stats = stats, brandColor = brandColor)
-
+                            DailyStatRowWithProfit(stats = stats)
                             if (stats != dailyStats.take(7).last()) {
-
-                                DrawTaxiDivider(color = Slate100, modifier = Modifier.padding(vertical = 8.dp))
-
+                                DrawTaxiDivider(color = Slate100.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = 12.dp))
                             }
-
                         }
-
                     }
-
                 }
-
             }
-
         }
 
-
-
         item {
-
-            Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(16.dp)) {
-
-                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-
-                        Icon(Icons.Default.Receipt, contentDescription = null, tint = brandColor, modifier = Modifier.size(24.dp))
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-
-                            Text("Générer des factures", fontWeight = FontWeight.Bold)
-
-                            Text("Créer des factures pour Kolecto", style = drawTaxiType().bodySmall, color = Slate500)
-
-                        }
-
-                    }
-
-                    DrawTaxiSolidButton(onClick = onNavigateToInvoices, shape = RoundedCornerShape(12.dp)) {
-
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-
-                    }
-
-                }
-
-            }
-
-        }
-
-
-
-        item {
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            
-
-            Row(
-
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-
+            DrawTaxiCard(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(20.dp),
+                backgroundColor = brandColor.copy(alpha = 0.05f)
             ) {
-
-                DrawTaxiOutlinedButton(
-
-                    onClick = onExportCsv,
-
-                    modifier = Modifier.weight(1f),
-
-                    shape = RoundedCornerShape(12.dp)
-
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-
-                    Text("Export CSV")
-
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(brandColor.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            DrawTaxiIcon(Icons.Default.Receipt, contentDescription = null, tint = brandColor, modifier = Modifier.size(24.dp))
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text("Générer des factures", style = drawTaxiType().titleSmall, fontWeight = FontWeight.Bold, color = Slate900)
+                            Text("Exportez vos courses pour Kolecto", style = drawTaxiType().bodySmall, color = Slate500)
+                        }
+                    }
+                    DrawTaxiSolidButton(
+                        onClick = onNavigateToInvoices,
+                        shape = RoundedCornerShape(12.dp),
+                        containerColor = brandColor,
+                        minHeight = 44.dp,
+                        modifier = Modifier.width(56.dp)
+                    ) {
+                        DrawTaxiIcon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                    }
                 }
+            }
+        }
 
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                DrawTaxiOutlinedButton(
+                    onClick = onExportCsv,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Export CSV")
+                }
                 DrawTaxiSolidButton(
                     onClick = onNavigateToInvoices,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     containerColor = brandColor
                 ) {
-
-                    Icon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(18.dp))
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    Text("Factures")
-
+                    DrawTaxiIcon(Icons.Default.Receipt, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Factures", color = Color.White)
                 }
-
             }
-
             
-
             Spacer(modifier = Modifier.height(100.dp))
-
         }
-
     }
 
 }
@@ -508,99 +402,70 @@ fun AccountingScreen(
 
 
 @Composable
-
 private fun ProfitStatColumn(value: String, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color = Slate900) {
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
-        Icon(imageVector = icon, contentDescription = null, tint = Slate400, modifier = Modifier.size(20.dp))
-
-        Spacer(modifier = Modifier.height(4.dp))
-
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 4.dp)) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .background(Slate100, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            DrawTaxiIcon(imageVector = icon, contentDescription = null, tint = Slate600, modifier = Modifier.size(22.dp))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
         Text(text = value, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = color)
-
         Text(text = label, style = drawTaxiType().labelSmall, color = Slate500)
-
     }
-
 }
 
-
-
 @Composable
-
-private fun DailyStatRowWithProfit(stats: DailyStats, brandColor: Color) {
-
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-
-            Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Slate400, modifier = Modifier.size(16.dp))
-
-            Spacer(modifier = Modifier.width(8.dp))
-
+private fun DailyStatRowWithProfit(stats: DailyStats) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Slate50, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                DrawTaxiIcon(Icons.Default.CalendarToday, contentDescription = null, tint = Slate400, modifier = Modifier.size(18.dp))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
             Column {
-
                 Text(text = stats.dayName.uppercase(), style = drawTaxiType().labelMedium, fontWeight = FontWeight.Bold, color = Slate700)
-
-                Text(text = stats.date, style = drawTaxiType().labelSmall, color = Slate500)
-
+                Text(text = stats.date, style = drawTaxiType().labelSmall, color = Slate400)
             }
-
         }
-
         
-
         Row(verticalAlignment = Alignment.CenterVertically) {
-
             Column(horizontalAlignment = Alignment.End) {
-
-                Text(text = String.format("%.2f €", stats.totalRevenue), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = Slate900)
-
-                Text(text = "${stats.rideCount} courses • ${String.format("%.0f", stats.totalKm)} km", style = drawTaxiType().labelSmall, color = Slate500)
-
+                Text(text = String.format(Locale.getDefault(), "%.2f €", stats.totalRevenue), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = Slate900)
+                Text(text = "${stats.rideCount} courses • ${String.format(Locale.getDefault(), "%.0f", stats.totalKm)} km", style = drawTaxiType().labelSmall, color = Slate500)
             }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
+            Spacer(modifier = Modifier.width(12.dp))
             DrawTaxiSurface(shape = RoundedCornerShape(8.dp), color = when {
-
                 stats.avgProfitability >= 70 -> Green100
-
                 stats.avgProfitability >= 50 -> Color(0xFFFFF3CD)
-
                 else -> Red100
-
-            }, modifier = Modifier.padding(start = 8.dp)) {
-
+            }) {
                 Text(
-
-                    text = "${String.format("%.0f", stats.avgProfitability)}%",
-
+                    text = "${String.format(Locale.getDefault(), "%.0f", stats.avgProfitability)}%",
                     style = drawTaxiType().labelMedium,
-
                     fontWeight = FontWeight.Bold,
-
                     color = when {
-
                         stats.avgProfitability >= 70 -> Green800
-
                         stats.avgProfitability >= 50 -> Color(0xFF856404)
-
                         else -> Red800
-
                     },
-
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-
                 )
-
             }
-
         }
-
     }
-
 }
 
 

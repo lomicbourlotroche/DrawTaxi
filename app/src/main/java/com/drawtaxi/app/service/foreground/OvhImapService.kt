@@ -96,7 +96,6 @@ class OvhImapService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Surveillance Email OVH",
@@ -107,7 +106,6 @@ class OvhImapService : Service() {
             }
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }
-    }
 
     private fun createNotification(): Notification {
         val pendingIntent = PendingIntent.getActivity(
@@ -127,21 +125,40 @@ class OvhImapService : Service() {
             .build()
     }
 
+    private var consecutiveFailures = 0
+
     private fun startMonitoring() {
+        if (isMonitoring) return
+        isMonitoring = true
         serviceScope.launch {
             while (isMonitoring) {
                 try {
                     checkEmails()
+                    consecutiveFailures = 0
                 } catch (e: Exception) {
-                    Log.e(TAG, "Erreur lors de la vérification des emails", e)
+                    consecutiveFailures++
+                    Log.e(TAG, "Erreur #$consecutiveFailures lors de la vérification des emails", e)
+                    val backoff = nextBackoffMs()
+                    if (consecutiveFailures == 1 || consecutiveFailures % 5 == 0) {
+                        updateNotification("Erreur connexion #$consecutiveFailures, nouvelle tentative dans ${backoff / 1000}s")
+                    }
+                    delay(backoff)
+                    continue
                 }
-                
-                // Attendre l'intervalle configuré
+
                 val settings = repository.getSettingsSync()
                 val intervalMs = (settings.ovhImapCheckInterval * 60 * 1000L).coerceAtLeast(60000L)
                 delay(intervalMs)
             }
         }
+    }
+
+    private fun nextBackoffMs(): Long {
+        val base = 60_000L
+        val maxBackoff = 30 * 60 * 1000L
+        val exponent = (consecutiveFailures - 1).coerceIn(0, 6)
+        val backoff = base * (1 shl exponent)
+        return backoff.coerceAtMost(maxBackoff)
     }
 
     private suspend fun checkEmails() {
@@ -202,14 +219,24 @@ class OvhImapService : Service() {
             store.close()
 
             // Mettre à jour la notification
-            updateNotification("Dernière vérification: ${java.text.SimpleDateFormat("HH:mm").format(java.util.Date())}")
+            updateNotification("Dernière vérification: ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
 
         } catch (e: AuthenticationFailedException) {
             Log.e(TAG, "Échec authentification IMAP", e)
             updateNotification("Erreur: Identifiants OVH incorrects")
+            consecutiveFailures = 0 // Don't backoff for credential errors; retry at normal interval
+        } catch (e: javax.mail.MessagingException) {
+            Log.e(TAG, "Erreur protocole IMAP", e)
+            consecutiveFailures++ // Let backoff handle transient errors
+            updateNotification("Erreur IMAP: ${e.message?.take(60)}")
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.e(TAG, "Timeout connexion IMAP", e)
+            consecutiveFailures++
+            updateNotification("Timeout connexion OVH")
         } catch (e: Exception) {
             Log.e(TAG, "Erreur connexion IMAP", e)
-            updateNotification("Erreur de connexion")
+            consecutiveFailures++
+            updateNotification("Erreur de connexion OVH")
         }
     }
 

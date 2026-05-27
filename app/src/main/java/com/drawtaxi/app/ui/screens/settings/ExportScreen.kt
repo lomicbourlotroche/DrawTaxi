@@ -137,7 +137,7 @@ fun ExportScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Total: ${String.format("%.2f €", totalAmount)}",
+                                text = "Total: ${String.format(Locale.getDefault(), "%.2f €", totalAmount)}",
                                 style = drawTaxiType().headlineMedium,
                                 fontWeight = FontWeight.Black,
                                 color = brandColor
@@ -247,7 +247,7 @@ private fun ExportPreviewRow(ride: RideRequest) {
             )
         }
         Text(
-            text = if (ride.price > 0) String.format("%.2f €", ride.price) else "—",
+            text = if (ride.price > 0) String.format(Locale.getDefault(), "%.2f €", ride.price) else "—",
             style = drawTaxiType().titleMedium,
             fontWeight = FontWeight.Bold,
             color = if (ride.price > 0) Green600 else Slate400

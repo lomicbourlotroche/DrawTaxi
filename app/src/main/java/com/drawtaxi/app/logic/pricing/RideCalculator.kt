@@ -41,13 +41,14 @@ object RideCalculator {
         val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
         val netProfit = price - coutDeplacement
         val profitability = RideRequest.calculateProfitability(price, coutDeplacement)
+        val revenuePerKm = if (distanceDomicileKm > 0) price / distanceDomicileKm else 0.0
 
         return RideCalcResult(
             price = price,
             coutDeplacement = coutDeplacement,
             netProfit = netProfit,
             profitabilityPercent = profitability,
-            revenuePerKm = if (RideRequest.calculateCoutDeplacement(1.0, settings.coutParKmDeplacement) > 0) price / 1.0 else 0.0,
+            revenuePerKm = revenuePerKm,
             revenuePerHour = 0.0
         )
     }
@@ -64,13 +65,14 @@ object RideCalculator {
 
     fun calculatePeriodStats(
         rides: List<RideRequest>,
-        period: DashboardPeriod
+        period: DashboardPeriod,
+        coutParKmDeplacement: Double = 0.10
     ): PeriodStats {
         val filtered = filterByPeriod(rides, period)
         val totalRevenue = filtered.sumOf { it.price }
         val totalRides = filtered.size
         val totalKm = filtered.sumOf { it.distanceKm }
-        val totalCoutDeplacement = filtered.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+        val totalCoutDeplacement = filtered.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * coutParKmDeplacement) }
         val totalNetProfit = totalRevenue - totalCoutDeplacement
         val avgProfitability = if (totalRevenue > 0) (totalNetProfit / totalRevenue) * 100.0 else 0.0
         val avgPerRide = if (totalRides > 0) totalRevenue / totalRides else 0.0
@@ -131,12 +133,12 @@ object RideCalculator {
         return rides.filter { !it.isPending && it.timestamp >= startOfPeriod }
     }
 
-    fun calculateDailyBreakdown(rides: List<RideRequest>): List<DailyBreakdown> {
+    fun calculateDailyBreakdown(rides: List<RideRequest>, coutParKmDeplacement: Double = 0.10): List<DailyBreakdown> {
         return rides
             .groupBy { it.date.ifBlank { "Sans date" } }
             .map { (date, dayRides) ->
                 val dayRevenue = dayRides.sumOf { it.price }
-                val dayCoutDeplacement = dayRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * 0.15) }
+                val dayCoutDeplacement = dayRides.sumOf { it.fuelCost.takeIf { c -> c > 0 } ?: (it.distanceKm * 0.3 * coutParKmDeplacement) }
                 val dayNet = dayRevenue - dayCoutDeplacement
                 val dayProfit = if (dayRevenue > 0) (dayNet / dayRevenue) * 100.0 else 0.0
 

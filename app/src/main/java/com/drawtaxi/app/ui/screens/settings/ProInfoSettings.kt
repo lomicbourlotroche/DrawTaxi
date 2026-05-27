@@ -1,17 +1,18 @@
 package com.drawtaxi.app.ui.screens.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Assignment
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import com.drawtaxi.app.ui.components.core.*
 import com.drawtaxi.app.ui.theme.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.ui.components.TaxiCard
@@ -35,7 +36,7 @@ fun ProInfoSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onBa
 
     // Debounced update to avoid DataStore lag
     LaunchedEffect(companyName, name, siret, city, vehicle, homeAddress, signature, missingInfoTemplate, arrivalMessageTemplate) {
-        kotlinx.coroutines.delay(500)
+        delay(500)
         if (companyName != settings.companyName || name != settings.name || 
             siret != settings.siret || city != settings.city || 
             vehicle != settings.vehicle || homeAddress != settings.homeAddress ||
@@ -56,51 +57,78 @@ fun ProInfoSettings(settings: AppSettings, onUpdate: (AppSettings) -> Unit, onBa
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        DrawTaxiSolidButton(onClick = onBack, modifier = Modifier.padding(bottom = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = null)
-                Text("Retour", fontWeight = FontWeight.SemiBold)
+    Column(modifier = Modifier.fillMaxSize().background(drawTaxiColors().background)) {
+        DrawTaxiTopBar(
+            title = { DrawTaxiTopBarTitle("Configuration Pro", subtitle = "Identité & Modèles") },
+            navigationIcon = {
+                DrawTaxiIconButton(onClick = onBack) {
+                    DrawTaxiIcon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Retour",
+                        tint = drawTaxiColors().onSurface
+                    )
+                }
             }
-        }
+        )
 
-        TaxiCard(title = "Compagnie & Application") {
-            TaxiInputField(label = "Nom de la Compagnie / App", value = companyName, onValueChange = { companyName = it })
-        }
-
-        TaxiCard(title = "Identité du Chauffeur") {
-            TaxiInputField(label = "Nom du Prestataire", value = name, onValueChange = { name = it })
-            TaxiInputField(label = "SIRET", value = siret, onValueChange = { siret = it })
-            TaxiInputField(label = "Ville", value = city, onValueChange = { city = it })
-            TaxiInputField(label = "Véhicule", value = vehicle, onValueChange = { vehicle = it })
-            TaxiInputField(label = "Adresse du domicile", value = homeAddress, onValueChange = { homeAddress = it }, placeholder = "Utilisé pour le GPS retour")
-        }
-
-        TaxiCard(title = "Signature & Templates") {
-            TaxiInputField(label = "Mention de signature (ex: Fait à...)", value = signature, onValueChange = { signature = it })
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 24.dp)
+        ) {
             Spacer(modifier = Modifier.height(8.dp))
-            TaxiInputField(
-                label = "Modèle message infos manquantes", 
-                value = missingInfoTemplate, 
-                onValueChange = { missingInfoTemplate = it }
-            )
-            Text(
-                text = "Utilisez [FIELDS] pour les infos manquantes.",
-                style = drawTaxiType().labelSmall,
-                color = Slate400,
-                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            TaxiInputField(
-                label = "Modèle message 'Je suis arrivé'", 
-                value = arrivalMessageTemplate, 
-                onValueChange = { arrivalMessageTemplate = it }
-            )
+
+            TaxiCard(
+                title = "Compagnie & Application",
+                titleIcon = Icons.Default.Business,
+                brandColor = Indigo500
+            ) {
+                TaxiInputField(label = "Nom de la Compagnie / App", value = companyName, onValueChange = { companyName = it })
+            }
+
+            TaxiCard(
+                title = "Identité du Chauffeur",
+                titleIcon = Icons.Default.Person,
+                brandColor = Emerald500
+            ) {
+                TaxiInputField(label = "Nom du Prestataire", value = name, onValueChange = { name = it })
+                TaxiInputField(label = "SIRET", value = siret, onValueChange = { siret = it })
+                TaxiInputField(label = "Ville", value = city, onValueChange = { city = it })
+                TaxiInputField(label = "Véhicule", value = vehicle, onValueChange = { vehicle = it })
+                TaxiInputField(label = "Adresse du domicile", value = homeAddress, onValueChange = { homeAddress = it }, placeholder = "Utilisé pour le GPS retour")
+            }
+
+            TaxiCard(
+                title = "Signature & Modèles de message",
+                titleIcon = Icons.AutoMirrored.Filled.Assignment,
+                brandColor = Amber600
+            ) {
+                TaxiInputField(label = "Mention de signature (ex: Fait à...)", value = signature, onValueChange = { signature = it })
+                Spacer(modifier = Modifier.height(8.dp))
+                TaxiInputField(
+                    label = "Modèle message infos manquantes", 
+                    value = missingInfoTemplate, 
+                    onValueChange = { missingInfoTemplate = it }
+                )
+                Text(
+                    text = "Utilisez [FIELDS] pour les infos manquantes.",
+                    style = drawTaxiType().labelSmall,
+                    color = Slate400,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                TaxiInputField(
+                    label = "Modèle message 'Je suis arrivé'", 
+                    value = arrivalMessageTemplate, 
+                    onValueChange = { arrivalMessageTemplate = it }
+                )
+            }
         }
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFFF1F5F9)
+@Preview(showBackground = true)
 @Composable
 fun ProInfoSettingsPreview() {
     val mockSettings = AppSettings(
@@ -111,9 +139,7 @@ fun ProInfoSettingsPreview() {
         vehicle = "Mercedes EQE",
         signature = "Fait à Bordeaux le ..."
     )
-    Box(modifier = Modifier.padding(16.dp)) {
+    DrawTaxiTheme {
         ProInfoSettings(settings = mockSettings, onUpdate = {}, onBack = {})
     }
 }
-
-

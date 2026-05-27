@@ -280,16 +280,7 @@ class SmsForegroundService : Service() {
         super.onTaskRemoved(rootIntent)
 
         val restartIntent = Intent(applicationContext, SmsForegroundService::class.java)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-            applicationContext.startForegroundService(restartIntent)
-
-        } else {
-
-            applicationContext.startService(restartIntent)
-
-        }
+        applicationContext.startForegroundService(restartIntent)
 
         Log.d(TAG, "Tâche retirée - redémarrage du service")
 
@@ -298,8 +289,6 @@ class SmsForegroundService : Service() {
 
 
     private fun createNotificationChannel() {
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
             val channel = NotificationChannel(
 
@@ -326,9 +315,6 @@ class SmsForegroundService : Service() {
             val notificationManager = getSystemService(NotificationManager::class.java)
 
             notificationManager.createNotificationChannel(channel)
-
-        }
-
     }
 
 

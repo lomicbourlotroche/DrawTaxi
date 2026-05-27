@@ -62,11 +62,7 @@ class BootReceiver : BroadcastReceiver() {
 
                         Log.d(TAG, "Démarrage du SmsForegroundService après boot")
                         val serviceIntent = Intent(context, SmsForegroundService::class.java)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            context.startForegroundService(serviceIntent)
-                        } else {
-                            context.startService(serviceIntent)
-                        }
+                        context.startForegroundService(serviceIntent)
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Erreur au démarrage du service: ${e.message}")

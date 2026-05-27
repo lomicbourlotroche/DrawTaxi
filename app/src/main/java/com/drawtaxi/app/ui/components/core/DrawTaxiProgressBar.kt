@@ -12,8 +12,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.drawtaxi.app.ui.theme.DrawTaxiTheme
+import com.drawtaxi.app.ui.theme.Emerald500
 import com.drawtaxi.app.ui.theme.Slate200
 
 @Composable
@@ -41,6 +44,28 @@ fun DrawTaxiProgressBar(
                 .height(height)
                 .clip(RoundedCornerShape(height / 2))
                 .background(color)
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiProgressBarPreview() {
+    DrawTaxiTheme {
+        DrawTaxiProgressBar(
+            progress = 0.65f,
+            color = Emerald500
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DrawTaxiProgressBarFullPreview() {
+    DrawTaxiTheme {
+        DrawTaxiProgressBar(
+            progress = 1f,
+            color = Emerald500
         )
     }
 }

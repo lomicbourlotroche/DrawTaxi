@@ -1,22 +1,22 @@
 package com.drawtaxi.app.ui.screens.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import com.drawtaxi.app.ui.components.core.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.drawtaxi.app.ui.theme.*
-
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Sms
+import androidx.compose.ui.unit.dp
+import com.drawtaxi.app.ui.components.core.DrawTaxiIcon
+import com.drawtaxi.app.ui.components.core.DrawTaxiSwitch
+import com.drawtaxi.app.ui.theme.*
 
 @Composable
 fun TaxiToggleRow(
@@ -24,46 +24,69 @@ fun TaxiToggleRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    icon: ImageVector
+    icon: ImageVector,
+    iconTint: Color = drawTaxiColors().primary
 ) {
-    DrawTaxiSurface(
-        shape = RoundedCornerShape(12.dp),
-        color = Slate50,
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        // Icon container
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(iconTint.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
         ) {
-            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = null, tint = TaxiRed, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Slate700)
-                    Text(subtitle, fontSize = 11.sp, color = Slate400)
-                }
-            }
-            DrawTaxiSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
+            DrawTaxiIcon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(20.dp)
             )
         }
+
+        Spacer(modifier = Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            androidx.compose.material3.Text(
+                text = title,
+                style = drawTaxiType().bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = drawTaxiColors().onSurface
+            )
+            androidx.compose.material3.Text(
+                text = subtitle,
+                style = drawTaxiType().bodySmall,
+                color = drawTaxiColors().onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        DrawTaxiSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            checkedTrackColor = drawTaxiColors().primary
+        )
     }
 }
 
 @Preview(showBackground = true)
 @Composable
 fun TaxiToggleRowPreview() {
-    Box(modifier = Modifier.padding(16.dp)) {
-        TaxiToggleRow(
-            title = "Surveiller les SMS",
-            subtitle = "Détecter les commandes entrantes",
-            checked = true,
-            onCheckedChange = {},
-            icon = Icons.Default.Sms
-        )
+    DrawTaxiTheme {
+        Box(modifier = Modifier.padding(16.dp)) {
+            TaxiToggleRow(
+                title = "Surveiller les SMS",
+                subtitle = "Détecter les commandes entrantes en temps réel",
+                checked = true,
+                onCheckedChange = {},
+                icon = Icons.Default.Sms
+            )
+        }
     }
 }
-
-

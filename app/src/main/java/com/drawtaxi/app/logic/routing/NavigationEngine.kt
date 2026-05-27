@@ -1,5 +1,7 @@
 package com.drawtaxi.app.logic.routing
 
+import java.util.Locale
+
 import android.content.Context
 import android.location.Location
 import android.util.Log
@@ -23,6 +25,7 @@ import org.maplibre.navigation.core.models.ManeuverModifier
 import org.maplibre.navigation.core.models.StepManeuver
 import org.maplibre.navigation.core.navigation.MapLibreNavigation
 import org.maplibre.navigation.core.navigation.MapLibreNavigationOptions
+import org.maplibre.navigation.core.offroute.OffRouteListener
 import org.maplibre.navigation.core.routeprogress.ProgressChangeListener
 import org.maplibre.navigation.core.routeprogress.RouteProgress
 import java.util.concurrent.TimeUnit
@@ -40,6 +43,7 @@ data class NavigationEngineState(
     val distanceText: String = "-- km",
     val isNavigating: Boolean = false,
     val isCalculating: Boolean = false,
+    val isRecalculating: Boolean = false,
     val error: String? = null
 )
 
@@ -49,6 +53,9 @@ class NavigationEngine(
 ) {
     private val locationEngine: LocationEngine = LocationEngineProvider.getBestLocationEngine(context)
     private var maplibreNavigation: MapLibreNavigation? = null
+
+    private var targetLat: Double = 0.0
+    private var targetLng: Double = 0.0
 
     private val _state = MutableStateFlow(NavigationEngineState())
     val state: StateFlow<NavigationEngineState> = _state.asStateFlow()
@@ -66,7 +73,7 @@ class NavigationEngine(
             ).collect { navLocation ->
                 val android = navLocation.toAndroidLocation()
                 val speed = if (android.hasSpeed()) {
-                    String.format("%.0f km/h", android.speed * 3.6)
+                    String.format(Locale.getDefault(), "%.0f km/h", android.speed * 3.6)
                 } else "0 km/h"
                 _state.value = _state.value.copy(
                     currentLocation = android,
@@ -76,9 +83,14 @@ class NavigationEngine(
         }
     }
 
-    fun startNavigation(route: DirectionsRoute) {
+    fun startNavigation(route: DirectionsRoute, toLat: Double? = null, toLng: Double? = null) {
         stopNavigation()
         _state.value = _state.value.copy(isNavigating = true, isCalculating = false, error = null)
+
+        if (toLat != null && toLng != null) {
+            targetLat = toLat
+            targetLng = toLng
+        }
 
         val decoded = decodePolyline(route.geometry)
         _state.value = _state.value.copy(routePoints = decoded)
@@ -99,7 +111,35 @@ class NavigationEngine(
             }
         )
 
+        maplibreNavigation!!.addOffRouteListener(OffRouteListener { navLocation ->
+            val androidLocation = navLocation.toAndroidLocation()
+            Log.d(TAG, "Off-route detected at ${androidLocation.latitude}, ${androidLocation.longitude}")
+            scope.launch {
+                recalculateRoute(
+                    fromLat = androidLocation.latitude,
+                    fromLng = androidLocation.longitude,
+                    toLat = targetLat,
+                    toLng = targetLng
+                )
+            }
+        })
+
         maplibreNavigation!!.startNavigation(route)
+    }
+
+    private suspend fun recalculateRoute(
+        fromLat: Double, fromLng: Double,
+        toLat: Double, toLng: Double
+    ) {
+        _state.value = _state.value.copy(isRecalculating = true)
+        val newRoute = fetchRoute(fromLat = fromLat, fromLng = fromLng, toLat = toLat, toLng = toLng)
+        if (newRoute != null) {
+            maplibreNavigation?.stopNavigation()
+            val decoded = decodePolyline(newRoute.geometry)
+            _state.value = _state.value.copy(routePoints = decoded)
+            maplibreNavigation?.startNavigation(newRoute)
+        }
+        _state.value = _state.value.copy(isRecalculating = false)
     }
 
     fun stopNavigation() {
@@ -131,38 +171,6 @@ class NavigationEngine(
             etaText = formatDuration(progress.durationRemaining),
             distanceText = formatDistance(progress.distanceRemaining)
         )
-    }
-
-    private fun decodePolyline(encoded: String): List<Pair<Double, Double>> {
-        val points = mutableListOf<Pair<Double, Double>>()
-        var index = 0
-        var lat = 0
-        var lng = 0
-        while (index < encoded.length) {
-            var shift = 0
-            var result = 0
-            var b: Int
-            do {
-                b = encoded[index++].code - 63
-                result = result or ((b and 0x1f) shl shift)
-                shift += 5
-            } while (b >= 0x20)
-            val dlat = if (result and 1 != 0) -(result shr 1) else result shr 1
-            lat += dlat
-
-            shift = 0
-            result = 0
-            do {
-                b = encoded[index++].code - 63
-                result = result or ((b and 0x1f) shl shift)
-                shift += 5
-            } while (b >= 0x20)
-            val dlng = if (result and 1 != 0) -(result shr 1) else result shr 1
-            lng += dlng
-
-            points.add(Pair(lat / 1e5, lng / 1e5))
-        }
-        return points
     }
 
     companion object {
@@ -217,14 +225,14 @@ class NavigationEngine(
         ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
             try {
                 val route = fetchRoute(fromLat, fromLng, toLat, toLng) ?: return@withContext emptyList()
-                decodePolylineStatic(route.geometry)
+                decodePolyline(route.geometry)
             } catch (e: Exception) {
                 Log.e(TAG, "Route geometry fetch failed", e)
                 emptyList()
             }
         }
 
-        private fun decodePolylineStatic(encoded: String): List<Pair<Double, Double>> {
+        fun decodePolyline(encoded: String): List<Pair<Double, Double>> {
             val points = mutableListOf<Pair<Double, Double>>()
             var index = 0
             var lat = 0
@@ -321,8 +329,8 @@ class NavigationEngine(
 
         fun formatDistance(meters: Double): String {
             return when {
-                meters >= 1000 -> String.format("%.1f km", meters / 1000)
-                else -> String.format("%.0f m", meters)
+                meters >= 1000 -> String.format(Locale.getDefault(), "%.1f km", meters / 1000)
+                else -> String.format(Locale.getDefault(), "%.0f m", meters)
             }
         }
     }

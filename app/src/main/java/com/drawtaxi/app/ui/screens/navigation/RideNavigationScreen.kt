@@ -1,9 +1,10 @@
 package com.drawtaxi.app.ui.screens.navigation
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.location.Location
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -21,17 +22,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
-import com.drawtaxi.app.logic.geocoding.GeocodingService
 import com.drawtaxi.app.logic.routing.NavigationEngine
+import com.drawtaxi.app.logic.routing.NavigationEngineState
 import com.drawtaxi.app.ui.screens.rides.InstructionCard
 import com.drawtaxi.app.ui.theme.*
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
@@ -58,8 +66,7 @@ enum class NavigationPhase {
     COMPLETED
 }
 
-@SuppressLint("MissingPermission")
-@OptIn(ExperimentalAnimationApi::class)
+@OptIn(ExperimentalAnimationApi::class, FlowPreview::class)
 @Composable
 fun RideNavigationScreen(
     ride: RideRequest,
@@ -71,87 +78,93 @@ fun RideNavigationScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val viewModel: NavigationViewModel = viewModel()
 
-    var currentPhase by remember { mutableStateOf(NavigationPhase.TO_PICKUP) }
     var showCallDialog by remember { mutableStateOf(false) }
     var showMessageDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showCompleteDialog by remember { mutableStateOf(false) }
-
-    var pickupLocation by remember { mutableStateOf<Location?>(null) }
-    var destLocation by remember { mutableStateOf<Location?>(null) }
-    var hasGeocoded by remember { mutableStateOf(false) }
-
-    val engine = remember {
-        NavigationEngine(context, scope)
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                    PackageManager.PERMISSION_GRANTED
+        )
     }
-    val engineState by engine.state.collectAsState()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasLocationPermission = granted
+    }
+
+    val engineState by viewModel.engineState.collectAsState()
+    val currentPhase by viewModel.currentPhase.collectAsState()
+    val pickupLocation by viewModel.pickupLocation.collectAsState()
+    val destLocation by viewModel.destLocation.collectAsState()
+    val homeLocation by viewModel.homeLocation.collectAsState()
 
     val cameraState = rememberCameraState()
 
-    val activeRoutePoints = engineState.routePoints
-    val activeRouteKey = "${currentPhase.name}_${activeRoutePoints.size}"
-
-    DisposableEffect(Unit) {
-        onDispose { engine.destroy() }
-    }
+    var hasGeocoded by remember { mutableStateOf(false) }
 
     LaunchedEffect(ride) {
         if (!hasGeocoded) {
-            if (ride.departure.isNotBlank()) {
-                pickupLocation = GeocodingService.geocode(ride.departure)
-            }
-            if (ride.arrival.isNotBlank()) {
-                if (ride.departure.isNotBlank()) {
-                    val fromLoc = GeocodingService.geocode(ride.departure)
-                    destLocation = GeocodingService.geocode(ride.arrival)
-                } else {
-                    destLocation = GeocodingService.geocode(ride.arrival)
-                }
-            }
+            viewModel.geocodeRide(ride.departure, ride.arrival)
             hasGeocoded = true
         }
     }
 
-    LaunchedEffect(currentPhase, engineState.currentLocation, pickupLocation, destLocation) {
-        if (currentPhase == NavigationPhase.TO_PICKUP || currentPhase == NavigationPhase.TO_DESTINATION) {
-            val from = when (currentPhase) {
-                NavigationPhase.TO_PICKUP -> engineState.currentLocation
-                NavigationPhase.TO_DESTINATION -> pickupLocation
-                else -> null
-            }
-            val to = when (currentPhase) {
-                NavigationPhase.TO_PICKUP -> pickupLocation
-                NavigationPhase.TO_DESTINATION -> destLocation
-                else -> null
-            }
-
-            if (from != null && to != null && !engineState.isNavigating) {
-                val route = NavigationEngine.fetchRoute(
-                    fromLat = from.latitude, fromLng = from.longitude,
-                    toLat = to.latitude, toLng = to.longitude
-                )
-                if (route != null) {
-                    engine.startNavigation(route)
+    LaunchedEffect(currentPhase, engineState.currentLocation, pickupLocation, destLocation, homeLocation) {
+        when (currentPhase) {
+            NavigationPhase.TO_PICKUP -> {
+                val from = engineState.currentLocation
+                val to = pickupLocation
+                if (from != null && to != null && !engineState.isNavigating) {
+                    viewModel.startNavigation(
+                        fromLat = from.latitude, fromLng = from.longitude,
+                        toLat = to.latitude, toLng = to.longitude
+                    )
                 }
             }
+            NavigationPhase.TO_DESTINATION -> {
+                val from = pickupLocation
+                val to = destLocation
+                if (from != null && to != null && !engineState.isNavigating) {
+                    viewModel.startNavigation(
+                        fromLat = from.latitude, fromLng = from.longitude,
+                        toLat = to.latitude, toLng = to.longitude
+                    )
+                }
+            }
+            NavigationPhase.TO_HOME -> {
+                viewModel.geocodeHome(settings.homeAddress)
+                val from = engineState.currentLocation
+                val to = homeLocation
+                if (from != null && to != null && !engineState.isNavigating) {
+                    viewModel.startNavigation(
+                        fromLat = from.latitude, fromLng = from.longitude,
+                        toLat = to.latitude, toLng = to.longitude
+                    )
+                }
+            }
+            NavigationPhase.COMPLETED -> {
+                viewModel.stopNavigation()
+            }
         }
     }
 
-    LaunchedEffect(currentPhase) {
-        if (currentPhase != NavigationPhase.TO_PICKUP && currentPhase != NavigationPhase.TO_DESTINATION) {
-            engine.stopNavigation()
-        }
-    }
+    val activeRoutePoints = engineState.routePoints
+    val activeRouteKey = "${currentPhase.name}_${activeRoutePoints.size}"
 
-    LaunchedEffect(activeRouteKey, engineState.currentLocation, pickupLocation, destLocation) {
+    LaunchedEffect(activeRouteKey) {
         val allPoints = mutableListOf<Pair<Double, Double>>()
         allPoints.addAll(activeRoutePoints)
         engineState.currentLocation?.let { allPoints.add(it.latitude to it.longitude) }
         val target = when (currentPhase) {
             NavigationPhase.TO_PICKUP -> pickupLocation
             NavigationPhase.TO_DESTINATION -> destLocation
-            else -> null
+            NavigationPhase.TO_HOME -> homeLocation
+            NavigationPhase.COMPLETED -> null
         }
         target?.let { allPoints.add(it.latitude to it.longitude) }
 
@@ -172,43 +185,157 @@ fun RideNavigationScreen(
         }
     }
 
-    LaunchedEffect(engineState.currentLocation, pickupLocation, currentPhase) {
-        if (currentPhase == NavigationPhase.TO_PICKUP && engineState.currentLocation != null && pickupLocation != null) {
-            if (engineState.currentLocation!!.distanceTo(pickupLocation!!) < 50f) {
-                currentPhase = NavigationPhase.TO_DESTINATION
+    LaunchedEffect(currentPhase) {
+        if (currentPhase == NavigationPhase.TO_PICKUP) {
+            viewModel.engineState.debounce(2000).collectLatest {
+                viewModel.checkArrivedAtPickup()
             }
         }
     }
 
     DrawTaxiScaffold { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 140.dp)
-            ) {
-                DrawTaxiIconButton(
-                    onClick = { showCallDialog = true },
-                    shape = CircleShape,
-                    size = 52.dp,
-                    modifier = Modifier.background(Emerald500, CircleShape)
-                ) {
-                    Icon(Icons.Default.Phone, contentDescription = "Appeler", modifier = Modifier.size(24.dp), tint = Color.White)
+        RideNavigationContent(
+            engineState = engineState,
+            currentPhase = currentPhase,
+            pickupLocation = pickupLocation,
+            destLocation = destLocation,
+            homeLocation = homeLocation,
+            cameraState = cameraState,
+            hasLocationPermission = hasLocationPermission,
+            onRequestPermission = { permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+            onCallClick = { showCallDialog = true },
+            onMessageClick = { showMessageDialog = true },
+            onPhaseChange = { viewModel.setPhase(it) },
+            onStartRideClick = {
+                viewModel.navigateToPickup()
+                viewModel.startLocationTracking(ride.id)
+            },
+            onCompleteClick = { showCompleteDialog = true },
+            onRecenterClick = {
+                scope.launch {
+                    engineState.currentLocation?.let { loc ->
+                        cameraState.animateTo(
+                            CameraPosition(
+                                target = Position(
+                                    longitude = loc.longitude,
+                                    latitude = loc.latitude
+                                ),
+                                zoom = 15.5
+                            )
+                        )
+                    }
                 }
-                DrawTaxiIconButton(
-                    onClick = { showMessageDialog = true },
-                    shape = CircleShape,
-                    size = 52.dp,
-                    modifier = Modifier.background(Indigo500, CircleShape)
+            },
+            modifier = Modifier.padding(padding)
+        )
+    }
+
+    if (showCompleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showCompleteDialog = false },
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Emerald500, modifier = Modifier.size(48.dp)) },
+            title = { Text("Terminer la course", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Confirmez-vous la fin de la course ?")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val trackedKm = viewModel.getTotalDistanceKm()
+                    if (trackedKm > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Straighten, contentDescription = null, tint = Slate500, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Distance parcourue : ${"%.2f".format(trackedKm)} km", style = MaterialTheme.typography.bodyMedium, color = Slate600)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                DrawTaxiSolidButton(
+                    onClick = {
+                        viewModel.stopLocationTracking()
+                        val trackedKm = viewModel.getTotalDistanceKm()
+                        val updatedRide = if (trackedKm > 0) {
+                            ride.copy(distanceKm = trackedKm.toDouble())
+                        } else ride
+                        showCompleteDialog = false
+                        onComplete(updatedRide)
+                    },
+                    containerColor = Emerald500,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Message, contentDescription = "Message", modifier = Modifier.size(24.dp), tint = Color.White)
+                    Text("Oui, terminer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCompleteDialog = false }) {
+                    Text("Annuler")
                 }
             }
+        )
+    }
+}
+
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+private fun RideNavigationContent(
+    engineState: NavigationEngineState,
+    currentPhase: NavigationPhase,
+    pickupLocation: Location?,
+    destLocation: Location?,
+    homeLocation: Location?,
+    cameraState: org.maplibre.compose.camera.CameraState,
+    hasLocationPermission: Boolean,
+    onRequestPermission: () -> Unit,
+    onCallClick: () -> Unit,
+    onMessageClick: () -> Unit,
+    onPhaseChange: (NavigationPhase) -> Unit,
+    onStartRideClick: () -> Unit,
+    onCompleteClick: () -> Unit,
+    onRecenterClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxSize()
+    ) {
+        if (LocalInspectionMode.current) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.LightGray),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Map Placeholder (Preview Mode)")
+            }
+        } else if (!hasLocationPermission) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Slate100),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.LocationOff,
+                        contentDescription = null,
+                        tint = Slate400,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Permission de localisation requise",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Slate700
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DrawTaxiSolidButton(
+                        onClick = onRequestPermission,
+                        containerColor = Indigo500
+                    ) {
+                        Text("Accorder la permission")
+                    }
+                }
+            }
+        } else {
             MaplibreMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraState = cameraState,
@@ -234,8 +361,11 @@ fun RideNavigationScreen(
                     options = GeoJsonOptions(synchronousUpdate = true)
                 )
 
-                LaunchedEffect(activeRouteKey) {
-                    val coords = activeRoutePoints.joinToString(",") { "[${it.second},${it.first}]" }
+                val routePoints = engineState.routePoints
+                val routeKey = "${currentPhase.name}_${routePoints.size}"
+
+                LaunchedEffect(routeKey) {
+                    val coords = routePoints.joinToString(",") { "[${it.second},${it.first}]" }
                     val json = if (coords.isNotEmpty()) {
                         """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
                     } else EMPTY_FC
@@ -248,11 +378,12 @@ fun RideNavigationScreen(
                     vousSource.setData(GeoJsonData.JsonString(json))
                 }
 
-                LaunchedEffect(currentPhase, pickupLocation, destLocation) {
+                LaunchedEffect(currentPhase, pickupLocation, destLocation, homeLocation) {
                     val target = when (currentPhase) {
                         NavigationPhase.TO_PICKUP -> pickupLocation
                         NavigationPhase.TO_DESTINATION -> destLocation
-                        else -> null
+                        NavigationPhase.TO_HOME -> homeLocation
+                        NavigationPhase.COMPLETED -> null
                     }
                     if (target != null) {
                         val json = """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${target.longitude},${target.latitude}]}}]}"""
@@ -289,6 +420,33 @@ fun RideNavigationScreen(
                     strokeWidth = const(3.dp)
                 )
             }
+        }
+
+        if (hasLocationPermission) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 180.dp)
+            ) {
+                NavigationFab(
+                    onClick = onRecenterClick,
+                    icon = Icons.Default.MyLocation,
+                    backgroundColor = Color.White,
+                    contentColor = Slate700
+                )
+
+                NavigationFab(
+                    onClick = onCallClick,
+                    icon = Icons.Default.Phone,
+                    backgroundColor = Emerald500
+                )
+                NavigationFab(
+                    onClick = onMessageClick,
+                    icon = Icons.AutoMirrored.Filled.Message,
+                    backgroundColor = Indigo500
+                )
+            }
 
             AnimatedVisibility(
                 visible = engineState.currentInstruction.isNotBlank(),
@@ -296,13 +454,13 @@ fun RideNavigationScreen(
                 exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 110.dp, start = 16.dp, end = 16.dp)
+                    .padding(top = 40.dp, start = 16.dp, end = 16.dp)
             ) {
                 InstructionCard(
                     instruction = engineState.currentInstruction,
                     nextInstruction = engineState.nextInstruction,
                     nextDistance = engineState.nextInstructionDistance,
-                    isRecalculating = false,
+                    isRecalculating = engineState.isRecalculating,
                     eta = engineState.etaText,
                     distance = engineState.distanceText
                 )
@@ -322,79 +480,114 @@ fun RideNavigationScreen(
                     }
                 }
             }
+        }
 
-            AnimatedVisibility(
-                visible = true,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                modifier = Modifier.align(Alignment.BottomCenter)
+        AnimatedVisibility(
+            visible = true,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            DrawTaxiSurface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                color = Color.White.copy(alpha = 0.98f),
+                shadowElevation = 16.dp
             ) {
-                DrawTaxiSurface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = Color.White.copy(alpha = 0.95f),
-                    shadowElevation = 8.dp
-                ) {
-                    Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Vitesse: ${engineState.currentSpeed}", style = drawTaxiType().bodySmall)
-                            Text("Distance: ${engineState.distanceText}", style = drawTaxiType().bodySmall)
-                            if (currentPhase == NavigationPhase.TO_PICKUP) {
-                                DrawTaxiSolidButton(
-                                    onClick = { currentPhase = NavigationPhase.TO_DESTINATION },
-                                    minHeight = 36.dp,
-                                    modifier = Modifier.width(160.dp)
-                                ) {
-                                    Text("Démarrer course", style = drawTaxiType().labelMedium)
-                                }
-                            }
-                        }
+                Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 12.dp)
+                            .size(width = 40.dp, height = 4.dp)
+                            .background(Slate200, CircleShape)
+                            .align(Alignment.CenterHorizontally)
+                    )
 
-                        Row(
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (currentPhase == NavigationPhase.TO_PICKUP) {
+                        DrawTaxiSolidButton(
+                            onClick = onStartRideClick,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 24.dp)
+                                .shadow(8.dp, RoundedCornerShape(16.dp)),
+                            shape = RoundedCornerShape(16.dp),
+                            containerColor = Indigo600
                         ) {
-                            PhaseButton(
-                                phase = NavigationPhase.TO_PICKUP,
-                                label = "Client",
-                                icon = Icons.Default.PersonPin,
-                                currentPhase = currentPhase,
-                                onClick = { currentPhase = NavigationPhase.TO_PICKUP }
-                            )
-                            PhaseButton(
-                                phase = NavigationPhase.TO_DESTINATION,
-                                label = "Destination",
-                                icon = Icons.Default.Place,
-                                currentPhase = currentPhase,
-                                onClick = { currentPhase = NavigationPhase.TO_DESTINATION }
-                            )
-                            PhaseButton(
-                                phase = NavigationPhase.TO_HOME,
-                                label = "Retour",
-                                icon = Icons.Default.Home,
-                                currentPhase = currentPhase,
-                                onClick = { currentPhase = NavigationPhase.TO_HOME }
-                            )
-                            PhaseButton(
-                                phase = NavigationPhase.COMPLETED,
-                                label = "Terminer",
-                                icon = Icons.Default.CheckCircle,
-                                currentPhase = currentPhase,
-                                onClick = { showCompleteDialog = true }
-                            )
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("Démarrer la course", style = drawTaxiType().titleSmall, fontWeight = FontWeight.Black)
                         }
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        PhaseButton(
+                            phase = NavigationPhase.TO_PICKUP,
+                            label = "Client",
+                            icon = Icons.Default.PersonPin,
+                            currentPhase = currentPhase,
+                            onClick = { onPhaseChange(NavigationPhase.TO_PICKUP) }
+                        )
+                        PhaseButton(
+                            phase = NavigationPhase.TO_DESTINATION,
+                            label = "Course",
+                            icon = Icons.Default.Route,
+                            currentPhase = currentPhase,
+                            onClick = { onPhaseChange(NavigationPhase.TO_DESTINATION) }
+                        )
+                        PhaseButton(
+                            phase = NavigationPhase.TO_HOME,
+                            label = "Retour",
+                            icon = Icons.Default.Home,
+                            currentPhase = currentPhase,
+                            onClick = { onPhaseChange(NavigationPhase.TO_HOME) }
+                        )
+                        PhaseButton(
+                            phase = NavigationPhase.COMPLETED,
+                            label = "Terminer",
+                            icon = Icons.Default.CheckCircle,
+                            currentPhase = currentPhase,
+                            onClick = onCompleteClick,
+                            isDestructive = true
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NavigationFab(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    backgroundColor: Color,
+    modifier: Modifier = Modifier,
+    contentColor: Color = Color.White
+) {
+    DrawTaxiIconButton(
+        onClick = onClick,
+        shape = CircleShape,
+        size = 56.dp,
+        modifier = modifier
+            .shadow(12.dp, CircleShape)
+            .background(backgroundColor, CircleShape)
+            .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(26.dp)
+        )
     }
 }
 
@@ -404,59 +597,90 @@ private fun PhaseButton(
     label: String,
     icon: ImageVector,
     currentPhase: NavigationPhase,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isDestructive: Boolean = false
 ) {
     val isActive = phase == currentPhase
+    val tint = when {
+        isActive && isDestructive -> Rose500
+        isActive -> Indigo500
+        else -> Slate400
+    }
+    val bgAlpha = if (isActive) 0.15f else 0f
+    val bgColor = if (isDestructive) Rose500 else Indigo500
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .then(
-                if (isActive) Modifier.background(Indigo500.copy(alpha = 0.1f))
-                else Modifier
-            )
-            .clickable(onClick = onClick)
-            .padding(8.dp)
+            .width(78.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(bgColor.copy(alpha = bgAlpha))
+            .clickable { onClick() }
+            .padding(vertical = 10.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (isActive) Indigo500 else Slate400,
-            modifier = Modifier.size(24.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .then(if (isActive) Modifier.background(bgColor.copy(alpha = 0.1f), CircleShape) else Modifier),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(24.dp)
+            )
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = label,
             style = drawTaxiType().labelSmall,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            color = if (isActive) Indigo500 else Slate500
+            fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.SemiBold,
+            color = tint,
+            fontSize = 11.sp
         )
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-fun RideNavigationScreenPreview() {
-    val sampleSettings = AppSettings()
-    val sampleRide = RideRequest(
-        id = "1",
-        sender = "0612345678",
-        body = "Taxi depuis Paris vers Lyon",
-        departure = "Paris",
-        arrival = "Lyon",
-        time = "14:30",
-        price = 45.0,
-        distanceKm = 18.5
+fun RideNavigationContentPreview() {
+    val sampleEngineState = NavigationEngineState(
+        currentInstruction = "Tournez à droite sur Rue de la Paix",
+        nextInstruction = "continuez tout droit",
+        nextInstructionDistance = "200m",
+        etaText = "12 min",
+        distanceText = "4.2 km",
+        currentSpeed = "45 km/h"
     )
     DrawTaxiTheme {
-        RideNavigationScreen(
-            ride = sampleRide,
-            settings = sampleSettings,
-            brandColor = Color(0xFF6366F1),
-            onBack = {},
-            onComplete = {}
+        val cameraState = rememberCameraState()
+        RideNavigationContent(
+            engineState = sampleEngineState,
+            currentPhase = NavigationPhase.TO_PICKUP,
+            pickupLocation = null,
+            destLocation = null,
+            homeLocation = null,
+            cameraState = cameraState,
+            hasLocationPermission = true,
+            onRequestPermission = {},
+            onCallClick = {},
+            onMessageClick = {},
+            onPhaseChange = {},
+            onStartRideClick = {},
+            onCompleteClick = {},
+            onRecenterClick = {}
         )
     }
 }
 
-
+private fun Modifier.clickable(onClick: () -> Unit): Modifier = this.then(
+    pointerInput(onClick) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.changes.any { it.pressed.not() && it.previousPressed }) onClick()
+            }
+        }
+    }
+)

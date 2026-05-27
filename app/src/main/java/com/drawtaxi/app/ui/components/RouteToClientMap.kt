@@ -5,31 +5,38 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import java.util.Locale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.drawtaxi.app.logic.geocoding.GeocodingService
 import com.drawtaxi.app.logic.routing.NavigationEngine
 import com.drawtaxi.app.ui.theme.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.expressions.dsl.const
 import org.maplibre.compose.layers.CircleLayer
 import org.maplibre.compose.layers.LineLayer
-import org.maplibre.compose.map.GestureOptions
 import org.maplibre.compose.map.MapOptions
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.OrnamentOptions
@@ -45,9 +52,11 @@ private const val EMPTY_FC = """{"type":"FeatureCollection","features":[]}"""
 fun RouteToClientMap(
     pickupAddress: String,
     brandColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var currentLocation by remember { mutableStateOf<Location?>(null) }
     var pickupLocation by remember { mutableStateOf<Location?>(null) }
@@ -81,7 +90,6 @@ fun RouteToClientMap(
                         toLat = pick.latitude, toLng = pick.longitude
                     )
                     if (route != null) {
-                        val points = mutableListOf<Position>()
                         val decoded = NavigationEngine.fetchRouteGeometry(
                             fromLat = cur.latitude, fromLng = cur.longitude,
                             toLat = pick.latitude, toLng = pick.longitude
@@ -100,47 +108,89 @@ fun RouteToClientMap(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp
+        shadowElevation = 3.dp
     ) {
         Column {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.MyLocation,
-                        contentDescription = null,
-                        tint = brandColor,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .background(brandColor.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.MyLocation,
+                            contentDescription = null,
+                            tint = brandColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
                             "Trajet vers le client",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Slate900
                         )
                         if (distanceKm != null && durationMin != null) {
-                            Text(
-                                "${String.format("%.1f", distanceKm)} km • ~$durationMin min",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Slate500
-                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .background(Slate100, RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    "${String.format(Locale.getDefault(), "%.1f", distanceKm)} km",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Slate600
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(modifier = Modifier.size(3.dp).background(Slate300, CircleShape))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "~$durationMin min",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = brandColor
+                                )
+                            }
                         }
                     }
+                }
+
+                IconButton(
+                    onClick = onNavigateClick,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .background(brandColor, RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        Icons.Default.Navigation,
+                        contentDescription = "Naviguer",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(200.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                    .clip(RoundedCornerShape(16.dp))
             ) {
                 if (isLoading) {
                     Box(
@@ -164,8 +214,7 @@ fun RouteToClientMap(
                                 isLogoEnabled = false,
                                 isAttributionEnabled = false,
                                 isCompassEnabled = false
-                            ),
-                            gestureOptions = GestureOptions.AllDisabled
+                            )
                         )
                     ) {
                         val routeSource = rememberGeoJsonSource(
@@ -219,10 +268,10 @@ fun RouteToClientMap(
                         CircleLayer(
                             id = "vous",
                             source = vousSource,
-                            color = const(Color(0xFF2196F3)),
-                            radius = const(6.dp),
+                            color = const(brandColor),
+                            radius = const(8.dp),
                             strokeColor = const(Color.White),
-                            strokeWidth = const(2.dp)
+                            strokeWidth = const(3.dp)
                         )
 
                         CircleLayer(
@@ -258,6 +307,53 @@ fun RouteToClientMap(
                             }
                         }
                     }
+
+                    // Floating Recenter Button
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        contentAlignment = Alignment.BottomEnd
+                    ) {
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    val allPositions = mutableListOf<Position>()
+                                    allPositions.addAll(routePositions)
+                                    currentLocation?.let {
+                                        allPositions.add(Position(latitude = it.latitude, longitude = it.longitude))
+                                    }
+                                    pickupLocation?.let {
+                                        allPositions.add(Position(latitude = it.latitude, longitude = it.longitude))
+                                    }
+                                    if (allPositions.isNotEmpty()) {
+                                        val lats = allPositions.map { it.latitude }
+                                        val lngs = allPositions.map { it.longitude }
+                                        cameraState.animateTo(
+                                            CameraPosition(
+                                                target = Position(
+                                                    longitude = (lngs.min() + lngs.max()) / 2.0,
+                                                    latitude = (lats.min() + lats.max()) / 2.0
+                                                ),
+                                                zoom = 12.0
+                                            )
+                                        )
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .shadow(4.dp, RoundedCornerShape(10.dp))
+                                .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Recentrer",
+                                tint = Slate700,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 } else {
                     Box(
                         modifier = Modifier
@@ -266,6 +362,124 @@ fun RouteToClientMap(
                         contentAlignment = Alignment.Center
                     ) {
                         Text("Position non disponible", color = Slate500)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun RouteToClientMapPreview() {
+    DrawTaxiTheme {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 3.dp
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .background(Indigo500.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.MyLocation,
+                                    contentDescription = null,
+                                    tint = Indigo500,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Trajet vers le client",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Slate900
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .background(Slate100, RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        "3.2 km",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Slate600
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Box(modifier = Modifier.size(3.dp).background(Slate300, CircleShape))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        "~8 min",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Indigo500
+                                    )
+                                }
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { },
+                            modifier = Modifier
+                                .size(42.dp)
+                                .background(Indigo500, RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(
+                                Icons.Default.Navigation,
+                                contentDescription = "Naviguer",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Slate200),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Carte MapLibre", color = Slate500, style = MaterialTheme.typography.bodyMedium)
+
+                        IconButton(
+                            onClick = { },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(12.dp)
+                                .size(36.dp)
+                                .shadow(4.dp, RoundedCornerShape(10.dp))
+                                .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Recentrer",
+                                tint = Slate700,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }

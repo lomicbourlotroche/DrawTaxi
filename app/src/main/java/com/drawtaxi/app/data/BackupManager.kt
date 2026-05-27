@@ -45,7 +45,6 @@ class BackupManager(private val context: Context) {
             put("pricePerKm", settings.pricePerKm)
             put("basePrice", settings.basePrice)
             put("brandColor", settings.brandColor.value.toLong())
-            put("theme", settings.theme)
             put("showLogo", settings.showLogo)
             put("signature", settings.signature)
             put("missingInfoTemplate", settings.missingInfoTemplate)
@@ -96,7 +95,6 @@ class BackupManager(private val context: Context) {
                 pricePerKm = settingsJson.optString("pricePerKm", "1.20"),
                 basePrice = settingsJson.optString("basePrice", "2.60"),
                 brandColor = settingsJson.optLong("brandColor", TaxiRed.value.toLong()).let { Color(it.toULong()) },
-                theme = settingsJson.optString("theme", "modern"),
                 showLogo = settingsJson.optBoolean("showLogo", true),
                 signature = settingsJson.optString("signature", "Fait à [Ville], le [Date]"),
                 missingInfoTemplate = settingsJson.optString("missingInfoTemplate", ""),
