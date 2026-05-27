@@ -519,7 +519,13 @@ class OvhImapService : Service() {
                 }
             }
             RideMatchResult.ADDITION, RideMatchResult.NEW_RIDE -> {
-                val ride = aiResult.toRideRequest(from, timestamp, settings)
+                val ride = aiResult.toRideRequest(
+                    sender = from,
+                    timestamp = timestamp,
+                    settings = settings,
+                    extraBody = body,
+                    messageChannel = com.drawtaxi.app.data.MessageChannel.EMAIL
+                )
                 if (ride != null) {
                     val hasMissingInfo = aiResult.missingFields.isNotEmpty()
                     val saved = ride.copy(

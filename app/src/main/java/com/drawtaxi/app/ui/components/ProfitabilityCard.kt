@@ -276,7 +276,7 @@ private fun InfoChip(icon: ImageVector, label: String, value: String, modifier: 
 
 @Composable
 fun QuoteProfitabilityDialog(
-    ride: RideRequest, settings: AppSettings, onConfirm: () -> Unit, onCancel: () -> Unit
+    ride: RideRequest, settings: AppSettings, isCalculating: Boolean = false, onConfirm: () -> Unit, onCancel: () -> Unit
 ) {
     val dep = ride.departure.ifBlank { "?" }
     val arr = ride.arrival.ifBlank { "?" }
@@ -290,11 +290,30 @@ fun QuoteProfitabilityDialog(
                 Spacer(modifier = Modifier.height(4.dp))
                 androidx.compose.material3.Text("${ride.date} a ${ride.time}", style = drawTaxiType().bodySmall, color = Slate500)
                 Spacer(modifier = Modifier.height(16.dp))
-                ProfitabilityAnalysisCard(ride = ride, settings = settings)
+                if (isCalculating) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            androidx.compose.material3.CircularProgressIndicator(color = settings.brandColor)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            androidx.compose.material3.Text(
+                                "Calcul de l'itinéraire et de la rentabilité...",
+                                style = drawTaxiType().bodyMedium,
+                                color = drawTaxiColors().onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    ProfitabilityAnalysisCard(ride = ride, settings = settings)
+                }
             }
         },
         confirmButton = {
-            DrawTaxiSolidButton(onClick = onConfirm, containerColor = settings.brandColor) {
+            DrawTaxiSolidButton(onClick = onConfirm, containerColor = settings.brandColor, enabled = !isCalculating) {
                 DrawTaxiIcon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 androidx.compose.material3.Text("Envoyer le devis")

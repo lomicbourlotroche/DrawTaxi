@@ -423,6 +423,7 @@ class MainActivity : ComponentActivity() {
                                             onRideClick = { ride ->
                                                 editingRide = ride
                                             },
+                                            onUpdateRide = { viewModel.updateRide(it) },
                                             brandColor = settings.brandColor,
                                             settings = settings,
                                             onCreateRide = {

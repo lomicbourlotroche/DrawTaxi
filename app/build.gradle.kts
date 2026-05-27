@@ -74,6 +74,7 @@ android {
         jniLibs {
             useLegacyPackaging = true
             excludes += "**/libdeepseek-ocr.so"
+            excludes += "lib/*/libdeepseek-ocr.so"
         }
     }
 

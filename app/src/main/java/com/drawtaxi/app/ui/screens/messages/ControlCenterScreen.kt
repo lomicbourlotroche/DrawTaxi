@@ -45,6 +45,13 @@ import com.drawtaxi.app.ui.components.QuoteProfitabilityDialog
 
 import com.drawtaxi.app.ui.theme.*
 import androidx.compose.ui.tooling.preview.Preview
+import com.drawtaxi.app.logic.geocoding.GeocodingService
+import com.drawtaxi.app.logic.routing.NavigationEngine
+import com.drawtaxi.app.logic.pricing.PriceEngine
+import java.util.Calendar
+import android.util.Log
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 
 
 
@@ -63,7 +70,8 @@ fun ControlCenterScreen(
     onRejectQuote: (RideRequest) -> Unit = {},
     onDeleteWithMessage: (RideRequest, String) -> Unit = { _, _ -> },
     onOpenAgenda: () -> Unit = {},
-    messageTemplates: List<String> = emptyList()
+    messageTemplates: List<String> = emptyList(),
+    onUpdateRide: (RideRequest) -> Unit = {}
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var rideToDelete by remember { mutableStateOf<RideRequest?>(null) }
@@ -71,6 +79,10 @@ fun ControlCenterScreen(
     var showQuoteDialog by remember { mutableStateOf(false) }
     var rideForQuote by remember { mutableStateOf<RideRequest?>(null) }
     var showDeleteAllDialog by remember { mutableStateOf(false) }
+    
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var isCalculatingRoute by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -217,6 +229,64 @@ fun ControlCenterScreen(
                         onSendQuote = {
                             rideForQuote = ride
                             showQuoteDialog = true
+                            scope.launch {
+                                isCalculatingRoute = true
+                                try {
+                                    val dep = ride.departure
+                                    val arr = ride.arrival
+                                    if (dep.isNotBlank() && arr.isNotBlank()) {
+                                        val depLoc = GeocodingService.geocode(dep, context)
+                                        val arrLoc = GeocodingService.geocode(arr, context)
+                                        if (depLoc != null && arrLoc != null) {
+                                            val route = NavigationEngine.fetchRoute(
+                                                fromLat = depLoc.latitude, fromLng = depLoc.longitude,
+                                                toLat = arrLoc.latitude, toLng = arrLoc.longitude
+                                            )
+                                            if (route != null) {
+                                                val realDistance = route.distance / 1000.0
+                                                val realDuration = (route.duration / 60.0).toInt()
+                                                
+                                                val priceBreakdown = PriceEngine.calculate(
+                                                    distanceKm = realDistance,
+                                                    dateTime = Calendar.getInstance(),
+                                                    pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 2.50,
+                                                    baseFare = settings.basePrice.toDoubleOrNull() ?: 9.00,
+                                                    minDistanceKm = settings.minDistanceKm.toDoubleOrNull() ?: 3.6,
+                                                    nightSurchargePercent = settings.nightSurchargePercent,
+                                                    sundaySurchargePercent = settings.sundaySurchargePercent,
+                                                    holidaySurchargePercent = settings.holidaySurchargePercent,
+                                                    nightStartHour = settings.nightStartHour,
+                                                    nightEndHour = settings.nightEndHour,
+                                                    tvaTransportRate = settings.tvaTransportRate
+                                                )
+                                                val finalPrice = priceBreakdown.totalTTC
+                                                
+                                                val emptyKm = RideRequest.estimateEmptyKm(realDistance, 0.3) * 2
+                                                val fuelCost = emptyKm * settings.coutParKmDeplacement
+                                                val operatingCost = (realDuration / 60.0) * settings.operatingCostPerHour
+                                                val totalCost = fuelCost + operatingCost
+                                                val netProfit = finalPrice - totalCost
+                                                val profitability = if (finalPrice > 0.001) ((netProfit / finalPrice) * 100).coerceIn(-999.0, 100.0) else 0.0
+                                                
+                                                val updatedRide = ride.copy(
+                                                    distanceKm = realDistance,
+                                                    durationMinutes = realDuration,
+                                                    price = finalPrice,
+                                                    fuelCost = fuelCost,
+                                                    operatingCost = operatingCost,
+                                                    profitabilityPercent = profitability
+                                                )
+                                                rideForQuote = updatedRide
+                                                onUpdateRide(updatedRide)
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("ControlCenterScreen", "Error calculating real distance: ${e.message}")
+                                } finally {
+                                    isCalculatingRoute = false
+                                }
+                            }
                         },
                         onAcceptQuote = { onAcceptQuote(ride) },
                         onRejectQuote = { onRejectQuote(ride) },
@@ -381,8 +451,6 @@ fun ControlCenterScreen(
 
     
 
-    // Dialog d'analyse de rentabilité avant envoi du devis
-
     if (showQuoteDialog && rideForQuote != null) {
 
         QuoteProfitabilityDialog(
@@ -390,6 +458,8 @@ fun ControlCenterScreen(
             ride = rideForQuote!!,
 
             settings = settings,
+
+            isCalculating = isCalculatingRoute,
 
             onConfirm = {
 

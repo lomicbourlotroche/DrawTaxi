@@ -289,11 +289,13 @@ Répondre à: bob.leponge@plouf.fr
 
   Email bob.leponge@plouf.fr
 
-  Prestation Depuis la gare
+  Prestation TY-ZEF Brest VTC
 
   Date 27/05/2026
 
   Horaire 18:12
+
+  Adresse de départ Gare de Brest
 
   Adresse de destination Fort Montbarey, Route du Fort Montbarey, Brest
 
@@ -310,7 +312,7 @@ Répondre à: bob.leponge@plouf.fr
 
         val result = AiSmsParser.parseFormspreeEmail(emailBody)
         assertNotNull(result)
-        assertEquals("La gare", result?.departure)
+        assertEquals("Gare de Brest", result?.departure)
         assertEquals("Fort Montbarey, Route du Fort Montbarey, Brest", result?.arrival)
         assertEquals("18:12", result?.time)
         assertEquals("27/05/2026", result?.date)
