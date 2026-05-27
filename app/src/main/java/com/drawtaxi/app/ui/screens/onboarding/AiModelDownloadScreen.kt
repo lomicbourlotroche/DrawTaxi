@@ -423,13 +423,14 @@ fun AiModelDownloadScreen(
 
 @Composable
 private fun FeatureItem(
+    modifier: Modifier = Modifier,
     icon: ImageVector,
     title: String,
     description: String,
     brandColor: Color
 ) {
     DrawTaxiSurface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         color = Color.White,
         borderWidth = 1.dp,
@@ -444,7 +445,10 @@ private fun FeatureItem(
                 shape = RoundedCornerShape(12.dp),
                 color = brandColor.copy(0.1f)
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
@@ -480,6 +484,25 @@ fun AiModelDownloadScreenPreview() {
             onSkip = {},
             onComplete = {}
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun FeatureItemPreview() {
+    DrawTaxiTheme {
+        Box(
+            modifier = Modifier
+                .background(Slate50)
+                .padding(16.dp)
+        ) {
+            FeatureItem(
+                icon = Icons.Default.Shield,
+                title = "100% hors ligne",
+                description = "Vos données ne quittent jamais l'appareil",
+                brandColor = Indigo500
+            )
+        }
     }
 }
 
