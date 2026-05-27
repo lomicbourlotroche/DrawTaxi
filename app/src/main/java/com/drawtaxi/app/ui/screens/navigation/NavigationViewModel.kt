@@ -69,16 +69,13 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
 
     fun startNavigation(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double) {
         viewModelScope.launch {
-            engine.state.value.let { current ->
-                if (!current.isNavigating) {
-                    val route = NavigationEngine.fetchRoute(
-                        fromLat = fromLat, fromLng = fromLng,
-                        toLat = toLat, toLng = toLng
-                    )
-                    if (route != null) {
-                        engine.startNavigation(route, toLat = toLat, toLng = toLng)
-                    }
-                }
+            engine.stopNavigation()
+            val route = NavigationEngine.fetchRoute(
+                fromLat = fromLat, fromLng = fromLng,
+                toLat = toLat, toLng = toLng
+            )
+            if (route != null) {
+                engine.startNavigation(route, toLat = toLat, toLng = toLng)
             }
         }
     }

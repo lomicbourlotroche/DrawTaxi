@@ -1,8 +1,10 @@
 package com.drawtaxi.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -20,6 +22,7 @@ import com.drawtaxi.app.ui.theme.Slate400
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.maplibre.compose.camera.CameraPosition
 import org.maplibre.compose.camera.rememberCameraState
 import org.maplibre.compose.expressions.dsl.const
@@ -49,6 +52,7 @@ fun RideMap(
     var routePoints by remember { mutableStateOf<List<Position>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var hasRoute by remember { mutableStateOf(false) }
     val cameraState = rememberCameraState()
 
     LaunchedEffect(departure, arrival) {
@@ -70,8 +74,10 @@ fun RideMap(
 
                     if (geometry.isNotEmpty()) {
                         routePoints = geometry.map { Position(latitude = it.first, longitude = it.second) }
+                        hasRoute = true
                     } else {
                         routePoints = listOf(start, end)
+                        errorMessage = "Itinéraire non disponible (API OSRM)"
                     }
                 } else {
                     errorMessage = "Impossible de localiser les adresses"
@@ -168,10 +174,11 @@ fun RideMap(
                     val lngs = routePoints.map { it.longitude }
                     val centerLat = (lats.min() + lats.max()) / 2.0
                     val centerLng = (lngs.min() + lngs.max()) / 2.0
+                    val dynamicZoom = NavigationEngine.calculateZoomPositions(routePoints)
                     cameraState.animateTo(
                         CameraPosition(
                             target = Position(longitude = centerLng, latitude = centerLat),
-                            zoom = 12.0
+                            zoom = dynamicZoom
                         )
                     )
                 }
@@ -185,8 +192,14 @@ fun RideMap(
         }
 
         if (errorMessage != null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(errorMessage!!, color = Slate400)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(8.dp)
+                    .background(androidx.compose.ui.graphics.Color(0xFFFF6B6B).copy(alpha = 0.9f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(errorMessage!!, color = androidx.compose.ui.graphics.Color.White, fontSize = 12.sp)
             }
         }
     }

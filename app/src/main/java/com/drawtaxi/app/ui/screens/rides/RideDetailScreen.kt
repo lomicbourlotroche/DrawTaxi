@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import com.drawtaxi.app.ui.components.core.*
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.data.RideRequest
+import com.drawtaxi.app.data.RideStatus
 import com.drawtaxi.app.ui.components.*
 import com.drawtaxi.app.ui.theme.*
 
@@ -58,11 +61,9 @@ fun RideDetailScreen(
             nightSurchargePercent = settings.nightSurchargePercent,
             sundaySurchargePercent = settings.sundaySurchargePercent,
             holidaySurchargePercent = settings.holidaySurchargePercent,
-            euroPerMinute = settings.euroPerMinute,
             nightStartHour = settings.nightStartHour,
             nightEndHour = settings.nightEndHour,
-            tvaTransportRate = settings.tvaTransportRate,
-            tvaWaitTimeRate = settings.tvaWaitTimeRate
+            tvaTransportRate = settings.tvaTransportRate
         )
         priceBreakdown.totalTTC
     }
@@ -73,7 +74,13 @@ fun RideDetailScreen(
         ride.distanceKm * 0.3
     }
     val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
-    val totalCost = coutDeplacement.takeIf { it.isFinite() } ?: 0.0
+    
+    // For completed rides, sum actual fuelCost and operatingCost. Fallback to estimated empty running cost otherwise.
+    val totalCost = if (ride.status == RideStatus.COMPLETED && (ride.fuelCost > 0 || ride.operatingCost > 0)) {
+        ride.fuelCost + ride.operatingCost
+    } else {
+        coutDeplacement.takeIf { it.isFinite() } ?: 0.0
+    }
     val netProfit = actualPrice - totalCost
     val profitability = if (actualPrice > 0.001) {
         ((netProfit / actualPrice) * 100).takeIf { it.isFinite() } ?: 0.0
@@ -230,8 +237,9 @@ fun RideDetailScreen(
                     ride = ride,
                     profitability = profitability,
                     netProfit = netProfit,
-                    coutDeplacement = coutDeplacement,
-                    distanceDomicileKm = distanceDomicileKm,
+                    fuelCost = if (ride.fuelCost > 0 || ride.operatingCost > 0) ride.fuelCost else coutDeplacement,
+                    operatingCost = ride.operatingCost,
+                    hasRealCosts = ride.fuelCost > 0 || ride.operatingCost > 0,
                     totalPrice = actualPrice,
                     brandColor = brandColor
                 )
@@ -247,16 +255,25 @@ fun RideDetailProfitabilityCard(
     ride: RideRequest,
     profitability: Double,
     netProfit: Double,
-    coutDeplacement: Double,
-    distanceDomicileKm: Double,
+    fuelCost: Double,
+    operatingCost: Double,
+    hasRealCosts: Boolean,
     totalPrice: Double,
     brandColor: Color
 ) {
     val profitColor = when {
         profitability >= 50 -> Green500
-        profitability >= 30 -> Color(0xFFFFA500)
+        profitability >= 30 -> Amber500
+        profitability >= 15 -> Color(0xFFFF6B00)
         else -> Red500
     }
+    val statusLabel = when {
+        profitability >= 50 -> "Excellente"
+        profitability >= 30 -> "Correcte"
+        profitability >= 15 -> "Faible"
+        else -> "Non rentable"
+    }
+    val totalCostDisplay = fuelCost + operatingCost
 
     DrawTaxiSurface(
         modifier = Modifier.fillMaxWidth(),
@@ -265,6 +282,7 @@ fun RideDetailProfitabilityCard(
         shadowElevation = 2.dp
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -273,56 +291,207 @@ fun RideDetailProfitabilityCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         color = brandColor.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.size(36.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Analytics, contentDescription = null, tint = brandColor, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Analytics, contentDescription = null, tint = brandColor, modifier = Modifier.size(20.dp))
                         }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Rentabilité", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
+                    Column {
+                        Text(
+                            "Rentabilité",
+                            style = drawTaxiType().titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = drawTaxiColors().onSurface
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                statusLabel,
+                                style = drawTaxiType().bodySmall,
+                                color = profitColor,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (!hasRealCosts) {
+                                Text(
+                                    "• estimée",
+                                    style = drawTaxiType().labelSmall,
+                                    color = drawTaxiColors().onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
-                Text(
-                    text = "${String.format(Locale.getDefault(), "%.0f", profitability)}%",
-                    style = drawTaxiType().headlineSmall,
-                    fontWeight = FontWeight.Black,
-                    color = profitColor
+                // Big % badge
+                Surface(
+                    color = profitColor.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        text = "${String.format(Locale.getDefault(), "%.0f", profitability)}%",
+                        style = drawTaxiType().headlineMedium,
+                        fontWeight = FontWeight.Black,
+                        color = profitColor,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Progress bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(profitColor.copy(alpha = 0.1f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth((profitability / 100.0).coerceIn(0.0, 1.0).toFloat())
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(profitColor)
                 )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ProfitabilityStatItem(label = "Prix TTC", value = String.format(Locale.getDefault(), "%.2f €", totalPrice), modifier = Modifier.weight(1f))
-                ProfitabilityStatItem(label = "Coûts", value = String.format(Locale.getDefault(), "%.2f €", coutDeplacement), modifier = Modifier.weight(1f))
-                ProfitabilityStatItem(label = "Distance", value = String.format(Locale.getDefault(), "%.1f km", distanceDomicileKm), modifier = Modifier.weight(1f))
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-            DrawTaxiDivider(color = drawTaxiColors().outlineVariant.copy(alpha = 0.5f))
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Bénéfice net", style = drawTaxiType().bodyMedium, color = Slate500, fontWeight = FontWeight.Medium)
-                Surface(
-                    color = (if (netProfit > 0) Green500 else Red500).copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
+            // Cost breakdown block
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(drawTaxiColors().surfaceVariant.copy(alpha = 0.5f))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Revenue row
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = String.format(Locale.getDefault(), "%.2f €", netProfit),
-                        style = drawTaxiType().titleMedium,
+                        "Prix TTC",
+                        style = drawTaxiType().bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (netProfit > 0) Green500 else Red500,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        color = drawTaxiColors().onSurface
+                    )
+                    Text(
+                        String.format(Locale.getDefault(), "+%.2f €", totalPrice),
+                        style = drawTaxiType().bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Green500
+                    )
+                }
+
+                DrawTaxiDivider(color = drawTaxiColors().outline.copy(alpha = 0.4f))
+
+                Text(
+                    if (hasRealCosts) "COÛTS RÉELS" else "COÛTS ESTIMÉS",
+                    style = drawTaxiType().labelSmall,
+                    color = drawTaxiColors().onSurfaceVariant,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        "Coût kilométrique",
+                        style = drawTaxiType().bodySmall,
+                        color = drawTaxiColors().onSurfaceVariant
+                    )
+                    Text(
+                        String.format(Locale.getDefault(), "-%.2f €", fuelCost),
+                        style = drawTaxiType().bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = drawTaxiColors().onSurface
+                    )
+                }
+
+                if (operatingCost > 0 || hasRealCosts) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(
+                            "Charges exploitation",
+                            style = drawTaxiType().bodySmall,
+                            color = drawTaxiColors().onSurfaceVariant
+                        )
+                        Text(
+                            String.format(Locale.getDefault(), "-%.2f €", operatingCost),
+                            style = drawTaxiType().bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = drawTaxiColors().onSurface
+                        )
+                    }
+                }
+
+                DrawTaxiDivider(color = drawTaxiColors().outline.copy(alpha = 0.3f))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        "Total coûts",
+                        style = drawTaxiType().bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = drawTaxiColors().onSurface
+                    )
+                    Text(
+                        String.format(Locale.getDefault(), "-%.2f €", totalCostDisplay),
+                        style = drawTaxiType().bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Red500
                     )
                 }
             }
 
-            if (ride.durationMinutes > 0) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Net profit
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = (if (netProfit > 0) Green500 else Red500).copy(alpha = 0.08f),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(
+                            if (netProfit > 0) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
+                            contentDescription = null,
+                            tint = if (netProfit > 0) Green500 else Red500,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            "Bénéfice net",
+                            style = drawTaxiType().titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = drawTaxiColors().onSurface
+                        )
+                    }
+                    Text(
+                        text = String.format(Locale.getDefault(), "%.2f €", netProfit),
+                        style = drawTaxiType().titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (netProfit > 0) Green500 else Red500
+                    )
+                }
+            }
+
+            // Revenue per hour (if duration known)
+            if (ride.durationMinutes > 0 && ride.price > 0) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Revenu / heure", style = drawTaxiType().bodyMedium, color = Slate500, fontWeight = FontWeight.Medium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Default.Schedule, contentDescription = null, tint = drawTaxiColors().onSurfaceVariant, modifier = Modifier.size(16.dp))
+                        Text("Revenu / heure", style = drawTaxiType().bodySmall, color = drawTaxiColors().onSurfaceVariant)
+                    }
                     Text(
                         text = String.format(Locale.getDefault(), "%.2f €/h", (ride.price / ride.durationMinutes) * 60),
                         style = drawTaxiType().bodyMedium,

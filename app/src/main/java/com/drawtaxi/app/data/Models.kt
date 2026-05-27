@@ -66,11 +66,9 @@ data class AppSettings(
     val nightSurchargePercent: Double = 0.15,
     val sundaySurchargePercent: Double = 0.10,
     val holidaySurchargePercent: Double = 0.15,
-    val euroPerMinute: Double = 1.0,
     val nightStartHour: Int = 20,
     val nightEndHour: Int = 7,
     val tvaTransportRate: Double = 0.10,
-    val tvaWaitTimeRate: Double = 0.20,
     val homeAddress: String = "",
     val smsScanIntervalMinutes: Int = 60,
     val aiEnabled: Boolean = true,
@@ -91,7 +89,9 @@ data class AppSettings(
     val ovhImapServer: String = "ssl0.ovh.net",
     val ovhImapPort: Int = 993,
     val ovhImapCheckInterval: Int = 5, // minutes
-    val ovhImapFolder: String = "INBOX"
+    val ovhImapFolder: String = "INBOX",
+    // Expéditeurs autorisés (séparés par des virgules)
+    val ovhAllowedSenders: String = "noreply@formspree.io"
 ) {
     companion object {
         val defaultMessageTemplates = listOf(
@@ -129,7 +129,6 @@ data class RideRequest(
     val profitabilityPercent: Double = 0.0,
     val homeAddress: String = "",
     val distanceReelleKm: Double = 0.0,
-    val waitMinutes: Int = 0,
     val priceBreakdown: String = "",
     val latitudeDepart: Double = 0.0,
     val longitudeDepart: Double = 0.0,
@@ -154,13 +153,23 @@ data class RideRequest(
         }
 
         fun calculateProfitability(price: Double, coutDeplacement: Double): Double {
-            if (price == 0.0) return 0.0
-            if (coutDeplacement <= 0.0) return 100.0
+            if (coutDeplacement == 0.0 || price == 0.0) return 0.0
             return ((price - coutDeplacement) / price) * 100.0
         }
 
-        fun calculateCoutDeplacement(distanceDomicileKm: Double, coutParKm: Double = 0.10): Double {
-            return distanceDomicileKm * coutParKm
+        fun calculateCoutDeplacement(totalEmptyKm: Double, coutParKm: Double = 0.10): Double {
+            return totalEmptyKm * coutParKm
+        }
+
+        fun estimateEmptyKm(distanceKm: Double, emptyPercent: Double = 0.3): Double {
+            return (distanceKm * emptyPercent).coerceAtLeast(1.0)
+        }
+
+        fun generateInvoiceNumber(timestamp: Long, driverName: String): String {
+            val sdf = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.getDefault())
+            val datePart = sdf.format(java.util.Date(timestamp))
+            val firstLetter = driverName.trim().take(1).uppercase().takeIf { it.isNotBlank() } ?: "X"
+            return "$datePart$firstLetter"
         }
     }
 }

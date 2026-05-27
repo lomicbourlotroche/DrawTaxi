@@ -4,8 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.drawtaxi.app.data.AppSettings
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.*
@@ -34,12 +32,16 @@ object OvhMailSender {
 
             val props = Properties().apply {
                 put("mail.smtp.auth", "true")
-                put("mail.smtp.starttls.enable", settings.ovhSmtpUseSsl)
                 put("mail.smtp.host", settings.ovhSmtpServer)
                 put("mail.smtp.port", settings.ovhSmtpPort.toString())
                 put("mail.smtp.ssl.trust", settings.ovhSmtpServer)
                 put("mail.smtp.connectiontimeout", "10000")
                 put("mail.smtp.timeout", "10000")
+                if (settings.ovhSmtpPort == 465) {
+                    put("mail.smtp.ssl.enable", "true")
+                } else {
+                    put("mail.smtp.starttls.enable", settings.ovhSmtpUseSsl.toString())
+                }
             }
 
             val session = Session.getInstance(props, object : Authenticator() {
@@ -63,21 +65,19 @@ object OvhMailSender {
                 sentDate = Date()
 
                 if (attachment != null && attachment.exists()) {
-                    // Message avec pièce jointe
                     val multipart = MimeMultipart()
-                    
+
                     val textPart = MimeBodyPart()
                     textPart.setContent(body, "text/plain; charset=utf-8")
                     multipart.addBodyPart(textPart)
-                    
+
                     val attachmentPart = MimeBodyPart()
                     attachmentPart.attachFile(attachment)
                     attachmentPart.fileName = attachment.name
                     multipart.addBodyPart(attachmentPart)
-                    
+
                     setContent(multipart)
                 } else {
-                    // Message simple
                     setContent(body, "text/plain; charset=utf-8")
                 }
             }
@@ -97,6 +97,39 @@ object OvhMailSender {
         }
     }
 
+    suspend fun testImapConnection(settings: AppSettings): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            if (settings.ovhSmtpUsername.isBlank() || settings.ovhSmtpPassword.isBlank()) {
+                return@withContext Result.failure(Exception("Identifiants non configurés"))
+            }
+
+            val props = Properties().apply {
+                put("mail.store.protocol", "imaps")
+                put("mail.imaps.host", settings.ovhImapServer)
+                put("mail.imaps.port", settings.ovhImapPort.toString())
+                put("mail.imaps.connectiontimeout", "10000")
+                put("mail.imaps.timeout", "10000")
+            }
+
+            val session = Session.getInstance(props)
+            val store = session.getStore("imaps")
+            store.connect(
+                settings.ovhImapServer,
+                settings.ovhImapPort,
+                settings.ovhSmtpUsername,
+                settings.ovhSmtpPassword
+            )
+            val inbox = store.getFolder(settings.ovhImapFolder)
+            inbox.open(Folder.READ_ONLY)
+            inbox.close(false)
+            store.close()
+
+            Result.success("Connexion IMAP réussie (dossier : ${settings.ovhImapFolder})")
+        } catch (e: Exception) {
+            Result.failure(Exception("Test IMAP échoué: ${e.message}"))
+        }
+    }
+
     suspend fun testConnection(settings: AppSettings): Result<String> = withContext(Dispatchers.IO) {
         try {
             if (settings.ovhSmtpUsername.isBlank() || settings.ovhSmtpPassword.isBlank()) {
@@ -105,11 +138,16 @@ object OvhMailSender {
 
             val props = Properties().apply {
                 put("mail.smtp.auth", "true")
-                put("mail.smtp.starttls.enable", settings.ovhSmtpUseSsl)
                 put("mail.smtp.host", settings.ovhSmtpServer)
                 put("mail.smtp.port", settings.ovhSmtpPort.toString())
-                put("mail.smtp.connectiontimeout", "5000")
-                put("mail.smtp.timeout", "5000")
+                put("mail.smtp.ssl.trust", settings.ovhSmtpServer)
+                put("mail.smtp.connectiontimeout", "10000")
+                put("mail.smtp.timeout", "10000")
+                if (settings.ovhSmtpPort == 465) {
+                    put("mail.smtp.ssl.enable", "true")
+                } else {
+                    put("mail.smtp.starttls.enable", settings.ovhSmtpUseSsl.toString())
+                }
             }
 
             val session = Session.getInstance(props, object : Authenticator() {
@@ -121,7 +159,6 @@ object OvhMailSender {
                 }
             })
 
-            // Tester la connexion
             val transport = session.getTransport("smtp")
             transport.connect(
                 settings.ovhSmtpServer,
@@ -137,12 +174,16 @@ object OvhMailSender {
         }
     }
 
-    fun sendRideConfirmation(
+    /**
+     * Envoie un email de confirmation de course.
+     * Fonction suspend à appeler depuis un CoroutineScope (ViewModel, Service, etc.).
+     */
+    suspend fun sendRideConfirmation(
         context: Context,
         settings: AppSettings,
         toEmail: String,
         ride: com.drawtaxi.app.data.RideRequest
-    ) {
+    ): Result<Unit> {
         val subject = "Confirmation de votre course - ${settings.companyName}"
         val body = """
             Bonjour,
@@ -160,19 +201,20 @@ object OvhMailSender {
             ${settings.companyName}
         """.trimIndent()
 
-        // Envoi asynchrone
-        GlobalScope.launch(Dispatchers.IO) {
-            sendEmail(context, settings, toEmail, subject, body)
-        }
+        return sendEmail(context, settings, toEmail, subject, body)
     }
 
-    fun sendInvoiceByEmail(
+    /**
+     * Envoie une facture par email avec pièce jointe.
+     * Fonction suspend à appeler depuis un CoroutineScope (ViewModel, Service, etc.).
+     */
+    suspend fun sendInvoiceByEmail(
         context: Context,
         settings: AppSettings,
         toEmail: String,
         ride: com.drawtaxi.app.data.RideRequest,
         invoiceFile: File
-    ) {
+    ): Result<Unit> {
         val subject = "Votre facture - ${settings.companyName}"
         val body = """
             Bonjour,
@@ -190,8 +232,6 @@ object OvhMailSender {
             ${settings.companyName}
         """.trimIndent()
 
-        GlobalScope.launch(Dispatchers.IO) {
-            sendEmail(context, settings, toEmail, subject, body, invoiceFile)
-        }
+        return sendEmail(context, settings, toEmail, subject, body, invoiceFile)
     }
 }

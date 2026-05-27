@@ -100,26 +100,6 @@ class PriceEngineTest {
     }
 
     @Test
-    fun testWaitTimeCalculation() {
-        val calendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 12)
-            set(Calendar.DAY_OF_WEEK, Calendar.WEDNESDAY)
-            set(Calendar.DAY_OF_YEAR, 100)
-        }
-
-        val result = PriceEngine.calculate(
-            distanceKm = 2.0,
-            waitMinutes = 10,
-            dateTime = calendar,
-            baseFare = 9.0,
-            euroPerMinute = 1.50
-        )
-
-        assertEquals(15.00, result.waitTimePrice, 0.001) // 10 min * 1.50 = 15.00
-        assertEquals(24.00, result.subtotalHT, 0.001) // 9.0 base + 15.0 wait = 24.0
-    }
-
-    @Test
     fun testFormatQuoteMessage() {
         // May 24, 2026 is a Sunday
         val calendar = Calendar.getInstance().apply {

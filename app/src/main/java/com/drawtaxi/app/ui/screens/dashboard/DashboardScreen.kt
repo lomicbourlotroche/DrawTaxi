@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
@@ -57,6 +58,24 @@ fun DashboardScreen(
         RideCalculator.calculatePeriodStats(completedRides, DashboardPeriod.TODAY)
     }
 
+    val last7DaysRevenue = remember(completedRides) {
+        val calendar = Calendar.getInstance()
+        val days = mutableListOf<Double>()
+        for (i in 6 downTo 0) {
+            val cal = calendar.clone() as Calendar
+            cal.add(Calendar.DAY_OF_YEAR, -i)
+            val year = cal.get(Calendar.YEAR)
+            val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
+            
+            val dayRevenue = completedRides.filter { ride ->
+                val rideCal = Calendar.getInstance().apply { timeInMillis = ride.timestamp }
+                rideCal.get(Calendar.YEAR) == year && rideCal.get(Calendar.DAY_OF_YEAR) == dayOfYear
+            }.sumOf { it.price }
+            days.add(dayRevenue)
+        }
+        days
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(drawTaxiColors().background),
         contentPadding = PaddingValues(bottom = 100.dp)
@@ -68,42 +87,62 @@ fun DashboardScreen(
                     .fillMaxWidth()
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(brandColor, brandColor.copy(alpha = 0.75f), drawTaxiColors().background)
+                            colors = listOf(brandColor, brandColor.copy(alpha = 0.6f), drawTaxiColors().background)
                         )
                     )
-                    .padding(horizontal = 20.dp, vertical = 24.dp)
+                    .statusBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 20.dp)
             ) {
                 Column {
-                    Text(
-                        text = "Tableau de bord",
-                        style = drawTaxiType().headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "${periodStats.totalRides} courses · ${String.format(Locale.getDefault(), "%.2f €", periodStats.totalRevenue)}",
-                        style = drawTaxiType().bodyMedium,
-                        color = Color.White.copy(alpha = 0.75f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Tableau de bord",
+                                style = drawTaxiType().headlineSmall,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "${periodStats.totalRides} courses effectuées",
+                                style = drawTaxiType().bodySmall,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color.White.copy(alpha = 0.2f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            DrawTaxiIcon(imageVector = Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
                     // Filtres période
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         DashboardPeriod.entries.forEach { period ->
                             val isSelected = selectedPeriod == period
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.15f))
                                     .clickable { selectedPeriod = period }
-                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
                             ) {
                                 Text(
                                     text = period.label,
                                     style = drawTaxiType().labelMedium,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isSelected) brandColor else Color.White
                                 )
                             }
@@ -115,7 +154,7 @@ fun DashboardScreen(
 
         item {
             Spacer(modifier = Modifier.height(16.dp))
-            DashboardHeroCard(stats = periodStats, brandColor = brandColor)
+            DashboardHeroCard(stats = periodStats, brandColor = brandColor, last7DaysRevenue = last7DaysRevenue)
         }
 
         item {
@@ -160,7 +199,7 @@ fun DashboardScreen(
                                 onClick = { selectedDay = day }
                             )
                             if (day != dailyBreakdown.take(daysToShow).last()) {
-                                DrawTaxiDivider(color = Slate100, modifier = Modifier.padding(vertical = 6.dp))
+                                DrawTaxiDivider(color = drawTaxiColors().outline, modifier = Modifier.padding(vertical = 6.dp))
                             }
                         }
                     }
@@ -204,54 +243,86 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun DashboardHeroCard(stats: PeriodStats, brandColor: Color) {
+private fun DashboardHeroCard(stats: PeriodStats, brandColor: Color, last7DaysRevenue: List<Double>) {
     DrawTaxiCard(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(20.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(24.dp),
+        backgroundColor = brandColor,
+        elevation = 0.dp
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    androidx.compose.ui.graphics.Brush.linearGradient(
-                        colors = listOf(brandColor, brandColor.copy(alpha = 0.85f))
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // Subtle background decoration
+            DrawTaxiIcon(
+                imageVector = Icons.Default.LocalTaxi,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.1f),
+                modifier = Modifier
+                    .size(160.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 40.dp, y = 60.dp)
+            )
+
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1.2f)) {
+                        Text(
+                            text = "Revenus totaux",
+                            style = drawTaxiType().labelMedium,
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = String.format(Locale.getDefault(), "%.2f €", stats.totalRevenue),
+                            style = drawTaxiType().displaySmall.copy(fontSize = 32.sp),
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
+                        )
+                    }
+
+                    MiniSparkline(
+                        data = last7DaysRevenue,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp)
+                            .padding(start = 12.dp),
+                        lineColor = Color.White,
+                        fillColor = Color.White.copy(alpha = 0.25f)
                     )
-                )
-                .padding(20.dp)
-        ) {
-            Column {
-                Text(
-                    text = String.format(Locale.getDefault(), "%.2f €", stats.totalRevenue),
-                    style = drawTaxiType().displaySmall,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White
-                )
-                Text(
-                    text = "Revenus totaux",
-                    style = drawTaxiType().bodyMedium,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
+                }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     HeroStatItem(
                         value = String.format(Locale.getDefault(), "%.0f%%", stats.avgProfitability),
                         label = "Rentabilité",
                         icon = Icons.AutoMirrored.Filled.TrendingUp,
-                        color = if (stats.avgProfitability >= 70) Color(0xFF86EFAC) else if (stats.avgProfitability >= 50) Color(0xFFFDE68A) else Color(0xFFFCA5A5)
+                        color = if (stats.avgProfitability >= 70) Color(0xFF86EFAC) else if (stats.avgProfitability >= 50) Color(0xFFFDE68A) else Color(0xFFFCA5A5),
+                        modifier = Modifier.weight(1f)
                     )
                     HeroStatItem(
                         value = String.format(Locale.getDefault(), "%.2f €", stats.totalNetProfit),
                         label = "Bénéfice net",
                         icon = Icons.Default.AttachMoney,
-                        color = if (stats.totalNetProfit > 0) Color(0xFF86EFAC) else Color(0xFFFCA5A5)
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
                     )
                     HeroStatItem(
                         value = stats.totalRides.toString(),
                         label = "Courses",
                         icon = Icons.Default.LocalTaxi,
-                        color = Color.White
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -260,12 +331,25 @@ private fun DashboardHeroCard(stats: PeriodStats, brandColor: Color) {
 }
 
 @Composable
-private fun HeroStatItem(value: String, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        DrawTaxiIcon(imageVector = icon, contentDescription = null, tint = color.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = value, style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = color)
-        Text(text = label, style = drawTaxiType().labelSmall, color = color.copy(alpha = 0.7f))
+private fun HeroStatItem(
+    value: String,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            DrawTaxiIcon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(text = value, style = drawTaxiType().titleSmall, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(text = label, style = drawTaxiType().labelSmall, color = Color.White.copy(alpha = 0.6f))
     }
 }
 
@@ -292,7 +376,7 @@ private fun QuickStatsRow(stats: PeriodStats, brandColor: Color) {
         QuickStatCard(
             value = String.format(Locale.getDefault(), "%.2f €/km", stats.avgPerKm),
             label = "Revenu/km",
-            icon = Icons.Default.TrendingUp,
+            icon = Icons.AutoMirrored.Filled.TrendingUp,
             color = brandColor,
             modifier = Modifier.weight(1f)
         )
@@ -301,15 +385,22 @@ private fun QuickStatsRow(stats: PeriodStats, brandColor: Color) {
 
 @Composable
 private fun QuickStatCard(value: String, label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, modifier: Modifier = Modifier) {
-    DrawTaxiCard(modifier = modifier, shape = RoundedCornerShape(14.dp)) {
+    DrawTaxiCard(modifier = modifier, shape = RoundedCornerShape(16.dp)) {
         Column(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            DrawTaxiIcon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = value, style = drawTaxiType().titleSmall, fontWeight = FontWeight.Bold, color = Slate900)
-            Text(text = label, style = drawTaxiType().labelSmall, color = Slate500)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(color.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                DrawTaxiIcon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = value, style = drawTaxiType().titleSmall, fontWeight = FontWeight.Bold, color = drawTaxiColors().onSurface)
+            Text(text = label, style = drawTaxiType().labelSmall, color = drawTaxiColors().onSurfaceVariant)
         }
     }
 }
@@ -321,25 +412,28 @@ private fun TodayMiniCard(stats: PeriodStats, brandColor: Color) {
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                DrawTaxiSurface(shape = RoundedCornerShape(10.dp), color = brandColor.copy(alpha = 0.1f), modifier = Modifier.size(40.dp)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        DrawTaxiIcon(imageVector = Icons.Default.Today, contentDescription = null, tint = brandColor, modifier = Modifier.size(20.dp))
-                    }
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(brandColor.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    DrawTaxiIcon(imageVector = Icons.Default.Today, contentDescription = null, tint = brandColor, modifier = Modifier.size(22.dp))
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
-                    Text(text = "Aujourd'hui", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold)
-                    Text(text = "${stats.totalRides} courses • ${String.format(Locale.getDefault(), "%.0f km", stats.totalKm)}", style = drawTaxiType().bodySmall, color = Slate500)
+                    Text(text = "Aujourd'hui", style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = drawTaxiColors().onSurface)
+                    Text(text = "${stats.totalRides} courses • ${String.format(Locale.getDefault(), "%.0f km", stats.totalKm)}", style = drawTaxiType().bodySmall, color = drawTaxiColors().onSurfaceVariant)
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(text = String.format(Locale.getDefault(), "%.2f €", stats.totalRevenue), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = Slate900)
-                Text(text = String.format(Locale.getDefault(), "%.0f%%", stats.avgProfitability), style = drawTaxiType().labelSmall, color = if (stats.avgProfitability >= 70) Green500 else if (stats.avgProfitability >= 50) Amber500 else Red500)
+                Text(text = String.format(Locale.getDefault(), "%.2f €", stats.totalRevenue), style = drawTaxiType().titleMedium, fontWeight = FontWeight.Bold, color = drawTaxiColors().onSurface)
+                Text(text = String.format(Locale.getDefault(), "%.0f%%", stats.avgProfitability), style = drawTaxiType().labelSmall, fontWeight = FontWeight.Bold, color = if (stats.avgProfitability >= 70) Green500 else if (stats.avgProfitability >= 50) Amber500 else Red500)
             }
         }
     }
@@ -348,39 +442,43 @@ private fun TodayMiniCard(stats: PeriodStats, brandColor: Color) {
 @Composable
 private fun DailyRow(breakdown: DailyBreakdown, brandColor: Color, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            DrawTaxiIcon(imageVector = Icons.Default.CalendarToday, contentDescription = null, tint = Slate400, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(drawTaxiColors().surfaceVariant, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                DrawTaxiIcon(imageVector = Icons.Default.CalendarToday, contentDescription = null, tint = drawTaxiColors().onSurfaceVariant, modifier = Modifier.size(16.dp))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
             Column {
-                Text(text = breakdown.date, style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Medium)
-                Text(text = "${breakdown.rideCount} courses • ${String.format(Locale.getDefault(), "%.0f km", breakdown.totalKm)}", style = drawTaxiType().labelSmall, color = Slate500)
+                Text(text = breakdown.date, style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Bold, color = drawTaxiColors().onSurface)
+                Text(text = "${breakdown.rideCount} courses • ${String.format(Locale.getDefault(), "%.0f km", breakdown.totalKm)}", style = drawTaxiType().labelSmall, color = drawTaxiColors().onSurfaceVariant)
             }
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text(text = String.format(Locale.getDefault(), "%.2f €", breakdown.totalRevenue), style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Bold, color = Slate900)
-            DrawTaxiSurface(
-                shape = RoundedCornerShape(6.dp),
-                color = when {
-                    breakdown.profitability >= 70 -> Green100
-                    breakdown.profitability >= 50 -> Amber100
-                    else -> Red100
-                },
-                modifier = Modifier.padding(top = 2.dp)
+            Text(text = String.format(Locale.getDefault(), "%.2f €", breakdown.totalRevenue), style = drawTaxiType().bodyMedium, fontWeight = FontWeight.Black, color = drawTaxiColors().onSurface)
+            Box(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(drawTaxiColors().profitabilityBgColor(breakdown.profitability))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = "${String.format(Locale.getDefault(), "%.0f", breakdown.profitability)}%",
                     style = drawTaxiType().labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = when {
-                        breakdown.profitability >= 70 -> Green800
-                        breakdown.profitability >= 50 -> Color(0xFF92400E)
-                        else -> Red800
-                    },
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    color = drawTaxiColors().profitabilityTextColor(breakdown.profitability)
                 )
             }
         }
@@ -416,5 +514,87 @@ fun DashboardScreenPreview() {
             onNavigateToInvoices = {},
             onRideClick = {}
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DashboardHeroCardPreview() {
+    val sampleStats = PeriodStats(
+        rides = emptyList(),
+        totalRevenue = 1250.50,
+        totalRides = 42,
+        totalKm = 850.0,
+        totalCoutDeplacement = 350.0,
+        totalNetProfit = 900.50,
+        avgProfitability = 72.0,
+        avgPerRide = 29.77,
+        avgPerKm = 1.47
+    )
+    DrawTaxiTheme {
+        DashboardHeroCard(
+            stats = sampleStats,
+            brandColor = Color(0xFF6366F1),
+            last7DaysRevenue = listOf(100.0, 150.0, 80.0, 200.0, 120.0, 300.0, 250.0)
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun QuickStatsRowPreview() {
+    val sampleStats = PeriodStats(
+        rides = emptyList(),
+        totalRevenue = 1250.50,
+        totalRides = 42,
+        totalKm = 850.0,
+        totalCoutDeplacement = 350.0,
+        totalNetProfit = 900.50,
+        avgProfitability = 72.0,
+        avgPerRide = 29.77,
+        avgPerKm = 1.47
+    )
+    DrawTaxiTheme {
+        QuickStatsRow(
+            stats = sampleStats,
+            brandColor = Color(0xFF6366F1)
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun TodayMiniCardPreview() {
+    val sampleStats = PeriodStats(
+        rides = emptyList(),
+        totalRevenue = 156.40,
+        totalRides = 5,
+        totalKm = 120.0,
+        totalCoutDeplacement = 45.0,
+        totalNetProfit = 111.40,
+        avgProfitability = 71.0,
+        avgPerRide = 31.28,
+        avgPerKm = 1.30
+    )
+    DrawTaxiTheme {
+        TodayMiniCard(
+            stats = sampleStats,
+            brandColor = Color(0xFF6366F1)
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun HeroStatItemPreview() {
+    DrawTaxiTheme {
+        Box(modifier = Modifier.background(Color(0xFF6366F1)).padding(16.dp)) {
+            HeroStatItem(
+                value = "42",
+                label = "Courses",
+                icon = Icons.Default.LocalTaxi,
+                color = Color.White
+            )
+        }
     }
 }

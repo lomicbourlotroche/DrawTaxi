@@ -263,13 +263,14 @@ fun ReturnHomeScreen(
             val maxLat = allPoints.maxOf { it.first }
             val minLng = allPoints.minOf { it.second }
             val maxLng = allPoints.maxOf { it.second }
+            val dynamicZoom = NavigationEngine.calculateZoom(allPoints)
             cameraState.animateTo(
                 CameraPosition(
                     target = Position(
                         longitude = (minLng + maxLng) / 2.0,
                         latitude = (minLat + maxLat) / 2.0
                     ),
-                    zoom = 12.0
+                    zoom = dynamicZoom
                 )
             )
         }
@@ -280,7 +281,8 @@ fun ReturnHomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 48.dp),
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

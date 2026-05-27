@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -15,6 +18,13 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        val localProps = Properties()
+        val localFile = rootProject.file("local.properties")
+        if (localFile.exists()) {
+            localProps.load(FileInputStream(localFile))
+        }
+        buildConfigField("String", "ORS_API_KEY", "\"${localProps.getProperty("ors.api.key", "")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -51,6 +61,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
@@ -62,6 +73,7 @@ android {
         }
         jniLibs {
             useLegacyPackaging = true
+            excludes += "**/libdeepseek-ocr.so"
         }
     }
 

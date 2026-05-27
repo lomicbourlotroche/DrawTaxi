@@ -30,25 +30,51 @@ fun ProfitabilityAnalysisCard(
     settings: AppSettings,
     modifier: Modifier = Modifier
 ) {
+    val pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 2.50
+    val coutParKm = settings.coutParKmDeplacement
+
     val actualPrice = ride.price.takeIf { it > 0 } ?: run {
         val priceBreakdown = PriceEngine.calculate(
             distanceKm = ride.distanceKm, dateTime = java.util.Calendar.getInstance(),
-            pricePerKm = settings.pricePerKm.toDoubleOrNull() ?: 2.50,
+            pricePerKm = pricePerKm,
             baseFare = settings.basePrice.toDoubleOrNull() ?: 9.00,
             minDistanceKm = settings.minDistanceKm.toDoubleOrNull() ?: 3.6,
             nightSurchargePercent = settings.nightSurchargePercent,
             sundaySurchargePercent = settings.sundaySurchargePercent,
             holidaySurchargePercent = settings.holidaySurchargePercent,
-            euroPerMinute = settings.euroPerMinute,
             nightStartHour = settings.nightStartHour, nightEndHour = settings.nightEndHour,
-            tvaTransportRate = settings.tvaTransportRate, tvaWaitTimeRate = settings.tvaWaitTimeRate
+            tvaTransportRate = settings.tvaTransportRate
         )
         priceBreakdown.totalTTC
     }
-    val distanceDomicileKm = (ride.fuelCost / settings.coutParKmDeplacement).takeIf { it.isFinite() && it > 0 } ?: (ride.distanceKm * 0.3)
-    val coutDeplacement = RideRequest.calculateCoutDeplacement(distanceDomicileKm, settings.coutParKmDeplacement)
-    val netProfit = actualPrice - coutDeplacement
-    val profitabilityPercent = if (actualPrice > 0) (netProfit / actualPrice) * 100 else 0.0
+
+    // Use actual stored costs if available (completed rides), otherwise estimate
+    val hasRealCosts = ride.fuelCost > 0 || ride.operatingCost > 0
+    val trajetBKm = ride.distanceKm
+
+    val fuelCostDisplay: Double
+    val operatingCostDisplay: Double
+    val totalKm: Double
+    val isEstimated: Boolean
+
+    if (hasRealCosts) {
+        fuelCostDisplay = ride.fuelCost
+        operatingCostDisplay = ride.operatingCost
+        totalKm = trajetBKm
+        isEstimated = false
+    } else {
+        // Estimate: 30% empty runs (A + C) × cout/km for fuel, operating based on duration
+        val emptyKm = RideRequest.estimateEmptyKm(trajetBKm, 0.3) * 2
+        fuelCostDisplay = emptyKm * coutParKm
+        val estimatedDurationHours = if (ride.durationMinutes > 0) ride.durationMinutes / 60.0 else (trajetBKm / 40.0)
+        operatingCostDisplay = estimatedDurationHours * settings.operatingCostPerHour
+        totalKm = trajetBKm + emptyKm
+        isEstimated = true
+    }
+
+    val totalCost = fuelCostDisplay + operatingCostDisplay
+    val netProfit = actualPrice - totalCost
+    val profitabilityPercent = if (actualPrice > 0.001) ((netProfit / actualPrice) * 100).coerceIn(-999.0, 100.0) else 0.0
 
     val (statusColor, statusText, statusIcon) = when {
         profitabilityPercent >= 50 -> Triple(drawTaxiColors().tertiary, "Excellente rentabilité", Icons.AutoMirrored.Filled.TrendingUp)
@@ -87,12 +113,21 @@ fun ProfitabilityAnalysisCard(
                             fontWeight = FontWeight.Bold,
                             color = drawTaxiColors().onSurface
                         )
-                        androidx.compose.material3.Text(
-                            statusText,
-                            style = drawTaxiType().bodySmall,
-                            color = statusColor,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            androidx.compose.material3.Text(
+                                statusText,
+                                style = drawTaxiType().bodySmall,
+                                color = statusColor,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (isEstimated) {
+                                androidx.compose.material3.Text(
+                                    "• estimé",
+                                    style = drawTaxiType().labelSmall,
+                                    color = drawTaxiColors().onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
                 DrawTaxiChip(
@@ -129,14 +164,30 @@ fun ProfitabilityAnalysisCard(
                 DrawTaxiDivider(color = drawTaxiColors().outline.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(12.dp))
                 androidx.compose.material3.Text(
-                    "DÉPENSES ESTIMÉES",
+                    "COÛTS${if (isEstimated) " (ESTIMÉS)" else " (RÉELS)"}",
                     style = drawTaxiType().labelSmall,
                     color = drawTaxiColors().onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                CostRow(label = "Frais d'approche (domicile)", value = coutDeplacement, color = drawTaxiColors().onSurfaceVariant, isPositive = false)
+                CostRow(
+                    label = if (isEstimated) "Coût kilométrique (est.)" else "Coût kilométrique",
+                    value = fuelCostDisplay,
+                    color = drawTaxiColors().onSurfaceVariant,
+                    isPositive = false
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                CostRow(
+                    label = if (isEstimated) "Charges exploitation (est.)" else "Charges exploitation",
+                    value = operatingCostDisplay,
+                    color = drawTaxiColors().onSurfaceVariant,
+                    isPositive = false
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                DrawTaxiDivider(color = drawTaxiColors().outline.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(10.dp))
+                CostRow(label = "Total des coûts", value = totalCost, color = drawTaxiColors().onSurface, isPositive = false, isBold = true)
             }
             Spacer(modifier = Modifier.height(20.dp))
             Row(
@@ -164,10 +215,26 @@ fun ProfitabilityAnalysisCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                InfoChip(icon = Icons.Default.Schedule, label = "Durée", value = "${ride.durationMinutes} min", modifier = Modifier.weight(1f))
-                val fuelLiters = ride.distanceKm * 0.07 // Heuristic 7L/100km
-                InfoChip(icon = Icons.Default.LocalGasStation, label = "Carburant", value = String.format(Locale.getDefault(), "%.1f L", fuelLiters), modifier = Modifier.weight(1f))
-                InfoChip(icon = Icons.Default.Speed, label = "Distance", value = "${String.format(Locale.getDefault(), "%.1f", ride.distanceKm)} km", modifier = Modifier.weight(1f))
+                InfoChip(
+                    icon = Icons.Default.Route,
+                    label = "Trajet",
+                    value = "${String.format(Locale.getDefault(), "%.1f", trajetBKm)} km",
+                    modifier = Modifier.weight(1f)
+                )
+                if (ride.durationMinutes > 0) {
+                    InfoChip(
+                        icon = Icons.Default.Schedule,
+                        label = "Durée",
+                        value = "${ride.durationMinutes} min",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                InfoChip(
+                    icon = Icons.Default.LocalOffer,
+                    label = "€/km",
+                    value = if (trajetBKm > 0) String.format(Locale.getDefault(), "%.2f", actualPrice / trajetBKm) else "–",
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }

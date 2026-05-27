@@ -1,5 +1,6 @@
 package com.drawtaxi.app.ui.components.core
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.drawtaxi.app.ui.components.core.DrawTaxiText
 import com.drawtaxi.app.ui.theme.DrawTaxiTheme
+import com.drawtaxi.app.ui.theme.drawTaxiColors
 
 @Composable
 fun DrawTaxiScaffold(
@@ -17,7 +19,7 @@ fun DrawTaxiScaffold(
     bottomBar: @Composable (() -> Unit)? = null,
     content: @Composable (PaddingValues) -> Unit
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().background(drawTaxiColors().background)) {
         if (topBar != null) {
             Box { topBar() }
         }

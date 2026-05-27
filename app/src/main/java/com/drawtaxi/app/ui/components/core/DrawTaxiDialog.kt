@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -39,7 +42,7 @@ fun DrawTaxiDialog(
             elevation = 8.dp,
             onClick = null
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
+            Column(modifier = Modifier.padding(24.dp).heightIn(max = 560.dp)) {
                 if (icon != null) {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         icon()
@@ -50,8 +53,12 @@ fun DrawTaxiDialog(
                     Box(modifier = Modifier.fillMaxWidth()) { title() }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
+                Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    if (text != null) {
+                        text()
+                    }
+                }
                 if (text != null) {
-                    text()
                     Spacer(modifier = Modifier.height(24.dp))
                 }
                 if (confirmButton != null || dismissButton != null) {

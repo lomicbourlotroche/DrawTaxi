@@ -50,6 +50,7 @@ fun SettingsMain(
         modifier = Modifier
             .fillMaxSize()
             .background(drawTaxiColors().background)
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
     ) {
@@ -274,32 +275,6 @@ fun SettingsMain(
         }
 
         Spacer(modifier = Modifier.height(100.dp))
-    }
-}
-
-@Composable
-fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(modifier = Modifier.padding(bottom = 12.dp)) {
-        Text(
-            text = title.uppercase(),
-            style = drawTaxiType().labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = drawTaxiColors().onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-        )
-        DrawTaxiCard(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
-            backgroundColor = drawTaxiColors().surface,
-            elevation = 1.dp
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                content()
-            }
-        }
     }
 }
 

@@ -457,7 +457,7 @@ private val leadingLabelPattern = Regex(
     RegexOption.IGNORE_CASE
 )
 
-private fun String.cleanLocation(): String {
+internal fun String.cleanLocation(): String {
     var text = this
         .replace(Regex("[.,!?;:\$€£]"), "")
         .replace(Regex("\\s+"), " ")
@@ -507,7 +507,7 @@ private val addressAfterPattern = Regex(
     RegexOption.IGNORE_CASE
 )
 
-private fun String.takeFirstPhrase(): String {
+internal fun String.takeFirstPhrase(): String {
     val match = phraseSeparatorPattern.find(this)
     if (match != null && match.range.first > 3) {
         return this.substring(0, match.range.first).trim()

@@ -75,12 +75,13 @@ fun ControlCenterScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Slate50)
+            .background(drawTaxiColors().background)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(drawTaxiColors().surface)
+                .statusBarsPadding()
                 .padding(bottom = 12.dp)
         ) {
             Row(
@@ -94,13 +95,13 @@ fun ControlCenterScreen(
                     Text(
                         text = "Centre de contrôle",
                         style = drawTaxiType().displaySmall,
-                        color = Slate900
+                        color = drawTaxiColors().onSurface
                     )
                     Text(
                         text = if (pendingRides.isEmpty()) "Aucune demande en attente"
                                else "${pendingRides.size} demande${if (pendingRides.size > 1) "s" else ""} en attente",
                         style = drawTaxiType().bodyMedium,
-                        color = Slate500
+                        color = drawTaxiColors().onSurfaceVariant
                     )
                 }
                 
@@ -164,13 +165,13 @@ fun ControlCenterScreen(
                     Box(
                         modifier = Modifier
                             .size(120.dp)
-                            .background(Slate100, CircleShape),
+                            .background(drawTaxiColors().surfaceVariant, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Default.Inbox,
                             contentDescription = null,
-                            tint = Slate300,
+                            tint = drawTaxiColors().onSurfaceVariant.copy(alpha = 0.4f),
                             modifier = Modifier.size(60.dp)
                         )
                     }
@@ -178,14 +179,14 @@ fun ControlCenterScreen(
                     Text(
                         text = "Tout est à jour !",
                         style = drawTaxiType().titleLarge,
-                        color = Slate900,
+                        color = drawTaxiColors().onSurface,
                         fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Aucune nouvelle demande de course pour le moment. Relaxez-vous !",
                         style = drawTaxiType().bodyMedium,
-                        color = Slate500,
+                        color = drawTaxiColors().onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 24.dp)
                     )
@@ -526,19 +527,21 @@ private fun QuickActionButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    containerColor: Color = Color.White,
-    contentColor: Color = Slate600
+    containerColor: Color = Color.Transparent,
+    contentColor: Color = Color.Unspecified
 ) {
-    val isPrimary = containerColor != Color.White
+    val isPrimary = containerColor != Color.Transparent && containerColor != drawTaxiColors().surface
+    val finalContainer = if (containerColor == Color.Transparent) drawTaxiColors().surface else containerColor
+    val finalContent = if (contentColor == Color.Unspecified) drawTaxiColors().onSurfaceVariant else contentColor
     
     DrawTaxiSurface(
         modifier = modifier
             .height(56.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = containerColor,
+        color = finalContainer,
         borderWidth = if (isPrimary) 0.dp else 1.dp,
-        borderColor = Slate100
+        borderColor = drawTaxiColors().outline
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -549,13 +552,13 @@ private fun QuickActionButton(
                 icon,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = if (isPrimary) Color.White else contentColor
+                tint = if (isPrimary) Color.White else finalContent
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = label,
                 style = drawTaxiType().labelSmall,
-                color = if (isPrimary) Color.White else contentColor,
+                color = if (isPrimary) Color.White else finalContent,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -574,23 +577,25 @@ private fun EnhancedRideCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val isDark = drawTaxiColors().surface == SurfaceDark
     val (statusBg, statusText) = when (ride.status) {
-        RideStatus.DRAFT -> Pair(Yellow100, "Brouillon")
-        RideStatus.QUOTED -> Pair(Blue100, "Devis envoyé")
-        RideStatus.CONFIRMED -> Pair(Green100, "Confirmée")
-        RideStatus.IN_PROGRESS -> Pair(brandColor.copy(alpha = 0.1f), "En cours")
-        RideStatus.COMPLETED -> Pair(Slate100, "Terminée")
-        RideStatus.CANCELLED -> Pair(Red100, "Annulée")
-        RideStatus.ABSENT -> Pair(Slate100, "Absent")
+        RideStatus.DRAFT -> Pair(if (isDark) Yellow800.copy(alpha = 0.2f) else Yellow100, "Brouillon")
+        RideStatus.QUOTED -> Pair(if (isDark) Blue800.copy(alpha = 0.2f) else Blue100, "Devis envoyé")
+        RideStatus.CONFIRMED -> Pair(if (isDark) Green800.copy(alpha = 0.2f) else Green100, "Confirmée")
+        RideStatus.IN_PROGRESS -> Pair(brandColor.copy(alpha = 0.15f), "En cours")
+        RideStatus.COMPLETED -> Pair(drawTaxiColors().surfaceVariant, "Terminée")
+        RideStatus.CANCELLED -> Pair(if (isDark) Red800.copy(alpha = 0.2f) else Red100, "Annulée")
+        RideStatus.ABSENT -> Pair(drawTaxiColors().surfaceVariant, "Absent")
     }
     
     val statusColor = when (ride.status) {
-        RideStatus.DRAFT -> Yellow800
-        RideStatus.QUOTED -> Blue800
-        RideStatus.CONFIRMED -> Green800
+        RideStatus.DRAFT -> if (isDark) Yellow500 else Yellow800
+        RideStatus.QUOTED -> if (isDark) Blue500 else Blue800
+        RideStatus.CONFIRMED -> if (isDark) Green500 else Green800
         RideStatus.IN_PROGRESS -> brandColor
-        RideStatus.COMPLETED -> Slate600
-        RideStatus.CANCELLED -> Red800
+        RideStatus.COMPLETED -> drawTaxiColors().onSurfaceVariant
+        RideStatus.CANCELLED -> if (isDark) Red500 else Red800
         RideStatus.ABSENT -> Orange600
     }
 
@@ -601,7 +606,7 @@ private fun EnhancedRideCard(
         onClick = onClick,
         shape = RoundedCornerShape(24.dp),
         elevation = 2.dp,
-        backgroundColor = Color.White
+        backgroundColor = drawTaxiColors().surface
     ) {
         Column {
             Row(
@@ -613,7 +618,7 @@ private fun EnhancedRideCard(
                     Icon(
                         Icons.Default.Schedule,
                         contentDescription = null,
-                        tint = Slate400,
+                        tint = drawTaxiColors().onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -621,16 +626,16 @@ private fun EnhancedRideCard(
                         text = ride.time.ifBlank { "—:—" },
                         style = drawTaxiType().titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Slate900
+                        color = drawTaxiColors().onSurface
                     )
                     if (ride.date.isNotBlank()) {
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "•", color = Slate200)
+                        Text(text = "•", color = drawTaxiColors().outline)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = ride.date,
                             style = drawTaxiType().labelSmall,
-                            color = Slate500
+                            color = drawTaxiColors().onSurfaceVariant
                         )
                     }
                 }
@@ -653,7 +658,7 @@ private fun EnhancedRideCard(
                     Text(
                         text = "ARRIVÉE",
                         style = drawTaxiType().labelSmall,
-                        color = Slate400,
+                        color = drawTaxiColors().onSurfaceVariant.copy(alpha = 0.7f),
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
@@ -661,7 +666,7 @@ private fun EnhancedRideCard(
                         text = ride.arrival.ifBlank { "Destination non définie" },
                         style = drawTaxiType().titleMedium,
                         fontWeight = FontWeight.Black,
-                        color = Slate900,
+                        color = drawTaxiColors().onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -671,7 +676,7 @@ private fun EnhancedRideCard(
                         Text(
                             text = "depuis ${ride.departure}",
                             style = drawTaxiType().bodySmall,
-                            color = Slate500,
+                            color = drawTaxiColors().onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -683,18 +688,18 @@ private fun EnhancedRideCard(
                         text = if (ride.price > 0) String.format(Locale.getDefault(), "%.2f €", ride.price) else "Devis",
                         style = drawTaxiType().headlineSmall,
                         fontWeight = FontWeight.Black,
-                        color = if (ride.price > 0) brandColor else Slate400
+                        color = if (ride.price > 0) brandColor else drawTaxiColors().onSurfaceVariant
                     )
                     Text(
                         text = "${String.format(Locale.getDefault(), "%.1f", ride.distanceKm)} km",
                         style = drawTaxiType().labelSmall,
-                        color = Slate400
+                        color = drawTaxiColors().onSurfaceVariant
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            DrawTaxiDivider(color = Slate50)
+            DrawTaxiDivider(color = drawTaxiColors().outlineVariant)
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(
@@ -706,13 +711,13 @@ private fun EnhancedRideCard(
                     Box(
                         modifier = Modifier
                             .size(28.dp)
-                            .background(Slate50, CircleShape),
+                            .background(drawTaxiColors().surfaceVariant, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Default.Person,
                             contentDescription = null,
-                            tint = Slate400,
+                            tint = drawTaxiColors().onSurfaceVariant,
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -721,7 +726,7 @@ private fun EnhancedRideCard(
                         text = ride.sender.ifBlank { "Client inconnu" },
                         style = drawTaxiType().bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = Slate700
+                        color = drawTaxiColors().onSurface
                     )
                 }
                 
@@ -731,7 +736,7 @@ private fun EnhancedRideCard(
                             onClick = onDelete,
                             modifier = Modifier
                                 .size(36.dp)
-                                .background(Rose50, CircleShape)
+                                .background(Rose500.copy(alpha = 0.15f), CircleShape)
                         ) {
                             Icon(Icons.Default.Delete, contentDescription = null, tint = Rose500, modifier = Modifier.size(18.dp))
                         }
@@ -751,7 +756,10 @@ private fun EnhancedRideCard(
 
                         if (ride.status == RideStatus.QUOTED) {
                             DrawTaxiSolidButton(
-                                onClick = onAcceptQuote,
+                                onClick = {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    onAcceptQuote()
+                                },
                                 shape = RoundedCornerShape(12.dp),
                                 containerColor = Color(0xFF10B981),
                                 minHeight = 36.dp
@@ -764,7 +772,10 @@ private fun EnhancedRideCard(
 
                         if (ride.status == RideStatus.CONFIRMED) {
                             DrawTaxiSolidButton(
-                                onClick = onValidate,
+                                onClick = {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    onValidate()
+                                },
                                 shape = RoundedCornerShape(12.dp),
                                 containerColor = Color(0xFF10B981),
                                 minHeight = 36.dp

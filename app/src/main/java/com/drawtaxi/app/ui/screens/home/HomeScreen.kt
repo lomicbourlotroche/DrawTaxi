@@ -2,6 +2,7 @@ package com.drawtaxi.app.ui.screens.home
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
@@ -96,6 +98,7 @@ fun HomeScreen(
                                 )
                             )
                         )
+                        .statusBarsPadding()
                         .padding(horizontal = 20.dp, vertical = 28.dp)
                 ) {
                     Column {
@@ -109,39 +112,41 @@ fun HomeScreen(
                                 androidx.compose.material3.Text(
                                     text = greetingForHour(),
                                     style = drawTaxiType().bodyLarge,
-                                    color = Color.White.copy(alpha = 0.8f)
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontWeight = FontWeight.Medium
                                 )
                                 androidx.compose.material3.Text(
                                     text = settings.name.ifBlank { "Chauffeur" },
-                                    style = drawTaxiType().headlineMedium,
-                                    fontWeight = FontWeight.Bold,
+                                    style = drawTaxiType().headlineLarge,
+                                    fontWeight = FontWeight.Black,
                                     color = Color.White
                                 )
                             }
-                            // Bouton + inline (le FAB est en overlay)
+                            // Bouton + inline
                             DrawTaxiIconButton(
                                 onClick = onCreateRide,
                                 modifier = Modifier
-                                    .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+                                    .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                                    .size(52.dp)
                             ) {
                                 DrawTaxiIcon(
                                     Icons.Default.Add,
                                     contentDescription = "Nouvelle course",
                                     tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(22.dp))
+                        Spacer(modifier = Modifier.height(26.dp))
 
-                        // Stats du jour — Glassmorphism pills
+                        // Stats du jour — Modern Tiles
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             GlassStatCard(
-                                value = String.format(Locale.getDefault(), "%.0f €", todayRevenue),
+                                value = String.format(Locale.getDefault(), "%.0f€", todayRevenue),
                                 label = "Revenus",
                                 icon = Icons.Default.EuroSymbol,
                                 modifier = Modifier.weight(1f)
@@ -162,33 +167,43 @@ fun HomeScreen(
 
                         // Bénéfice net (si courses du jour)
                         if (todayCompletedRides.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(18.dp))
                             DrawTaxiSurface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = Color.White.copy(alpha = 0.12f)
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.White.copy(alpha = 0.12f),
+                                borderWidth = 1.dp,
+                                borderColor = Color.White.copy(alpha = 0.08f)
                             ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        DrawTaxiIcon(
-                                            Icons.Default.TrendingUp,
-                                            contentDescription = null,
-                                            tint = if (todayNet >= 0) Emerald500 else Rose500,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(42.dp)
+                                                .background(Color.White.copy(alpha = 0.1f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            DrawTaxiIcon(
+                                                Icons.Default.TrendingUp,
+                                                contentDescription = null,
+                                                tint = if (todayNet >= 0) Emerald500 else Rose500,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(14.dp))
                                         Column {
                                             androidx.compose.material3.Text(
-                                                "Bénéfice net aujourd'hui",
+                                                "Bénéfice net estimé",
                                                 style = drawTaxiType().labelSmall,
-                                                color = Color.White.copy(alpha = 0.7f)
+                                                color = Color.White.copy(alpha = 0.6f),
+                                                fontWeight = FontWeight.Medium
                                             )
                                             androidx.compose.material3.Text(
                                                 String.format(Locale.getDefault(), "%.2f €", todayNet),
-                                                style = drawTaxiType().titleMedium,
+                                                style = drawTaxiType().titleLarge,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White
                                             )
@@ -201,13 +216,13 @@ fun HomeScreen(
                                         else -> Rose500
                                     }
                                     DrawTaxiSurface(
-                                        shape = RoundedCornerShape(20.dp),
+                                        shape = RoundedCornerShape(12.dp),
                                         color = pillColor.copy(alpha = 0.25f)
                                     ) {
                                         androidx.compose.material3.Text(
                                             text = "${String.format(Locale.getDefault(), "%.0f", profitPercent)}%",
                                             style = drawTaxiType().labelMedium,
-                                            fontWeight = FontWeight.ExtraBold,
+                                            fontWeight = FontWeight.Black,
                                             color = Color.White,
                                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                         )
@@ -263,29 +278,31 @@ fun HomeScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(4.dp, 20.dp)
-                                .clip(RoundedCornerShape(2.dp))
+                                .size(6.dp, 24.dp)
+                                .clip(RoundedCornerShape(3.dp))
                                 .background(Emerald500)
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         androidx.compose.material3.Text(
                             text = "Courses confirmées",
                             style = drawTaxiType().titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = colors.onBackground
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .background(Emerald500.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        DrawTaxiSurface(
+                            shape = CircleShape,
+                            color = Emerald500.copy(alpha = 0.1f),
+                            modifier = Modifier.size(28.dp)
                         ) {
-                            androidx.compose.material3.Text(
-                                text = "${confirmedRides.size}",
-                                style = drawTaxiType().labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Emerald500
-                            )
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                androidx.compose.material3.Text(
+                                    text = "${confirmedRides.size}",
+                                    style = drawTaxiType().labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Emerald600
+                                )
+                            }
                         }
                     }
                 }
@@ -297,7 +314,7 @@ fun HomeScreen(
             // ── DERNIÈRES COURSES ──
             if (recentCompletedRides.isNotEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(22.dp))
+                    Spacer(modifier = Modifier.height(26.dp))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -306,35 +323,36 @@ fun HomeScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(4.dp, 20.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(colors.onSurfaceVariant)
+                                .size(6.dp, 24.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(colors.onSurfaceVariant.copy(alpha = 0.5f))
                         )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
                         androidx.compose.material3.Text(
                             text = "Dernières courses",
                             style = drawTaxiType().titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = colors.onBackground
                         )
                     }
                 }
-                items(recentCompletedRides) { ride ->
-                    RideHistoryCard(ride = ride, brandColor = brandColor, onClick = { onRideClick(ride) })
-                }
+                 items(recentCompletedRides) { ride ->
+                     // TODO: Replace with actual card component
+                     // RideHistoryCard(ride = ride, brandColor = brandColor, onClick = { onRideClick(ride) })
+                 }
             }
 
             // ── EMPTY STATE ──
             if (confirmedRides.isEmpty() && completedRides.isEmpty()) {
                 item {
-                    Spacer(modifier = Modifier.height(40.dp))
+                    Spacer(modifier = Modifier.height(60.dp))
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(88.dp)
+                                .size(120.dp)
                                 .background(
                                     Brush.radialGradient(listOf(brandColor.copy(alpha = 0.15f), Color.Transparent)),
                                     CircleShape
@@ -344,38 +362,40 @@ fun HomeScreen(
                             DrawTaxiSurface(
                                 shape = CircleShape,
                                 color = brandColor.copy(alpha = 0.1f),
-                                modifier = Modifier.size(64.dp)
+                                modifier = Modifier.size(80.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                     DrawTaxiIcon(
                                         Icons.Default.LocalTaxi,
                                         contentDescription = null,
                                         tint = brandColor,
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(40.dp)
                                     )
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
                         androidx.compose.material3.Text(
                             "Prêt pour la route ?",
                             style = drawTaxiType().headlineSmall,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Black,
                             color = colors.onBackground
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         androidx.compose.material3.Text(
-                            "Créez une course ou attendez vos SMS clients",
+                            "Créez une course ou attendez vos SMS clients pour commencer.",
                             style = drawTaxiType().bodyMedium,
-                            color = colors.onSurfaceVariant
+                            color = colors.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(32.dp))
                         DrawTaxiSolidButton(
                             onClick = onCreateRide,
-                            shape = RoundedCornerShape(16.dp),
-                            containerColor = brandColor
+                            shape = RoundedCornerShape(20.dp),
+                            containerColor = brandColor,
+                            modifier = Modifier.width(200.dp)
                         ) {
-                            DrawTaxiIcon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            DrawTaxiIcon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             androidx.compose.material3.Text("Nouvelle course", fontWeight = FontWeight.Bold)
                         }
@@ -407,31 +427,41 @@ private fun GlassStatCard(
 ) {
     DrawTaxiSurface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = Color.White.copy(alpha = 0.15f)
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White.copy(alpha = 0.12f),
+        borderWidth = 1.dp,
+        borderColor = Color.White.copy(alpha = 0.15f)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(vertical = 16.dp, horizontal = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            DrawTaxiIcon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                DrawTaxiIcon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
             androidx.compose.material3.Text(
                 text = value,
                 style = drawTaxiType().titleLarge,
-                fontWeight = FontWeight.Black,
+                fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
                 maxLines = 1
             )
             androidx.compose.material3.Text(
                 text = label,
                 style = drawTaxiType().labelSmall,
-                color = Color.White.copy(alpha = 0.7f)
+                color = Color.White.copy(alpha = 0.6f),
+                fontWeight = FontWeight.Medium
             )
         }
     }
@@ -447,39 +477,41 @@ fun InProgressRideBanner(
     val infiniteTransition = rememberInfiniteTransition(label = "inProgress")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.4f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(800, easing = EaseInOutSine), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(1000, easing = EaseInOutSine), RepeatMode.Reverse),
         label = "pulseAlpha"
     )
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f, targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(tween(800, easing = EaseInOutSine), RepeatMode.Reverse),
+        initialValue = 0.98f, targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(tween(1000, easing = EaseInOutSine), RepeatMode.Reverse),
         label = "pulseScale"
     )
 
-    DrawTaxiCard(
+    DrawTaxiSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(18.dp),
-        backgroundColor = Emerald500.copy(alpha = 0.15f),
-        elevation = 0.dp,
-        onClick = onClick
+            .padding(horizontal = 16.dp)
+            .scale(pulseScale),
+        shape = RoundedCornerShape(20.dp),
+        color = Emerald500.copy(alpha = 0.08f),
+        borderWidth = 1.dp,
+        borderColor = Emerald500.copy(alpha = 0.2f)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            modifier = Modifier
+                .clickable { onClick() }
+                .padding(12.dp)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Indicateur pulsant
             Box(contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .scale(pulseScale)
-                        .background(Emerald500.copy(alpha = pulseAlpha * 0.3f), CircleShape)
+                        .size(44.dp)
+                        .background(Emerald500.copy(alpha = pulseAlpha * 0.2f), CircleShape)
                 )
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(32.dp)
                         .background(Emerald500, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -487,23 +519,26 @@ fun InProgressRideBanner(
                         Icons.Default.Navigation,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 androidx.compose.material3.Text(
-                    "🟢 Course EN COURS",
-                    style = drawTaxiType().labelMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Emerald600
+                    "COURSE EN COURS",
+                    style = drawTaxiType().labelSmall,
+                    fontWeight = FontWeight.Black,
+                    color = Emerald600,
+                    letterSpacing = 1.sp
                 )
                 androidx.compose.material3.Text(
-                    "${ride.departure.ifBlank { "—" }} → ${ride.arrival.ifBlank { "—" }}",
+                    text = "${ride.departure.ifBlank { "—" }} → ${ride.arrival.ifBlank { "—" }}",
                     style = drawTaxiType().bodyMedium,
                     color = drawTaxiColors().onSurface,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             DrawTaxiIcon(
@@ -524,84 +559,94 @@ fun NextRideCard(
     onClick: () -> Unit
 ) {
     val colors = drawTaxiColors()
-    DrawTaxiCard(
+    DrawTaxiSurface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(20.dp),
-        backgroundColor = colors.surface,
-        elevation = 3.dp,
-        onClick = onClick
+        shape = RoundedCornerShape(24.dp),
+        color = colors.surface,
+        shadowElevation = 6.dp
     ) {
-        // Accent strip en haut
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                .background(
-                    Brush.horizontalGradient(listOf(brandColor, brandColor.copy(alpha = 0.5f)))
-                )
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Icône horloge
+        Column(modifier = Modifier.clickable { onClick() }) {
+            // Accent gradient header
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .background(brandColor.copy(alpha = 0.12f), RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(
+                        Brush.horizontalGradient(listOf(brandColor, brandColor.copy(alpha = 0.5f)))
+                    )
+            )
+            
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                DrawTaxiIcon(
-                    Icons.Default.Schedule,
-                    contentDescription = null,
-                    tint = brandColor,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                androidx.compose.material3.Text(
-                    "⚡ Prochaine course",
-                    style = drawTaxiType().labelSmall,
-                    color = brandColor,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                androidx.compose.material3.Text(
-                    "${ride.departure.ifBlank { "—" }} → ${ride.arrival.ifBlank { "—" }}",
-                    style = drawTaxiType().titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.onSurface
-                )
-                androidx.compose.material3.Text(
-                    "${ride.date.ifBlank { "" }}  ${ride.time.ifBlank { "" }}",
-                    style = drawTaxiType().bodySmall,
-                    color = colors.onSurfaceVariant
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                if (ride.price > 0) {
+                // Time Badge
+                Column(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(brandColor.copy(alpha = 0.08f), RoundedCornerShape(18.dp)),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
                     androidx.compose.material3.Text(
-                        String.format(Locale.getDefault(), "%.0f €", ride.price),
-                        style = drawTaxiType().headlineSmall,
+                        text = ride.time.take(2),
+                        style = drawTaxiType().headlineMedium,
                         fontWeight = FontWeight.Black,
                         color = brandColor
                     )
+                    androidx.compose.material3.Text(
+                        text = ride.time.takeLast(2),
+                        style = drawTaxiType().labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = brandColor.copy(alpha = 0.6f)
+                    )
                 }
-                DrawTaxiIcon(
-                    Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = colors.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
+                
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DrawTaxiIcon(Icons.Default.FlashOn, contentDescription = null, tint = Amber500, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        androidx.compose.material3.Text(
+                            "PROCHAINE COURSE",
+                            style = drawTaxiType().labelSmall,
+                            color = brandColor,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    androidx.compose.material3.Text(
+                        text = "${ride.departure.ifBlank { "—" }} → ${ride.arrival.ifBlank { "—" }}",
+                        style = drawTaxiType().titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    androidx.compose.material3.Text(
+                        text = ride.date.ifBlank { "Aujourd'hui" },
+                        style = drawTaxiType().bodySmall,
+                        color = colors.onSurfaceVariant
+                    )
+                }
+                
+                Column(horizontalAlignment = Alignment.End) {
+                    if (ride.price > 0) {
+                        androidx.compose.material3.Text(
+                            text = String.format(Locale.getDefault(), "%.0f€", ride.price),
+                            style = drawTaxiType().titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = colors.onSurface
+                        )
+                    }
+                    DrawTaxiIcon(Icons.Default.ChevronRight, contentDescription = null, tint = colors.onSurfaceVariant.copy(alpha = 0.3f))
+                }
             }
         }
-        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
@@ -674,85 +719,83 @@ private fun ConfirmedRideCard(
     onClick: () -> Unit
 ) {
     val colors = drawTaxiColors()
-    DrawTaxiCard(
+    DrawTaxiSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp),
-        shape = RoundedCornerShape(18.dp),
-        backgroundColor = colors.surface,
-        elevation = 2.dp,
-        onClick = onClick
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = colors.surface,
+        shadowElevation = 2.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            modifier = Modifier
+                .clickable { onClick() }
+                .padding(16.dp)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Accent vert à gauche
+            // Status bar
             Box(
                 modifier = Modifier
                     .width(4.dp)
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .height(44.dp)
+                    .clip(CircleShape)
                     .background(Emerald500)
             )
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
+                androidx.compose.material3.Text(
+                    text = ride.arrival.ifBlank { "Destination" },
+                    style = drawTaxiType().titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    DrawTaxiIcon(Icons.Default.Place, contentDescription = null, tint = colors.onSurfaceVariant, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     androidx.compose.material3.Text(
-                        text = ride.arrival.ifBlank { "Destination" },
-                        style = drawTaxiType().titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onSurface,
-                        maxLines = 1
-                    )
-                }
-                if (ride.departure.isNotBlank()) {
-                    androidx.compose.material3.Text(
-                        text = "Depuis ${ride.departure}",
+                        text = ride.departure.ifBlank { "Lieu de départ" },
                         style = drawTaxiType().bodySmall,
                         color = colors.onSurfaceVariant,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
+                Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     DrawTaxiIcon(Icons.Default.Schedule, contentDescription = null, tint = brandColor, modifier = Modifier.size(12.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     androidx.compose.material3.Text(
-                        text = "${ride.date}  ${ride.time}",
+                        text = "${ride.date} • ${ride.time}",
                         style = drawTaxiType().bodySmall,
                         color = brandColor,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
-            if (ride.price > 0) {
-                Column(horizontalAlignment = Alignment.End) {
+            Column(horizontalAlignment = Alignment.End) {
+                androidx.compose.material3.Text(
+                    text = String.format(Locale.getDefault(), "%.0f€", ride.price),
+                    style = drawTaxiType().titleMedium,
+                    fontWeight = FontWeight.Black,
+                    color = colors.onSurface
+                )
+                DrawTaxiSurface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Emerald500.copy(alpha = 0.1f)
+                ) {
                     androidx.compose.material3.Text(
-                        text = String.format(Locale.getDefault(), "%.0f €", ride.price),
-                        style = drawTaxiType().titleMedium,
+                        "CONFIRMÉE",
+                        style = drawTaxiType().labelSmall,
                         fontWeight = FontWeight.Black,
-                        color = brandColor
+                        color = Emerald600,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        letterSpacing = 0.5.sp
                     )
-                    DrawTaxiSurface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Emerald500.copy(alpha = 0.12f)
-                    ) {
-                        androidx.compose.material3.Text(
-                            "Confirmée",
-                            style = drawTaxiType().labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Emerald600,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
                 }
             }
-            DrawTaxiIcon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = colors.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
-            )
         }
     }
 }
@@ -809,8 +852,8 @@ fun BatteryWarningBanner(onFixClick: () -> Unit) {
 private fun greetingForHour(): String {
     return when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
         in 5..11 -> "Bonjour 🌤"
-        in 12..17 -> "Bon après-midi ☀️"
-        in 18..20 -> "Bonne soirée 🌆"
+        in 12..16 -> "Bon après-midi ☀️"
+        in 17..21 -> "Bonne soirée 🌆"
         else -> "Bonne nuit 🌙"
     }
 }

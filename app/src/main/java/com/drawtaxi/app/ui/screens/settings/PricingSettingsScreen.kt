@@ -1,5 +1,6 @@
 package com.drawtaxi.app.ui.screens.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.sp
 import com.drawtaxi.app.data.AppSettings
 import kotlinx.coroutines.delay
 
@@ -40,21 +42,19 @@ fun PricingSettingsScreen(
     var holidaySurcharge by remember { mutableStateOf(settings.holidaySurchargePercent.toString()) }
     var nightStartHour by remember { mutableStateOf(settings.nightStartHour.toString()) }
     var nightEndHour by remember { mutableStateOf(settings.nightEndHour.toString()) }
-    var euroPerMinute by remember { mutableStateOf(settings.euroPerMinute.toString()) }
     
     // Coûts
     var coutParKmDeplacement by remember { mutableStateOf(settings.coutParKmDeplacement.toString()) }
     
     // TVA
     var tvaTransport by remember { mutableStateOf(settings.tvaTransportRate.toString()) }
-    var tvaWait by remember { mutableStateOf(settings.tvaWaitTimeRate.toString()) }
     
     // Sauvegarde automatique
     LaunchedEffect(
         pricePerKm, basePrice, minDistanceKm, nightSurcharge, sundaySurcharge, holidaySurcharge,
-        nightStartHour, nightEndHour, euroPerMinute,
+        nightStartHour, nightEndHour,
         coutParKmDeplacement,
-        tvaTransport, tvaWait
+        tvaTransport
     ) {
         delay(500)
         onUpdate(
@@ -67,10 +67,8 @@ fun PricingSettingsScreen(
                 holidaySurchargePercent = holidaySurcharge.toDoubleOrNull() ?: settings.holidaySurchargePercent,
                 nightStartHour = nightStartHour.toIntOrNull() ?: settings.nightStartHour,
                 nightEndHour = nightEndHour.toIntOrNull() ?: settings.nightEndHour,
-                euroPerMinute = euroPerMinute.toDoubleOrNull() ?: settings.euroPerMinute,
                 coutParKmDeplacement = coutParKmDeplacement.toDoubleOrNull() ?: settings.coutParKmDeplacement,
-                tvaTransportRate = tvaTransport.toDoubleOrNull() ?: settings.tvaTransportRate,
-                tvaWaitTimeRate = tvaWait.toDoubleOrNull() ?: settings.tvaWaitTimeRate
+                tvaTransportRate = tvaTransport.toDoubleOrNull() ?: settings.tvaTransportRate
             )
         )
     }
@@ -78,13 +76,13 @@ fun PricingSettingsScreen(
     DrawTaxiScaffold(
         topBar = {
             DrawTaxiTopBar(
-                title = { Text("Tarifs & Coûts", fontWeight = FontWeight.Bold) },
+                title = { DrawTaxiTopBarTitle("Tarifs & Coûts") },
                 navigationIcon = {
                     DrawTaxiIconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
                     }
                 },
-                backgroundColor = Color.White
+                backgroundColor = drawTaxiColors().surface
             )
         }
     ) { padding ->
@@ -92,10 +90,10 @@ fun PricingSettingsScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(Slate50)
+                .background(drawTaxiColors().background)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(modifier = Modifier.height(4.dp))
             PricingCard(
@@ -105,28 +103,25 @@ fun PricingSettingsScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     PricingInput(
-                        label = "Prix au kilomètre (€)",
+                        label = "Prix au kilomètre",
                         value = pricePerKm,
                         onValueChange = { pricePerKm = it },
-                        brandColor = brandColor
+                        brandColor = brandColor,
+                        suffix = "€"
                     )
                     PricingInput(
-                        label = "Prise en charge (€)",
+                        label = "Prise en charge",
                         value = basePrice,
                         onValueChange = { basePrice = it },
-                        brandColor = brandColor
+                        brandColor = brandColor,
+                        suffix = "€"
                     )
                     PricingInput(
-                        label = "Distance minimale incluse (km)",
+                        label = "Distance incluse",
                         value = minDistanceKm,
                         onValueChange = { minDistanceKm = it },
-                        brandColor = brandColor
-                    )
-                    PricingInput(
-                        label = "Tarif attente (€/min)",
-                        value = euroPerMinute,
-                        onValueChange = { euroPerMinute = it },
-                        brandColor = brandColor
+                        brandColor = brandColor,
+                        suffix = "km"
                     )
                 }
             }
@@ -143,25 +138,28 @@ fun PricingSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         PricingInput(
-                            label = "Nuit (%)",
+                            label = "Nuit",
                             value = nightSurcharge,
                             onValueChange = { nightSurcharge = it },
                             modifier = Modifier.weight(1f),
-                            brandColor = brandColor
+                            brandColor = brandColor,
+                            suffix = "%"
                         )
                         PricingInput(
-                            label = "Dimanche (%)",
+                            label = "Dimanche",
                             value = sundaySurcharge,
                             onValueChange = { sundaySurcharge = it },
                             modifier = Modifier.weight(1f),
-                            brandColor = brandColor
+                            brandColor = brandColor,
+                            suffix = "%"
                         )
                         PricingInput(
-                            label = "Férié (%)",
+                            label = "Férié",
                             value = holidaySurcharge,
                             onValueChange = { holidaySurcharge = it },
                             modifier = Modifier.weight(1f),
-                            brandColor = brandColor
+                            brandColor = brandColor,
+                            suffix = "%"
                         )
                     }
                     
@@ -170,18 +168,20 @@ fun PricingSettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         PricingInput(
-                            label = "Début nuit (h)",
+                            label = "Début nuit",
                             value = nightStartHour,
                             onValueChange = { nightStartHour = it },
                             modifier = Modifier.weight(1f),
-                            brandColor = brandColor
+                            brandColor = brandColor,
+                            suffix = "h"
                         )
                         PricingInput(
-                            label = "Fin nuit (h)",
+                            label = "Fin nuit",
                             value = nightEndHour,
                             onValueChange = { nightEndHour = it },
                             modifier = Modifier.weight(1f),
-                            brandColor = brandColor
+                            brandColor = brandColor,
+                            suffix = "h"
                         )
                     }
                 }
@@ -189,21 +189,23 @@ fun PricingSettingsScreen(
 
             // Section Coûts
             PricingCard(
-                title = "Coût déplacement domicile → client",
+                title = "Coût trajet d'approche",
                 icon = Icons.Default.Route,
                 brandColor = brandColor
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     PricingInput(
-                        label = "Coût par km de déplacement (€)",
+                        label = "Coût par km",
                         value = coutParKmDeplacement,
                         onValueChange = { coutParKmDeplacement = it },
-                        brandColor = brandColor
+                        brandColor = brandColor,
+                        suffix = "€/km"
                     )
                     Text(
-                        "Utilisé pour calculer la rentabilité : distance(domicile → départ) × coût/km",
+                        "Utilisé pour calculer la rentabilité du trajet entre votre domicile et le point de départ du client.",
                         style = drawTaxiType().bodySmall,
-                        color = Slate500
+                        color = drawTaxiColors().onSurfaceVariant,
+                        lineHeight = 18.sp
                     )
                 }
             }
@@ -216,21 +218,16 @@ fun PricingSettingsScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     PricingInput(
-                        label = "TVA transport (%)",
+                        label = "TVA transport",
                         value = tvaTransport,
                         onValueChange = { tvaTransport = it },
-                        brandColor = brandColor
-                    )
-                    PricingInput(
-                        label = "TVA attente (%)",
-                        value = tvaWait,
-                        onValueChange = { tvaWait = it },
-                        brandColor = brandColor
+                        brandColor = brandColor,
+                        suffix = "%"
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
@@ -240,38 +237,49 @@ private fun PricingCard(
     title: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     brandColor: Color,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
+            defaultElevation = 0.dp
+        ),
+        border = BorderStroke(1.dp, Slate100)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp)
+            modifier = Modifier.padding(24.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = brandColor,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = brandColor.copy(alpha = 0.1f),
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = brandColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
                 Text(
                     text = title,
                     style = drawTaxiType().titleMedium,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Slate900
                 )
             }
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             content()
         }
     }
@@ -283,7 +291,8 @@ private fun PricingInput(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    brandColor: Color
+    brandColor: Color,
+    suffix: String? = null
 ) {
     OutlinedTextField(
         value = value,
@@ -297,8 +306,18 @@ private fun PricingInput(
             Text(
                 text = label,
                 style = drawTaxiType().bodySmall,
-                color = Slate500
+                color = drawTaxiColors().onSurfaceVariant
             ) 
+        },
+        suffix = suffix?.let {
+            {
+                Text(
+                    text = it,
+                    style = drawTaxiType().bodyMedium,
+                    color = drawTaxiColors().onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         },
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -307,8 +326,10 @@ private fun PricingInput(
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = brandColor,
             focusedLabelColor = brandColor,
-            unfocusedBorderColor = Slate200,
-            unfocusedLabelColor = Slate500
+            unfocusedBorderColor = drawTaxiColors().outline,
+            unfocusedLabelColor = drawTaxiColors().onSurfaceVariant,
+            focusedContainerColor = drawTaxiColors().surfaceVariant.copy(alpha = 0.3f),
+            unfocusedContainerColor = drawTaxiColors().surfaceVariant.copy(alpha = 0.3f)
         )
     )
 }

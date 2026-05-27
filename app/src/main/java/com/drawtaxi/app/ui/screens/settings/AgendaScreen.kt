@@ -51,7 +51,7 @@ fun AgendaScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Slate50)
+            .background(drawTaxiColors().background)
     ) {
         DrawTaxiTopBar(
             title = {
@@ -361,7 +361,7 @@ private fun AbsenceCard(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .background(if (absence.messageSent) Green100.copy(alpha = 0.5f) else Slate50, RoundedCornerShape(8.dp))
+                    .background(if (absence.messageSent) drawTaxiColors().statusValidatedBg.copy(alpha = 0.5f) else drawTaxiColors().surfaceVariant, RoundedCornerShape(8.dp))
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 DrawTaxiIcon(
@@ -504,7 +504,7 @@ private fun AddAbsenceDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Slate50, RoundedCornerShape(12.dp))
+                        .background(drawTaxiColors().surfaceVariant, RoundedCornerShape(12.dp))
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {

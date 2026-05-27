@@ -15,6 +15,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
@@ -41,13 +43,11 @@ import com.drawtaxi.app.ui.TaxiViewModelFactory
 import com.drawtaxi.app.ui.components.BottomNavigationBar
 import com.drawtaxi.app.ui.screens.dashboard.DashboardScreen
 import com.drawtaxi.app.ui.screens.home.HomeScreen
-import com.drawtaxi.app.ui.screens.invoices.AccountingScreen
 import com.drawtaxi.app.ui.screens.invoices.InvoiceScreen
 import com.drawtaxi.app.ui.screens.messages.ControlCenterScreen
 import com.drawtaxi.app.ui.screens.navigation.RideNavigationScreen
 import com.drawtaxi.app.ui.screens.onboarding.AiModelDownloadScreen
 import com.drawtaxi.app.ui.screens.onboarding.OnboardingScreen
-import com.drawtaxi.app.ui.screens.rides.PendingRideItem
 import com.drawtaxi.app.util.PermissionHelper
 import com.drawtaxi.app.util.hasLocationPermissions
 import com.drawtaxi.app.util.hasNotificationPermission
@@ -55,22 +55,15 @@ import com.drawtaxi.app.util.hasSmsPermissions
 import com.drawtaxi.app.ui.screens.rides.RideCompletionScreen
 import com.drawtaxi.app.ui.screens.rides.RideCreateScreen
 import com.drawtaxi.app.ui.screens.rides.RideDetailScreen
-import com.drawtaxi.app.ui.screens.rides.RideHistoryItem
 import com.drawtaxi.app.ui.screens.rides.ReturnHomeScreen
 import com.drawtaxi.app.ui.screens.settings.AgendaScreen
 import com.drawtaxi.app.ui.screens.settings.BackupSettingsScreen
-import com.drawtaxi.app.ui.screens.settings.BrandingSettings
-import com.drawtaxi.app.ui.screens.settings.ClientDirectoryScreen
 import com.drawtaxi.app.ui.screens.settings.ExportScreen
 import com.drawtaxi.app.ui.screens.settings.MessageTemplatesScreen
 import com.drawtaxi.app.ui.screens.settings.OvhMailSettingsScreen
 import com.drawtaxi.app.ui.screens.settings.PricingSettingsScreen
-import com.drawtaxi.app.ui.screens.settings.ProfileScreen
 import com.drawtaxi.app.ui.screens.settings.ProInfoSettings
 import com.drawtaxi.app.ui.screens.settings.SettingsMain
-import com.drawtaxi.app.ui.screens.settings.SettingsMenuItem
-import com.drawtaxi.app.ui.screens.settings.StatsScreen
-import com.drawtaxi.app.ui.screens.settings.TaxiToggleRow
 import com.drawtaxi.app.ui.theme.DrawTaxiTheme
 class MainActivity : ComponentActivity() {
 
@@ -192,6 +185,7 @@ class MainActivity : ComponentActivity() {
             var showCompletionScreen by remember { mutableStateOf(false) }
             var completionRide by remember { mutableStateOf<RideRequest?>(null) }
             var showReturnHomeScreen by remember { mutableStateOf(false) }
+            var showConfetti by remember { mutableStateOf(false) }
 
             val currentIntent by intentState
             LaunchedEffect(currentIntent) {
@@ -294,6 +288,7 @@ class MainActivity : ComponentActivity() {
                             completionRide = null
                             showCompletionScreen = false
                             showReturnHomeScreen = true
+                            showConfetti = true
                             Toast.makeText(this@MainActivity, "Course terminée !", Toast.LENGTH_SHORT).show()
                         },
                         onBack = { completionRide = null; showCompletionScreen = false }
@@ -377,7 +372,15 @@ class MainActivity : ComponentActivity() {
                                 )
                                 BackHandler { selectedRide = null }
                             } else {
-                                when (activeTab) {
+                                AnimatedContent(
+                                    targetState = activeTab,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(220, delayMillis = 90)) togetherWith
+                                                fadeOut(animationSpec = tween(90))
+                                    },
+                                    label = "tabTransition"
+                                ) { targetTab ->
+                                    when (targetTab) {
                                     "home" -> {
                                         // Courses confirmées = depuis validatedRides (isPending=0) OU pendingRides avec statut CONFIRMED/IN_PROGRESS
                                         val confirmedFromValidated = validatedRides.filter {
@@ -428,7 +431,20 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onCheckSms = {
                                                 viewModel.scanSmsNow(this@MainActivity)
-                                                Toast.makeText(this@MainActivity, "Vérification des SMS en cours...", Toast.LENGTH_SHORT).show()
+                                                val emailIntent = android.content.Intent(
+                                                    this@MainActivity,
+                                                    com.drawtaxi.app.service.foreground.OvhImapService::class.java
+                                                ).apply {
+                                                    action = "com.drawtaxi.app.action.SCAN_NOW"
+                                                }
+                                                try {
+                                                    startService(emailIntent)
+                                                } catch (_: Exception) { }
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "Vérification SMS + emails en cours...",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             },
                                             onSendQuote = { ride ->
                                                 val priceBreakdown = com.drawtaxi.app.logic.pricing.PriceEngine.calculate(
@@ -440,11 +456,9 @@ class MainActivity : ComponentActivity() {
                                                     nightSurchargePercent = settings.nightSurchargePercent,
                                                     sundaySurchargePercent = settings.sundaySurchargePercent,
                                                     holidaySurchargePercent = settings.holidaySurchargePercent,
-                                                    euroPerMinute = settings.euroPerMinute,
                                                     nightStartHour = settings.nightStartHour,
                                                     nightEndHour = settings.nightEndHour,
-                                                    tvaTransportRate = settings.tvaTransportRate,
-                                                    tvaWaitTimeRate = settings.tvaWaitTimeRate
+                                                    tvaTransportRate = settings.tvaTransportRate
                                                 )
                                                 val quoteMessage = settings.quoteTemplate
                                                     .replace("[DEPART]", ride.departure.ifBlank { "—" })
@@ -524,7 +538,11 @@ class MainActivity : ComponentActivity() {
                                             onBack = {
                                                 activeTab = "dashboard"
                                             },
-                                            coutParKmDeplacement = settings.coutParKmDeplacement
+                                            coutParKmDeplacement = settings.coutParKmDeplacement,
+                                            driverName = settings.name,
+                                            onRideUpdated = { updatedRide ->
+                                                viewModel.updateRide(updatedRide)
+                                            }
                                         )
                                     }
                                     "settings" -> {
@@ -579,9 +597,15 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 }
+                                }
                             }
                         }
                     }
+                }
+                if (showConfetti) {
+                    ConfettiEffect(
+                        onFinished = { showConfetti = false }
+                    )
                 }
             }
         }

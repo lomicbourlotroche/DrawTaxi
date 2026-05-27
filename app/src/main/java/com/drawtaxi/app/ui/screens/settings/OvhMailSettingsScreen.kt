@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import com.drawtaxi.app.data.AppSettings
 import com.drawtaxi.app.logic.messaging.OvhMailSender
 import kotlinx.coroutines.launch
@@ -54,8 +55,10 @@ fun OvhMailSettingsScreen(
     var imapServer by remember { mutableStateOf(settings.ovhImapServer) }
     var imapPort by remember { mutableStateOf(settings.ovhImapPort.toString()) }
     var imapInterval by remember { mutableStateOf(settings.ovhImapCheckInterval.toString()) }
+    var allowedSenders by remember { mutableStateOf(settings.ovhAllowedSenders) }
     
     var testStatus by remember { mutableStateOf<TestStatus?>(null) }
+    var imapTestStatus by remember { mutableStateOf<TestStatus?>(null) }
     var showPassword by remember { mutableStateOf(false) }
 
     DrawTaxiScaffold(
@@ -64,10 +67,10 @@ fun OvhMailSettingsScreen(
                 title = { DrawTaxiTopBarTitle("Configuration Email OVH") },
                 navigationIcon = {
                     DrawTaxiIconButton(onClick = onBack) {
-                        DrawTaxiIcon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Slate700)
+                        DrawTaxiIcon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = drawTaxiColors().onSurface)
                     }
                 },
-                backgroundColor = Color.White
+                backgroundColor = drawTaxiColors().surface
             )
         }
     ) { padding ->
@@ -75,7 +78,7 @@ fun OvhMailSettingsScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(Slate50)
+                .background(drawTaxiColors().background)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -97,7 +100,7 @@ fun OvhMailSettingsScreen(
                             )
                             DrawTaxiText(
                                 text = "Envoyer factures et confirmations",
-                                color = Slate500,
+                                color = drawTaxiColors().onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         }
@@ -192,7 +195,7 @@ fun OvhMailSettingsScreen(
                             )
                             DrawTaxiText(
                                 text = "Créer automatiquement des courses",
-                                color = Slate500,
+                                color = drawTaxiColors().onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         }
@@ -225,62 +228,28 @@ fun OvhMailSettingsScreen(
                             label = "Intervalle de vérification (minutes)",
                             keyboardType = KeyboardType.Number
                         )
-                    }
-                }
-            }
-            
-            // Test de connexion
-            testStatus?.let { status ->
-                DrawTaxiCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = when (status) {
-                        is TestStatus.Success -> Color(0xFFD1FAE5)
-                        is TestStatus.Error -> Color(0xFFFFE4E6)
-                        is TestStatus.Loading -> Slate100
-                    },
-                    elevation = 0.dp,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        when (status) {
-                            is TestStatus.Loading -> {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = brandColor
-                                )
-                            }
-                            is TestStatus.Success -> {
-                                DrawTaxiIcon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color(0xFF10B981)
-                                )
-                            }
-                            is TestStatus.Error -> {
-                                DrawTaxiIcon(
-                                    Icons.Default.Error,
-                                    contentDescription = null,
-                                    tint = Color(0xFFF43F5E)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
+
+                        DrawTaxiTextField(
+                            value = allowedSenders,
+                            onValueChange = { allowedSenders = it },
+                            label = "Expéditeurs autorisés",
+                            placeholder = "noreply@formspree.io, client@gmail.com",
+                            keyboardType = KeyboardType.Email
+                        )
                         DrawTaxiText(
-                            text = status.message,
-                            color = when (status) {
-                                is TestStatus.Success -> Color(0xFF065F46)
-                                is TestStatus.Error -> Color(0xFF9F1239)
-                                is TestStatus.Loading -> Slate600
-                            },
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp
+                            text = "Séparés par des virgules. Laissez vide pour accepter tous les expéditeurs.",
+                            color = drawTaxiColors().onSurfaceVariant,
+                            fontSize = 11.sp
                         )
                     }
                 }
             }
+            
+            // Résultat test SMTP
+            testStatus?.let { status -> TestResultBanner(status, brandColor) }
+            
+            // Résultat test IMAP
+            imapTestStatus?.let { status -> TestResultBanner(status, brandColor) }
             
             // Boutons d'action
             Row(
@@ -290,28 +259,39 @@ fun OvhMailSettingsScreen(
                 DrawTaxiOutlinedButton(
                     onClick = {
                         scope.launch {
-                            testStatus = TestStatus.Loading("Test en cours...")
+                            testStatus = TestStatus.Loading("Test SMTP en cours...")
+                            imapTestStatus = TestStatus.Loading("Test IMAP en cours...")
                             val testSettings = settings.copy(
                                 ovhSmtpServer = smtpServer,
                                 ovhSmtpPort = smtpPort.toIntOrNull() ?: 587,
                                 ovhSmtpUsername = smtpUsername,
                                 ovhSmtpPassword = smtpPassword,
-                                ovhSmtpUseSsl = smtpUseSsl
+                                ovhSmtpUseSsl = smtpUseSsl,
+                                ovhImapServer = imapServer,
+                                ovhImapPort = imapPort.toIntOrNull() ?: 993
                             )
-                            val result = OvhMailSender.testConnection(testSettings)
-                            testStatus = if (result.isSuccess) {
-                                TestStatus.Success(result.getOrDefault("Connecté !"))
+                            // Test SMTP
+                            val smtpResult = OvhMailSender.testConnection(testSettings)
+                            testStatus = if (smtpResult.isSuccess) {
+                                TestStatus.Success("SMTP : " + smtpResult.getOrDefault("Connecté"))
                             } else {
-                                TestStatus.Error(result.exceptionOrNull()?.message ?: "Erreur inconnue")
+                                TestStatus.Error("SMTP : " + (smtpResult.exceptionOrNull()?.message ?: "Erreur"))
+                            }
+                            // Test IMAP
+                            val imapResult = OvhMailSender.testImapConnection(testSettings)
+                            imapTestStatus = if (imapResult.isSuccess) {
+                                TestStatus.Success("IMAP : " + imapResult.getOrDefault("Connecté"))
+                            } else {
+                                TestStatus.Error("IMAP : " + (imapResult.exceptionOrNull()?.message ?: "Erreur"))
                             }
                         }
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = smtpEnabled && smtpUsername.isNotBlank() && smtpPassword.isNotBlank()
+                    enabled = smtpUsername.isNotBlank() && smtpPassword.isNotBlank()
                 ) {
-                    DrawTaxiIcon(Icons.Default.NetworkCheck, contentDescription = null, tint = if (smtpEnabled && smtpUsername.isNotBlank() && smtpPassword.isNotBlank()) brandColor else brandColor.copy(alpha = 0.4f))
+                    DrawTaxiIcon(Icons.Default.NetworkCheck, contentDescription = null, tint = if (smtpUsername.isNotBlank() && smtpPassword.isNotBlank()) brandColor else brandColor.copy(alpha = 0.4f))
                     Spacer(modifier = Modifier.width(8.dp))
-                    DrawTaxiText("Tester", fontWeight = FontWeight.Bold, color = if (smtpEnabled && smtpUsername.isNotBlank() && smtpPassword.isNotBlank()) brandColor else brandColor.copy(alpha = 0.4f))
+                    DrawTaxiText("Tester", fontWeight = FontWeight.Bold, color = if (smtpUsername.isNotBlank() && smtpPassword.isNotBlank()) brandColor else brandColor.copy(alpha = 0.4f))
                 }
                 
                 DrawTaxiSolidButton(
@@ -329,7 +309,8 @@ fun OvhMailSettingsScreen(
                                 ovhImapEnabled = imapEnabled,
                                 ovhImapServer = imapServer,
                                 ovhImapPort = imapPort.toIntOrNull() ?: 993,
-                                ovhImapCheckInterval = imapInterval.toIntOrNull() ?: 5
+                                ovhImapCheckInterval = imapInterval.toIntOrNull() ?: 5,
+                                ovhAllowedSenders = allowedSenders
                             )
                         )
                         onBack()
@@ -344,6 +325,57 @@ fun OvhMailSettingsScreen(
             }
             
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun TestResultBanner(status: TestStatus, brandColor: Color) {
+    DrawTaxiCard(
+        modifier = Modifier.fillMaxWidth(),
+        backgroundColor = when (status) {
+            is TestStatus.Success -> Color(0xFFD1FAE5)
+            is TestStatus.Error -> Color(0xFFFFE4E6)
+            is TestStatus.Loading -> Slate100
+        },
+        elevation = 0.dp,
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            when (status) {
+                is TestStatus.Loading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = brandColor
+                    )
+                }
+                is TestStatus.Success -> {
+                    DrawTaxiIcon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981)
+                    )
+                }
+                is TestStatus.Error -> {
+                    DrawTaxiIcon(
+                        Icons.Default.Error,
+                        contentDescription = null,
+                        tint = Color(0xFFF43F5E)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            DrawTaxiText(
+                text = status.message,
+                color = when (status) {
+                    is TestStatus.Success -> Color(0xFF065F46)
+                    is TestStatus.Error -> Color(0xFF9F1239)
+                    is TestStatus.Loading -> Slate600
+                },
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp
+            )
         }
     }
 }

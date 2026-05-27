@@ -276,6 +276,13 @@ Si un champ n'est pas présent dans le SMS, utilise une chaîne vide "" ou 0.
     }
 
     suspend fun parseWithAI(context: Context, smsBody: String, aiEnabled: Boolean = true): AiParsedResult {
+        // Intercept and parse Formspree emails immediately using dedicated regex parser
+        val formspreeResult = parseFormspreeEmail(smsBody)
+        if (formspreeResult != null) {
+            Log.d(TAG, "Parsed Formspree email successfully using regex")
+            return formspreeResult
+        }
+
         if (!aiEnabled) {
             Log.d(TAG, "AI disabled, using regex fallback")
             return parseWithFallback(smsBody)
@@ -467,6 +474,87 @@ Si un champ n'est pas présent dans le SMS, utilise une chaîne vide "" ou 0.
 
     internal fun String.validateEmail(): String = this.validateEmailExtension()
 
+    fun isFormspreeEmail(body: String): Boolean {
+        return (body.contains("Formspree", ignoreCase = true) || body.contains("formulaire réservation VTC", ignoreCase = true)) &&
+                body.contains("Nom", ignoreCase = true) &&
+                body.contains("Téléphone", ignoreCase = true)
+    }
+
+    fun parseFormspreeEmail(body: String): AiParsedResult? {
+        if (!isFormspreeEmail(body)) return null
+
+        try {
+            val cleanedBody = cleanEmailBody(body)
+            val nomRegex = Regex("(?im)^\\s*Nom\\s*(?::)?\\s*([^\\n\\r]+)")
+            val telRegex = Regex("(?im)^\\s*(?:T\\u00e9l\\u00e9phone|Telephone|Tel)\\s*(?::)?\\s*([^\\n\\r]+)")
+            val emailRegex = Regex("(?im)^\\s*E-?mail\\s*(?::)?\\s*([^\\n\\r]+)")
+            val prestRegex = Regex("(?im)^\\s*Prestation\\s*(?::)?\\s*([^\\n\\r]+)")
+            val dateRegex = Regex("(?im)^\\s*Date\\s*(?::)?\\s*([^\\n\\r]+)")
+            val horaireRegex = Regex("(?im)^\\s*(?:Horaire|Heure|Time)\\s*(?::)?\\s*([^\\n\\r]+)")
+            val destRegex = Regex("(?im)^\\s*(?:Adresse de destination|Destination|Arriv\\u00e9e|Arrivee)\\s*(?::)?\\s*([^\\n\\r]+)")
+            val detailsRegex = Regex("(?im)^\\s*(?:D\u00e9tails|Details|Message)\\s*(?::)?\\s*([^\\n\\r]+)")
+
+            val nom = nomRegex.find(cleanedBody)?.groupValues?.get(1)?.trim() ?: ""
+            val tel = telRegex.find(cleanedBody)?.groupValues?.get(1)?.trim()?.replace(Regex("[^+0-9]"), "") ?: ""
+            val email = emailRegex.find(cleanedBody)?.groupValues?.get(1)?.trim() ?: ""
+            val prest = prestRegex.find(cleanedBody)?.groupValues?.get(1)?.trim() ?: ""
+            val dateVal = dateRegex.find(cleanedBody)?.groupValues?.get(1)?.trim() ?: ""
+            val horaire = horaireRegex.find(cleanedBody)?.groupValues?.get(1)?.trim() ?: ""
+            val dest = destRegex.find(cleanedBody)?.groupValues?.get(1)?.trim() ?: ""
+
+            var firstName = ""
+            var lastName = ""
+            if (nom.isNotBlank()) {
+                val parts = nom.split(Regex("\\s+"), 2)
+                if (parts.size == 2) {
+                    firstName = parts[0]
+                    lastName = parts[1]
+                } else {
+                    lastName = nom
+                }
+            }
+
+            val departure = if (prest.isNotBlank()) {
+                prest.cleanLocation().takeFirstPhrase().replaceFirstChar { it.uppercase() }
+            } else {
+                ""
+            }
+            val arrival = dest.trim()
+
+            if (departure.isBlank() && arrival.isBlank() && horaire.isBlank()) {
+                return null
+            }
+
+            val missingFields = mutableListOf<String>()
+            if (departure.isBlank()) missingFields.add("lieu de départ")
+            if (arrival.isBlank()) missingFields.add("destination")
+            if (horaire.isBlank()) missingFields.add("heure")
+            if (dateVal.isBlank()) missingFields.add("date")
+
+            return AiParsedResult(
+                departure = departure,
+                arrival = arrival,
+                time = horaire,
+                date = dateVal,
+                clientName = lastName,
+                clientFirstName = firstName,
+                phone = tel,
+                email = email,
+                nbPassengers = 1,
+                price = 0.0,
+                isConfirmation = false,
+                isCancellation = false,
+                isModification = false,
+                confidence = 1.0f,
+                missingFields = missingFields,
+                aiReasoning = "Formspree reservation email regex parsing"
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing Formspree email", e)
+            return null
+        }
+    }
+
     suspend fun parseEmail(context: Context, emailBody: String, aiEnabled: Boolean = true): AiParsedResult {
         Log.d(TAG, "Parsing email avec AI enabled: $aiEnabled")
         val cleanedBody = cleanEmailBody(emailBody)
@@ -475,13 +563,16 @@ Si un champ n'est pas présent dans le SMS, utilise une chaîne vide "" ou 0.
 
     internal fun cleanEmailBody(body: String): String {
         return body
-            .replace(Regex("(?i)--\\s*\\n.*", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("(?m)^--\\s*\\r?\\n[\\s\\S]*"), "")
             .replace(Regex("(?i)Envoyé depuis.*"), "")
             .replace(Regex("(?i)Sent from.*"), "")
             .replace(Regex("(?i)Le\\s+\\d{1,2}/\\d{1,2}/\\d{2,4}.*"), "")
-            .replace(Regex("(?i)De :.*"), "")
-            .replace(Regex("(?i)À :.*"), "")
-            .replace(Regex("(?i)Objet :.*"), "")
+            .replace(Regex("(?im)^De\\s*:.*"), "")
+            .replace(Regex("(?im)^À\\s*:.*"), "")
+            .replace(Regex("(?im)^Objet\\s*:.*"), "")
+            .replace(Regex("(?im)^Date\\s*:.*"), "")
+            .replace(Regex("(?im)^Répondre à\\s*:.*"), "")
+            .replace(Regex("(?im)^--------.*--------"), "")
             .replace(Regex("(?i)_______________"), "")
             .trim()
     }

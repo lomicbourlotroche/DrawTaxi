@@ -1,21 +1,24 @@
 package com.drawtaxi.app.logic.routing
 
 import java.util.Locale
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
+import java.nio.charset.Charset
 
 import android.content.Context
 import android.location.Location
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
+import org.maplibre.spatialk.geojson.Position
 import org.maplibre.navigation.core.location.engine.LocationEngine
 import org.maplibre.navigation.core.location.engine.LocationEngineProvider
 import org.maplibre.navigation.core.location.toAndroidLocation
@@ -28,7 +31,6 @@ import org.maplibre.navigation.core.navigation.MapLibreNavigationOptions
 import org.maplibre.navigation.core.offroute.OffRouteListener
 import org.maplibre.navigation.core.routeprogress.ProgressChangeListener
 import org.maplibre.navigation.core.routeprogress.RouteProgress
-import java.util.concurrent.TimeUnit
 
 data class NavigationEngineState(
     val currentLocation: Location? = null,
@@ -92,7 +94,7 @@ class NavigationEngine(
             targetLng = toLng
         }
 
-        val decoded = decodePolyline(route.geometry)
+        val decoded = parseGeometry(route.geometry)
         _state.value = _state.value.copy(routePoints = decoded)
 
         maplibreNavigation = MapLibreNavigation(
@@ -135,7 +137,7 @@ class NavigationEngine(
         val newRoute = fetchRoute(fromLat = fromLat, fromLng = fromLng, toLat = toLat, toLng = toLng)
         if (newRoute != null) {
             maplibreNavigation?.stopNavigation()
-            val decoded = decodePolyline(newRoute.geometry)
+            val decoded = parseGeometry(newRoute.geometry)
             _state.value = _state.value.copy(routePoints = decoded)
             maplibreNavigation?.startNavigation(newRoute)
         }
@@ -175,46 +177,62 @@ class NavigationEngine(
 
     companion object {
         private const val TAG = "NavigationEngine"
-        private const val OSRM_BASE_URL = "https://router.project-osrm.org/route/v1/driving"
 
-        private val client = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
+        private fun fetchJson(url: String, method: String = "GET", body: String? = null): String? {
+            var connection: HttpURLConnection? = null
+            return try {
+                connection = URL(url).openConnection() as HttpURLConnection
+                connection.requestMethod = method
+                connection.connectTimeout = 10000
+                connection.readTimeout = 10000
+                connection.setRequestProperty("User-Agent", "DrawTaxi/1.0")
+                if (body != null) {
+                    connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    connection.doOutput = true
+                    connection.outputStream.write(body.toByteArray(Charset.forName("UTF-8")))
+                }
+                val code = connection.responseCode
+                Log.d(TAG, "HTTP $code $method for ${url.take(100)}...")
+                if (code in 200..299) {
+                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
+                    reader.readText()
+                } else {
+                    val reader = BufferedReader(InputStreamReader(connection.errorStream))
+                    val errBody = reader.readText()
+                    Log.e(TAG, "HTTP error $code: ${errBody.take(200)}")
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "HTTP request failed: ${e.message}")
+                null
+            } finally {
+                try { connection?.disconnect() } catch (_: Exception) { }
+            }
+        }
 
         suspend fun fetchRoute(
             fromLat: Double, fromLng: Double,
             toLat: Double, toLng: Double
         ): DirectionsRoute? = withContext(Dispatchers.IO) {
+            val url = "https://routing.openstreetmap.de/routed-car/route/v1/driving/$fromLng,$fromLat;$toLng,$toLat?overview=full&geometries=geojson&steps=true"
             try {
-                val origin = "$fromLng,$fromLat"
-                val destination = "$toLng,$toLat"
-                val url = "$OSRM_BASE_URL/$origin;$destination?overview=full&geometries=polyline&steps=true&language=fr&alternatives=false"
-                Log.d(TAG, "OSRM request: $url")
-
-                val request = Request.Builder().url(url).build()
-                val response = client.newCall(request).execute()
-
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "OSRM error: ${response.code}")
+                Log.d(TAG, "OSRM route request (GET): $url")
+                val body = fetchJson(url, "GET") ?: return@withContext null
+                val root = JSONObject(body)
+                val routes = root.optJSONArray("routes")
+                if (routes == null || routes.length() == 0) {
+                    Log.e(TAG, "OSRM: no routes in response")
                     return@withContext null
                 }
 
-                val body = response.body?.string() ?: return@withContext null
-                val json = JSONObject(body)
-
-                if (json.optString("code") != "Ok") {
-                    Log.e(TAG, "OSRM bad response: ${json.optString("message")}")
-                    return@withContext null
+                val routeObj = routes.getJSONObject(0)
+                val result = DirectionsRoute.fromJson(routeObj.toString())
+                if (result != null) {
+                    Log.d(TAG, "OSRM route OK: ${result.distance.toInt()}m, ${result.duration.toInt()}s")
                 }
-
-                val routes = json.getJSONArray("routes")
-                if (routes.length() == 0) return@withContext null
-
-                val routeJson = routes.getJSONObject(0).toString()
-                DirectionsRoute.fromJson(routeJson)
+                return@withContext result
             } catch (e: Exception) {
-                Log.e(TAG, "Route fetch failed", e)
+                Log.e(TAG, "OSRM route fetch failed: ${e.message}")
                 null
             }
         }
@@ -223,12 +241,46 @@ class NavigationEngine(
             fromLat: Double, fromLng: Double,
             toLat: Double, toLng: Double
         ): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+            val url = "https://routing.openstreetmap.de/routed-car/route/v1/driving/$fromLng,$fromLat;$toLng,$toLat?overview=full&geometries=geojson&steps=false"
             try {
-                val route = fetchRoute(fromLat, fromLng, toLat, toLng) ?: return@withContext emptyList()
-                decodePolyline(route.geometry)
+                Log.d(TAG, "OSRM geometry request (GET): $url")
+                val body = fetchJson(url, "GET") ?: return@withContext emptyList()
+                val root = JSONObject(body)
+                val routes = root.optJSONArray("routes")
+                if (routes == null || routes.length() == 0) {
+                    Log.e(TAG, "OSRM geometry: no routes in response")
+                    return@withContext emptyList()
+                }
+
+                val routeObj = routes.getJSONObject(0)
+                val geometry = routeObj.getJSONObject("geometry")
+                val coords = geometry.getJSONArray("coordinates")
+
+                val points = mutableListOf<Pair<Double, Double>>()
+                for (i in 0 until coords.length()) {
+                    val c = coords.getJSONArray(i)
+                    points.add(Pair(c.getDouble(1), c.getDouble(0)))
+                }
+                Log.d(TAG, "OSRM geometry OK: ${points.size} points")
+                points
             } catch (e: Exception) {
-                Log.e(TAG, "Route geometry fetch failed", e)
+                Log.e(TAG, "OSRM geometry fetch failed: ${e.message}")
                 emptyList()
+            }
+        }
+
+        fun parseGeometry(geo: String): List<Pair<Double, Double>> {
+            return try {
+                val json = JSONObject(geo)
+                val coordsArray = json.getJSONArray("coordinates")
+                val points = mutableListOf<Pair<Double, Double>>()
+                for (i in 0 until coordsArray.length()) {
+                    val coord = coordsArray.getJSONArray(i)
+                    points.add(Pair(coord.getDouble(1), coord.getDouble(0)))
+                }
+                points
+            } catch (e: Exception) {
+                decodePolyline(geo)
             }
         }
 
@@ -332,6 +384,44 @@ class NavigationEngine(
                 meters >= 1000 -> String.format(Locale.getDefault(), "%.1f km", meters / 1000)
                 else -> String.format(Locale.getDefault(), "%.0f m", meters)
             }
+        }
+
+        fun calculateZoom(points: List<Pair<Double, Double>>): Double {
+            if (points.isEmpty()) return 13.0
+            val lats = points.map { it.first }
+            val lngs = points.map { it.second }
+            val minLat = lats.minOrNull() ?: return 13.0
+            val maxLat = lats.maxOrNull() ?: return 13.0
+            val minLng = lngs.minOrNull() ?: return 13.0
+            val maxLng = lngs.maxOrNull() ?: return 13.0
+
+            val latSpan = maxLat - minLat
+            val lngSpan = maxLng - minLng
+            val maxSpan = maxOf(latSpan, lngSpan)
+            if (maxSpan <= 0.0) return 15.0
+            
+            // log2(360.0 / (maxSpan / 0.6))
+            val rawZoom = Math.log(360.0 / (maxSpan / 0.6)) / Math.log(2.0)
+            return rawZoom.coerceIn(4.0, 16.0)
+        }
+
+        fun calculateZoomPositions(positions: List<Position>): Double {
+            if (positions.isEmpty()) return 13.0
+            val lats = positions.map { it.latitude }
+            val lngs = positions.map { it.longitude }
+            val minLat = lats.minOrNull() ?: return 13.0
+            val maxLat = lats.maxOrNull() ?: return 13.0
+            val minLng = lngs.minOrNull() ?: return 13.0
+            val maxLng = lngs.maxOrNull() ?: return 13.0
+
+            val latSpan = maxLat - minLat
+            val lngSpan = maxLng - minLng
+            val maxSpan = maxOf(latSpan, lngSpan)
+            if (maxSpan <= 0.0) return 15.0
+            
+            // log2(360.0 / (maxSpan / 0.6))
+            val rawZoom = Math.log(360.0 / (maxSpan / 0.6)) / Math.log(2.0)
+            return rawZoom.coerceIn(4.0, 16.0)
         }
     }
 }

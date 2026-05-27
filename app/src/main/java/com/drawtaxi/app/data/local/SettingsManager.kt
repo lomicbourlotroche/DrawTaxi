@@ -52,11 +52,9 @@ class SettingsManager(private val context: Context) {
         val NIGHT_SURCHARGE = floatPreferencesKey("night_surcharge")
         val SUNDAY_SURCHARGE = floatPreferencesKey("sunday_surcharge")
         val HOLIDAY_SURCHARGE = floatPreferencesKey("holiday_surcharge")
-        val EURO_PER_MINUTE = floatPreferencesKey("euro_per_minute")
         val NIGHT_START_HOUR = intPreferencesKey("night_start_hour")
         val NIGHT_END_HOUR = intPreferencesKey("night_end_hour")
         val TVA_TRANSPORT = floatPreferencesKey("tva_transport")
-        val TVA_WAIT = floatPreferencesKey("tva_wait")
         val HOME_ADDRESS = stringPreferencesKey("home_address")
         val SMS_SCAN_INTERVAL = intPreferencesKey("sms_scan_interval")
         val AI_ENABLED = booleanPreferencesKey("ai_enabled")
@@ -78,6 +76,7 @@ class SettingsManager(private val context: Context) {
         val OVH_IMAP_PORT = intPreferencesKey("ovh_imap_port")
         val OVH_IMAP_CHECK_INTERVAL = intPreferencesKey("ovh_imap_check_interval")
         val OVH_IMAP_FOLDER = stringPreferencesKey("ovh_imap_folder")
+        val OVH_ALLOWED_SENDERS = stringPreferencesKey("ovh_allowed_senders")
     }
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { preferences ->
@@ -126,11 +125,9 @@ class SettingsManager(private val context: Context) {
             nightSurchargePercent = preferences[Keys.NIGHT_SURCHARGE]?.toDouble() ?: 0.15,
             sundaySurchargePercent = preferences[Keys.SUNDAY_SURCHARGE]?.toDouble() ?: 0.10,
             holidaySurchargePercent = preferences[Keys.HOLIDAY_SURCHARGE]?.toDouble() ?: 0.15,
-            euroPerMinute = preferences[Keys.EURO_PER_MINUTE]?.toDouble() ?: 1.0,
             nightStartHour = preferences[Keys.NIGHT_START_HOUR] ?: 20,
             nightEndHour = preferences[Keys.NIGHT_END_HOUR] ?: 7,
             tvaTransportRate = preferences[Keys.TVA_TRANSPORT]?.toDouble() ?: 0.10,
-            tvaWaitTimeRate = preferences[Keys.TVA_WAIT]?.toDouble() ?: 0.20,
             homeAddress = preferences[Keys.HOME_ADDRESS] ?: "",
             smsScanIntervalMinutes = preferences[Keys.SMS_SCAN_INTERVAL] ?: 60,
             aiEnabled = preferences[Keys.AI_ENABLED] ?: true,
@@ -151,7 +148,8 @@ class SettingsManager(private val context: Context) {
             ovhImapServer = preferences[Keys.OVH_IMAP_SERVER] ?: "ssl0.ovh.net",
             ovhImapPort = preferences[Keys.OVH_IMAP_PORT] ?: 993,
             ovhImapCheckInterval = preferences[Keys.OVH_IMAP_CHECK_INTERVAL] ?: 5,
-            ovhImapFolder = preferences[Keys.OVH_IMAP_FOLDER] ?: "INBOX"
+            ovhImapFolder = preferences[Keys.OVH_IMAP_FOLDER] ?: "INBOX",
+            ovhAllowedSenders = preferences[Keys.OVH_ALLOWED_SENDERS] ?: "noreply@formspree.io"
         )
     }
 
@@ -195,11 +193,9 @@ class SettingsManager(private val context: Context) {
             preferences[Keys.NIGHT_SURCHARGE] = settings.nightSurchargePercent.toFloat()
             preferences[Keys.SUNDAY_SURCHARGE] = settings.sundaySurchargePercent.toFloat()
             preferences[Keys.HOLIDAY_SURCHARGE] = settings.holidaySurchargePercent.toFloat()
-            preferences[Keys.EURO_PER_MINUTE] = settings.euroPerMinute.toFloat()
             preferences[Keys.NIGHT_START_HOUR] = settings.nightStartHour
             preferences[Keys.NIGHT_END_HOUR] = settings.nightEndHour
             preferences[Keys.TVA_TRANSPORT] = settings.tvaTransportRate.toFloat()
-            preferences[Keys.TVA_WAIT] = settings.tvaWaitTimeRate.toFloat()
             preferences[Keys.HOME_ADDRESS] = settings.homeAddress
             preferences[Keys.SMS_SCAN_INTERVAL] = settings.smsScanIntervalMinutes
             preferences[Keys.AI_ENABLED] = settings.aiEnabled
@@ -221,6 +217,7 @@ class SettingsManager(private val context: Context) {
             preferences[Keys.OVH_IMAP_PORT] = settings.ovhImapPort
             preferences[Keys.OVH_IMAP_CHECK_INTERVAL] = settings.ovhImapCheckInterval
             preferences[Keys.OVH_IMAP_FOLDER] = settings.ovhImapFolder
+            preferences[Keys.OVH_ALLOWED_SENDERS] = settings.ovhAllowedSenders
         }
     }
 

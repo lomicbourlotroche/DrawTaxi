@@ -831,11 +831,8 @@ class SmsForegroundService : Service() {
 
     fun scanNow() {
         Log.d(TAG, "Scan manuel déclenché")
-
-        lastCheckedTimestamp = System.currentTimeMillis() - 3600000
-
+        lastCheckedTimestamp = System.currentTimeMillis() - 86400000
         checkForNewSms()
-
     }
 
 }

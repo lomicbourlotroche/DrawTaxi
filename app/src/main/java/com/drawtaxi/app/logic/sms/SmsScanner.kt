@@ -22,7 +22,8 @@ object SmsScanner {
     suspend fun scanLastHourSmsWithAI(
         context: Context,
         aiEnabled: Boolean = true,
-        mode: SmsAnalysisMode = SmsAnalysisMode.AI_THEN_PARSING
+        mode: SmsAnalysisMode = SmsAnalysisMode.AI_THEN_PARSING,
+        windowDurationMs: Long = 3600000
     ): List<RideRequest> {
         val rides = mutableListOf<RideRequest>()
 
@@ -31,7 +32,7 @@ object SmsScanner {
             return rides
         }
 
-        val oneHourAgo = System.currentTimeMillis() - 3600000
+        val oneHourAgo = System.currentTimeMillis() - windowDurationMs
 
         val projection = arrayOf(
             Telephony.Sms.ADDRESS,

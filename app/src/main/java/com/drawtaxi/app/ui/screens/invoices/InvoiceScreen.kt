@@ -55,6 +55,8 @@ import java.text.SimpleDateFormat
 
 import java.util.*
 
+import kotlinx.coroutines.delay
+
 
 
 enum class InvoiceFilter(val label: String) {
@@ -83,7 +85,11 @@ fun InvoiceScreen(
 
     onBack: () -> Unit,
 
-    coutParKmDeplacement: Double = 0.10
+    coutParKmDeplacement: Double = 0.10,
+
+    driverName: String = "",
+
+    onRideUpdated: ((RideRequest) -> Unit)? = null
 
 ) {
 
@@ -197,7 +203,11 @@ fun InvoiceScreen(
 
             brandColor = brandColor,
 
-            coutParKmDeplacement = coutParKmDeplacement
+            coutParKmDeplacement = coutParKmDeplacement,
+
+            driverName = driverName,
+
+            onSave = onRideUpdated
 
         )
 
@@ -471,31 +481,37 @@ fun InvoiceDetailScreen(
 
     brandColor: Color,
 
-    coutParKmDeplacement: Double = 0.10
+    coutParKmDeplacement: Double = 0.10,
+
+    driverName: String = "",
+
+    onSave: ((RideRequest) -> Unit)? = null
 
 ) {
 
     val context = LocalContext.current
 
     var invoiceNumber by remember { mutableStateOf(ride.invoiceNumber) }
-
     var clientName by remember { mutableStateOf(ride.clientName) }
-
     var clientAddress by remember { mutableStateOf("") }
-
     var clientEmail by remember { mutableStateOf(ride.clientEmail) }
-
     var notes by remember { mutableStateOf(ride.notes) }
 
+    LaunchedEffect(ride) {
+        if (invoiceNumber.isBlank()) {
+            delay(100)
+            invoiceNumber = RideRequest.generateInvoiceNumber(ride.timestamp, driverName)
+        }
+    }
 
-
+    val totalCost = if (ride.fuelCost > 0 || ride.operatingCost > 0) {
+        ride.fuelCost + ride.operatingCost
+    } else {
+        ride.distanceKm * 0.3 * coutParKmDeplacement
+    }
     val profitability = if (ride.price > 0) {
-
-        RideRequest.calculateProfitability(ride.price, ride.fuelCost.takeIf { it > 0 } ?: ride.distanceKm * 0.3 * coutParKmDeplacement)
-
+        RideRequest.calculateProfitability(ride.price, totalCost)
     } else 0.0
-
-
 
     Column(modifier = Modifier.fillMaxSize().background(Slate50)) {
 
@@ -724,7 +740,28 @@ fun InvoiceDetailScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                
+                val isUnsaved = invoiceNumber != ride.invoiceNumber || notes != ride.notes
+
+                if (isUnsaved) {
+                    DrawTaxiSolidButton(
+                        onClick = {
+                            val updated = ride.copy(
+                                invoiceNumber = invoiceNumber,
+                                clientName = clientName,
+                                notes = notes
+                            )
+                            onSave?.invoke(updated)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        containerColor = brandColor
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Enregistrer la facture", fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 DrawTaxiSolidButton(
                     onClick = {

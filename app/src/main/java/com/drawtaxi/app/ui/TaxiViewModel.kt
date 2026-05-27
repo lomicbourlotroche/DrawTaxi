@@ -123,7 +123,8 @@ class TaxiViewModel(private val repository: TaxiRepository) : ViewModel() {
                 val scannedRides = com.drawtaxi.app.logic.sms.SmsScanner.scanLastHourSmsWithAI(
                     context,
                     aiEnabled = settings.aiEnabled,
-                    mode = settings.smsAnalysisMode
+                    mode = settings.smsAnalysisMode,
+                    windowDurationMs = 86400000
                 )
                 scannedRides.forEach { ride ->
                     repository.saveRide(ride)

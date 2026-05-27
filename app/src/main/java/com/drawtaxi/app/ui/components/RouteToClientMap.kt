@@ -295,13 +295,14 @@ fun RouteToClientMap(
                             if (allPositions.isNotEmpty()) {
                                 val lats = allPositions.map { it.latitude }
                                 val lngs = allPositions.map { it.longitude }
+                                val dynamicZoom = NavigationEngine.calculateZoomPositions(allPositions)
                                 cameraState.animateTo(
                                     CameraPosition(
                                         target = Position(
                                             longitude = (lngs.min() + lngs.max()) / 2.0,
                                             latitude = (lats.min() + lats.max()) / 2.0
                                         ),
-                                        zoom = 12.0
+                                        zoom = dynamicZoom
                                     )
                                 )
                             }
@@ -329,13 +330,14 @@ fun RouteToClientMap(
                                     if (allPositions.isNotEmpty()) {
                                         val lats = allPositions.map { it.latitude }
                                         val lngs = allPositions.map { it.longitude }
+                                        val dynamicZoom = NavigationEngine.calculateZoomPositions(allPositions)
                                         cameraState.animateTo(
                                             CameraPosition(
                                                 target = Position(
                                                     longitude = (lngs.min() + lngs.max()) / 2.0,
                                                     latitude = (lats.min() + lats.max()) / 2.0
                                                 ),
-                                                zoom = 12.0
+                                                zoom = dynamicZoom
                                             )
                                         )
                                     }

@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -104,6 +105,7 @@ fun RideNavigationScreen(
     val homeLocation by viewModel.homeLocation.collectAsState()
 
     val cameraState = rememberCameraState()
+    var isCameraAutoFollow by remember { mutableStateOf(true) }
 
     var hasGeocoded by remember { mutableStateOf(false) }
 
@@ -114,41 +116,51 @@ fun RideNavigationScreen(
         }
     }
 
+    var lastNavigatedPhase by remember { mutableStateOf<NavigationPhase?>(null) }
+
     LaunchedEffect(currentPhase, engineState.currentLocation, pickupLocation, destLocation, homeLocation) {
-        when (currentPhase) {
-            NavigationPhase.TO_PICKUP -> {
-                val from = engineState.currentLocation
-                val to = pickupLocation
-                if (from != null && to != null && !engineState.isNavigating) {
-                    viewModel.startNavigation(
-                        fromLat = from.latitude, fromLng = from.longitude,
-                        toLat = to.latitude, toLng = to.longitude
-                    )
+        val loc = engineState.currentLocation
+        if (loc == null) return@LaunchedEffect
+
+        if (currentPhase != lastNavigatedPhase) {
+            when (currentPhase) {
+                NavigationPhase.TO_PICKUP -> {
+                    val to = pickupLocation
+                    if (to != null) {
+                        lastNavigatedPhase = currentPhase
+                        viewModel.startNavigation(
+                            fromLat = loc.latitude, fromLng = loc.longitude,
+                            toLat = to.latitude, toLng = to.longitude
+                        )
+                    }
                 }
-            }
-            NavigationPhase.TO_DESTINATION -> {
-                val from = pickupLocation
-                val to = destLocation
-                if (from != null && to != null && !engineState.isNavigating) {
-                    viewModel.startNavigation(
-                        fromLat = from.latitude, fromLng = from.longitude,
-                        toLat = to.latitude, toLng = to.longitude
-                    )
+                NavigationPhase.TO_DESTINATION -> {
+                    val to = destLocation
+                    if (to != null) {
+                        lastNavigatedPhase = currentPhase
+                        viewModel.startNavigation(
+                            fromLat = loc.latitude, fromLng = loc.longitude,
+                            toLat = to.latitude, toLng = to.longitude
+                        )
+                    }
                 }
-            }
-            NavigationPhase.TO_HOME -> {
-                viewModel.geocodeHome(settings.homeAddress)
-                val from = engineState.currentLocation
-                val to = homeLocation
-                if (from != null && to != null && !engineState.isNavigating) {
-                    viewModel.startNavigation(
-                        fromLat = from.latitude, fromLng = from.longitude,
-                        toLat = to.latitude, toLng = to.longitude
-                    )
+                NavigationPhase.TO_HOME -> {
+                    if (settings.homeAddress.isNotBlank()) {
+                        viewModel.geocodeHome(settings.homeAddress)
+                        val to = homeLocation
+                        if (to != null) {
+                            lastNavigatedPhase = currentPhase
+                            viewModel.startNavigation(
+                                fromLat = loc.latitude, fromLng = loc.longitude,
+                                toLat = to.latitude, toLng = to.longitude
+                            )
+                        }
+                    }
                 }
-            }
-            NavigationPhase.COMPLETED -> {
-                viewModel.stopNavigation()
+                NavigationPhase.COMPLETED -> {
+                    lastNavigatedPhase = currentPhase
+                    viewModel.stopNavigation()
+                }
             }
         }
     }
@@ -173,13 +185,35 @@ fun RideNavigationScreen(
             val maxLat = allPoints.maxOf { it.first }
             val minLng = allPoints.minOf { it.second }
             val maxLng = allPoints.maxOf { it.second }
+            val dynamicZoom = NavigationEngine.calculateZoom(allPoints)
             cameraState.animateTo(
                 CameraPosition(
                     target = Position(
                         longitude = (minLng + maxLng) / 2.0,
                         latitude = (minLat + maxLat) / 2.0
                     ),
-                    zoom = 13.0
+                    zoom = dynamicZoom
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(isCameraAutoFollow, engineState.currentLocation, engineState.isNavigating) {
+        val loc = engineState.currentLocation
+        if (isCameraAutoFollow && engineState.isNavigating && loc != null) {
+            val speedKmh = loc.speed * 3.6
+            val zoom = when {
+                speedKmh > 80 -> 14.5
+                speedKmh > 50 -> 15.5
+                else -> 16.5
+            }
+            val bearing = if (loc.hasBearing()) loc.bearing.toDouble() else 0.0
+            cameraState.animateTo(
+                CameraPosition(
+                    target = Position(longitude = loc.longitude, latitude = loc.latitude),
+                    zoom = zoom,
+                    bearing = bearing,
+                    tilt = 55.0  // 3D perspective tilt
                 )
             )
         }
@@ -205,27 +239,28 @@ fun RideNavigationScreen(
             onRequestPermission = { permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
             onCallClick = { showCallDialog = true },
             onMessageClick = { showMessageDialog = true },
-            onPhaseChange = { viewModel.setPhase(it) },
+            onPhaseChange = { phase ->
+                if (phase == NavigationPhase.TO_HOME && settings.homeAddress.isBlank()) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Veuillez configurer votre adresse de domicile dans les paramètres pro pour utiliser le retour à la maison.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    viewModel.setPhase(phase)
+                }
+            },
             onStartRideClick = {
+                isCameraAutoFollow = true
                 viewModel.navigateToPickup()
                 viewModel.startLocationTracking(ride.id)
             },
             onCompleteClick = { showCompleteDialog = true },
             onRecenterClick = {
-                scope.launch {
-                    engineState.currentLocation?.let { loc ->
-                        cameraState.animateTo(
-                            CameraPosition(
-                                target = Position(
-                                    longitude = loc.longitude,
-                                    latitude = loc.latitude
-                                ),
-                                zoom = 15.5
-                            )
-                        )
-                    }
-                }
+                isCameraAutoFollow = true
             },
+            isCameraAutoFollow = isCameraAutoFollow,
+            onAutoFollowChanged = { isCameraAutoFollow = it },
             modifier = Modifier.padding(padding)
         )
     }
@@ -292,6 +327,8 @@ private fun RideNavigationContent(
     onStartRideClick: () -> Unit,
     onCompleteClick: () -> Unit,
     onRecenterClick: () -> Unit,
+    isCameraAutoFollow: Boolean,
+    onAutoFollowChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -336,89 +373,104 @@ private fun RideNavigationContent(
                 }
             }
         } else {
-            MaplibreMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraState = cameraState,
-                baseStyle = BaseStyle.Uri("https://tiles.openfreemap.org/styles/liberty"),
-                options = MapOptions(
-                    ornamentOptions = OrnamentOptions(
-                        isLogoEnabled = false,
-                        isAttributionEnabled = false,
-                        isCompassEnabled = false
-                    )
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                if (event.changes.any { it.pressed }) {
+                                    onAutoFollowChanged(false)
+                                }
+                            }
+                        }
+                    }
             ) {
-                val routeSource = rememberGeoJsonSource(
-                    data = GeoJsonData.JsonString(EMPTY_FC),
-                    options = GeoJsonOptions(synchronousUpdate = true)
-                )
-                val vousSource = rememberGeoJsonSource(
-                    data = GeoJsonData.JsonString(EMPTY_FC),
-                    options = GeoJsonOptions(synchronousUpdate = true)
-                )
-                val destSource = rememberGeoJsonSource(
-                    data = GeoJsonData.JsonString(EMPTY_FC),
-                    options = GeoJsonOptions(synchronousUpdate = true)
-                )
+                MaplibreMap(
+                    modifier = Modifier.fillMaxSize(),
+                    cameraState = cameraState,
+                    baseStyle = BaseStyle.Uri("https://tiles.openfreemap.org/styles/liberty"),
+                    options = MapOptions(
+                        ornamentOptions = OrnamentOptions(
+                            isLogoEnabled = false,
+                            isAttributionEnabled = false,
+                            isCompassEnabled = false
+                        )
+                    )
+                ) {
+                    val routeSource = rememberGeoJsonSource(
+                        data = GeoJsonData.JsonString(EMPTY_FC),
+                        options = GeoJsonOptions(synchronousUpdate = true)
+                    )
+                    val vousSource = rememberGeoJsonSource(
+                        data = GeoJsonData.JsonString(EMPTY_FC),
+                        options = GeoJsonOptions(synchronousUpdate = true)
+                    )
+                    val destSource = rememberGeoJsonSource(
+                        data = GeoJsonData.JsonString(EMPTY_FC),
+                        options = GeoJsonOptions(synchronousUpdate = true)
+                    )
 
-                val routePoints = engineState.routePoints
-                val routeKey = "${currentPhase.name}_${routePoints.size}"
+                    val routePoints = engineState.routePoints
+                    val routeKey = "${currentPhase.name}_${routePoints.size}"
 
-                LaunchedEffect(routeKey) {
-                    val coords = routePoints.joinToString(",") { "[${it.second},${it.first}]" }
-                    val json = if (coords.isNotEmpty()) {
-                        """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
-                    } else EMPTY_FC
-                    routeSource.setData(GeoJsonData.JsonString(json))
-                }
-
-                LaunchedEffect(engineState.currentLocation) {
-                    val loc = engineState.currentLocation ?: return@LaunchedEffect
-                    val json = """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${loc.longitude},${loc.latitude}]}}]}"""
-                    vousSource.setData(GeoJsonData.JsonString(json))
-                }
-
-                LaunchedEffect(currentPhase, pickupLocation, destLocation, homeLocation) {
-                    val target = when (currentPhase) {
-                        NavigationPhase.TO_PICKUP -> pickupLocation
-                        NavigationPhase.TO_DESTINATION -> destLocation
-                        NavigationPhase.TO_HOME -> homeLocation
-                        NavigationPhase.COMPLETED -> null
+                    LaunchedEffect(routeKey) {
+                        val coords = routePoints.joinToString(",") { "[${it.second},${it.first}]" }
+                        val json = if (coords.isNotEmpty()) {
+                            """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}]}"""
+                        } else EMPTY_FC
+                        routeSource.setData(GeoJsonData.JsonString(json))
                     }
-                    if (target != null) {
-                        val json = """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${target.longitude},${target.latitude}]}}]}"""
-                        destSource.setData(GeoJsonData.JsonString(json))
-                    } else {
-                        destSource.setData(GeoJsonData.JsonString(EMPTY_FC))
+
+                    LaunchedEffect(engineState.currentLocation) {
+                        val loc = engineState.currentLocation ?: return@LaunchedEffect
+                        val json = """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${loc.longitude},${loc.latitude}]}}]}"""
+                        vousSource.setData(GeoJsonData.JsonString(json))
                     }
+
+                    LaunchedEffect(currentPhase, pickupLocation, destLocation, homeLocation) {
+                        val target = when (currentPhase) {
+                            NavigationPhase.TO_PICKUP -> pickupLocation
+                            NavigationPhase.TO_DESTINATION -> destLocation
+                            NavigationPhase.TO_HOME -> homeLocation
+                            NavigationPhase.COMPLETED -> null
+                        }
+                        if (target != null) {
+                            val json = """{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[${target.longitude},${target.latitude}]}}]}"""
+                            destSource.setData(GeoJsonData.JsonString(json))
+                        } else {
+                            destSource.setData(GeoJsonData.JsonString(EMPTY_FC))
+                        }
+                    }
+
+                    LineLayer(
+                        id = "route-line",
+                        source = routeSource,
+                        color = const(Color(0xFF2196F3)),
+                        width = const(8.dp),
+                        cap = const(LineCap.Round),
+                        join = const(LineJoin.Round)
+                    )
+
+                    CircleLayer(
+                        id = "vous-marker",
+                        source = vousSource,
+                        color = const(Color(0xFF2196F3)),
+                        radius = const(10.dp),
+                        strokeColor = const(Color.White),
+                        strokeWidth = const(3.dp)
+                    )
+
+                    CircleLayer(
+                        id = "dest-marker",
+                        source = destSource,
+                        color = const(Color(0xFF10B981)),
+                        radius = const(12.dp),
+                        strokeColor = const(Color.White),
+                        strokeWidth = const(3.dp)
+                    )
                 }
-
-                LineLayer(
-                    id = "route-line",
-                    source = routeSource,
-                    color = const(Color(0xFF2196F3)),
-                    width = const(8.dp),
-                    cap = const(LineCap.Round),
-                    join = const(LineJoin.Round)
-                )
-
-                CircleLayer(
-                    id = "vous-marker",
-                    source = vousSource,
-                    color = const(Color(0xFF2196F3)),
-                    radius = const(10.dp),
-                    strokeColor = const(Color.White),
-                    strokeWidth = const(3.dp)
-                )
-
-                CircleLayer(
-                    id = "dest-marker",
-                    source = destSource,
-                    color = const(Color(0xFF10B981)),
-                    radius = const(12.dp),
-                    strokeColor = const(Color.White),
-                    strokeWidth = const(3.dp)
-                )
             }
         }
 
@@ -432,8 +484,8 @@ private fun RideNavigationContent(
                 NavigationFab(
                     onClick = onRecenterClick,
                     icon = Icons.Default.MyLocation,
-                    backgroundColor = Color.White,
-                    contentColor = Slate700
+                    backgroundColor = if (isCameraAutoFollow) Indigo500 else Color.White,
+                    contentColor = if (isCameraAutoFollow) Color.White else Slate700
                 )
 
                 NavigationFab(
@@ -454,7 +506,8 @@ private fun RideNavigationContent(
                 exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 40.dp, start = 16.dp, end = 16.dp)
+                    .statusBarsPadding()
+                    .padding(top = 12.dp, start = 16.dp, end = 16.dp)
             ) {
                 InstructionCard(
                     instruction = engineState.currentInstruction,
@@ -669,7 +722,9 @@ fun RideNavigationContentPreview() {
             onPhaseChange = {},
             onStartRideClick = {},
             onCompleteClick = {},
-            onRecenterClick = {}
+            onRecenterClick = {},
+            isCameraAutoFollow = true,
+            onAutoFollowChanged = {}
         )
     }
 }

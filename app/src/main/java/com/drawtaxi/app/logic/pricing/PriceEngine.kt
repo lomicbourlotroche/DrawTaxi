@@ -8,14 +8,12 @@ data class PriceBreakdown(
     val nightSurcharge: Double,
     val sundaySurcharge: Double,
     val holidaySurcharge: Double,
-    val waitTimePrice: Double,
     val subtotalHT: Double,
     val tvaAmount: Double,
     val totalTTC: Double,
     val isNight: Boolean,
     val isSunday: Boolean,
-    val isHoliday: Boolean,
-    val waitMinutes: Int
+    val isHoliday: Boolean
 ) {
     val totalSurcharges: Double
         get() = nightSurcharge + sundaySurcharge + holidaySurcharge
@@ -27,7 +25,6 @@ data class PriceBreakdown(
             if (isNight) appendLine("Majoration nuit: ${String.format("%.2f €", nightSurcharge)}")
             if (isSunday) appendLine("Majoration dimanche: ${String.format("%.2f €", sundaySurcharge)}")
             if (isHoliday) appendLine("Majoration férié: ${String.format("%.2f €", holidaySurcharge)}")
-            if (waitMinutes > 0) appendLine("Attente ($waitMinutes min): ${String.format("%.2f €", waitTimePrice)}")
             appendLine("Sous-total HT: ${String.format("%.2f €", subtotalHT)}")
             appendLine("TVA (10%): ${String.format("%.2f €", tvaAmount)}")
             appendLine("TOTAL TTC: ${String.format("%.2f €", totalTTC)}")
@@ -42,7 +39,6 @@ object PriceEngine {
 
     fun calculate(
         distanceKm: Double,
-        waitMinutes: Int = 0,
         dateTime: Calendar = Calendar.getInstance(),
         pricePerKm: Double = 2.50,
         baseFare: Double = 9.00,
@@ -50,11 +46,9 @@ object PriceEngine {
         nightSurchargePercent: Double = 0.15,
         sundaySurchargePercent: Double = 0.10,
         holidaySurchargePercent: Double = 0.15,
-        euroPerMinute: Double = 1.00,
         nightStartHour: Int = 20,
         nightEndHour: Int = 7,
-        tvaTransportRate: Double = 0.10,
-        tvaWaitTimeRate: Double = 0.20
+        tvaTransportRate: Double = 0.10
     ): PriceBreakdown {
         val hour = dateTime.get(Calendar.HOUR_OF_DAY)
         val dayOfWeek = dateTime.get(Calendar.DAY_OF_WEEK)
@@ -87,9 +81,7 @@ object PriceEngine {
             holidayCost = transportHT * holidaySurchargePercent
         }
 
-        val waitCost = waitMinutes * euroPerMinute
-
-        val subtotalHT = transportHT + nightCost + sundayCost + holidayCost + waitCost
+        val subtotalHT = transportHT + nightCost + sundayCost + holidayCost
 
         val tvaAmount = subtotalHT * tvaTransportRate
 
@@ -101,14 +93,12 @@ object PriceEngine {
             nightSurcharge = nightCost,
             sundaySurcharge = sundayCost,
             holidaySurcharge = holidayCost,
-            waitTimePrice = waitCost,
             subtotalHT = subtotalHT,
             tvaAmount = tvaAmount,
             totalTTC = totalTTC,
             isNight = isNight,
             isSunday = isSunday,
-            isHoliday = isHoliday,
-            waitMinutes = waitMinutes
+            isHoliday = isHoliday
         )
     }
 
@@ -176,7 +166,6 @@ object PriceEngine {
             if (price.isNight) appendLine("⏰ Majoration nuit incluse")
             if (price.isSunday) appendLine("📅 Majoration dimanche incluse")
             if (price.isHoliday) appendLine("🎉 Majoration jour férié incluse")
-            if (price.waitMinutes > 0) appendLine("⏱️ Temps d'attente : ${price.waitMinutes} min")
             appendLine("")
             appendLine("Total TTC : ${String.format("%.2f €", price.totalTTC)}")
             appendLine("")

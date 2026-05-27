@@ -252,6 +252,98 @@ Suite de la conversation"""
         assertTrue(result.missingFields.any { it.contains("départ") || it.contains("depart") })
     }
 
+    @Test
+    fun testIsFormspreeEmail() {
+        val formspreeBody = """
+            Bonjour Jean,
+            You've received a new form submission on formulaire réservation VTC.
+            Nom bob leponge
+            Téléphone 0664183172
+            Prestation Depuis la gare
+        """.trimIndent()
+        assertTrue(AiSmsParser.isFormspreeEmail(formspreeBody))
+
+        val normalBody = "Bonjour, je veux un taxi."
+        assertFalse(AiSmsParser.isFormspreeEmail(normalBody))
+    }
+
+    @Test
+    fun testParseFormspreeEmail() {
+        val emailBody = """
+-------- Courriel original --------
+Objet: Réservation TY-ZEF - bob leponge - 27/05/2026
+Date: 27.05.2026 14:12
+De: Formspree <noreply@formspree.io>
+À: contact@tyzefbrestvtc.fr
+Répondre à: bob.leponge@plouf.fr
+
+  You've received a new form submission. --
+
+  New form submission on formulaire réservation VTC
+
+  Someone just submitted a form on null. Here's what they had to say:
+
+  Nom bob leponge
+
+  Téléphone 0664183172
+
+  Email bob.leponge@plouf.fr
+
+  Prestation Depuis la gare
+
+  Date 27/05/2026
+
+  Horaire 18:12
+
+  Adresse de destination Fort Montbarey, Route du Fort Montbarey, Brest
+
+  Détails test
+
+  Submitted 12:12 PM - 27 May 2026
+
+  Mark as spam
+
+   [1]
+
+  You are receiving this because you confirmed this email address on Formspree.
+        """.trimIndent()
+
+        val result = AiSmsParser.parseFormspreeEmail(emailBody)
+        assertNotNull(result)
+        assertEquals("La gare", result?.departure)
+        assertEquals("Fort Montbarey, Route du Fort Montbarey, Brest", result?.arrival)
+        assertEquals("18:12", result?.time)
+        assertEquals("27/05/2026", result?.date)
+        assertEquals("leponge", result?.clientName)
+        assertEquals("bob", result?.clientFirstName)
+        assertEquals("0664183172", result?.phone)
+        assertEquals("bob.leponge@plouf.fr", result?.email)
+        assertEquals(1.0f, result?.confidence ?: 0f, 0.01f)
+    }
+
+    @Test
+    fun testCleanEmailBodyDoesNotDestroyFormspreeContent() {
+        val emailBody = """
+-------- Courriel original --------
+Objet: Réservation TY-ZEF - bob leponge - 27/05/2026
+Date: 27.05.2026 14:12
+De: Formspree <noreply@formspree.io>
+À: contact@tyzefbrestvtc.fr
+Répondre à: bob.leponge@plouf.fr
+
+  You've received a new form submission. --
+
+  New form submission on formulaire réservation VTC
+
+  Someone just submitted a form on null. Here's what they had to say:
+
+  Nom bob leponge
+        """.trimIndent()
+
+        val cleaned = AiSmsParser.cleanEmailBody(emailBody)
+        assertTrue(cleaned.contains("Nom bob leponge"))
+    }
+
     // ── isValidJson ──
 
     // isValidJson is a thin wrapper around JSONObject - behavior differs between
